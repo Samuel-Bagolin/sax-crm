@@ -2,7 +2,7 @@
 
 **Publicação no Vercel: siga [`DEPLOY_VERCEL.md`](DEPLOY_VERCEL.md).**
 
-Aplicação React/TypeScript (Vite) com API FastAPI/Python e MongoDB/Motor. Cada empresa possui banco próprio; o banco de controle mantém empresas, administradores de sistema e o índice global de e-mails.
+Aplicação React/TypeScript (Vite) com API FastAPI/Python. Banco: Firebase Firestore em produção (adaptador `backend/lib/firestore_mongo.py`, mesma API do Motor) ou MongoDB. Cada empresa possui banco próprio; o banco de controle mantém empresas, administradores de sistema e o índice global de e-mails.
 
 ## Módulos implementados
 
@@ -22,7 +22,7 @@ Local: `pip install -r backend/requirements-dev.txt` e `cd frontend && yarn inst
 
 Configurações de ambiente (não versionar valores secretos):
 
-- `MONGO_URL`, `DB_NAME`, `JWT_SECRET`: conexão e sessões.
+- `FIREBASE_SERVICE_ACCOUNT` (Firestore) ou `MONGO_URL` (MongoDB), `DB_NAME`, `JWT_SECRET`: conexão e sessões.
 - `APP_ENV=producao`: ativa cookies HTTPS; configurar corretamente em produção.
 - `APP_URL`: origem HTTPS real do ERP, usada nos convites e lembretes. Sem fallback para previews antigos.
 - `CORS_ORIGINS`: origens explícitas separadas por vírgula; não aceita wildcard com credenciais.

@@ -1,23 +1,24 @@
 # Publicar o SAX CRM no Vercel
 
-Um único projeto no Vercel serve o site (React) e a API (FastAPI) no mesmo endereço. O site fica em `/`, a API em `/api/*`, e o login funciona porque o cookie é do próprio domínio. O banco fica no MongoDB Atlas e os e-mails saem pelo Resend.
+Um único projeto no Vercel serve o site (React) e a API (FastAPI) no mesmo endereço. O site fica em `/`, a API em `/api/*`, e o login funciona porque o cookie é do próprio domínio. O banco fica no Firebase Firestore e os e-mails saem pelo Resend.
 
 Tempo estimado: 30 a 40 minutos na primeira vez.
 
-## 1. Banco de dados: MongoDB Atlas (gratuito para começar)
+## 1. Banco de dados: Firebase Firestore
 
-**Jeito mais fácil (recomendado):** depois de criar o projeto no Vercel, abra **Storage → Create Database → MongoDB Atlas** (Marketplace), escolha o plano gratuito e conecte ao projeto `sax-crm`. O Vercel cria o banco, libera o acesso e grava a variável `MONGODB_URI` sozinho; o sistema já lê essa variável. Depois é só fazer **Redeploy**. Pule o restante desta seção.
+O sistema usa o Firestore do projeto Firebase `sax-crm`. O login do CRM é o do próprio sistema (não usa o Firebase Authentication); o administrador é criado pelas variáveis `ADMIN_INICIAL_*`.
 
-**Jeito manual:**
+1. Firebase Console → projeto **sax-crm** → **Build → Firestore Database → Create database**.
+   - Edição **Standard**, ID do banco `(default)`.
+   - Local: **southamerica-east1 (São Paulo)**. Não dá para mudar depois.
+   - Modo: **Production** (as regras bloqueiam o acesso direto pelo navegador; o servidor usa a conta de serviço e não depende das regras).
+2. **Configurações do projeto (engrenagem) → Contas de serviço → Gerar nova chave privada**. Baixa um arquivo `.json`.
+   - **Esse arquivo dá acesso total ao banco.** Não mande por e-mail/WhatsApp/chat, não suba no GitHub. Ele vai só para a variável `FIREBASE_SERVICE_ACCOUNT` no Vercel. Se vazar, apague a chave nessa mesma tela e gere outra.
+3. **Plano Blaze + alerta de orçamento (recomendado antes de usar com clientes).** No plano gratuito (Spark) o limite é 50 mil leituras e 20 mil gravações por dia; passando disso o banco recusa requisições até o dia seguinte e o CRM para. No Blaze a cota grátis continua igual e só o excedente é cobrado. Em Google Cloud → Billing → **Budgets & alerts**, crie um alerta (ex.: R$ 50/mês).
+4. Opcional: Firestore → **TTL** → política na coleção `rate_limits`, campo `expires` (a rotina diária já limpa esses registros; o TTL só adianta).
 
-1. Crie uma conta em https://www.mongodb.com/cloud/atlas e um cluster **M0 (Free)**. Escolha a região **São Paulo (sa-east-1)** se estiver disponível; senão, uma região dos EUA.
-2. **Database Access** → Add New Database User → usuário e senha fortes (anote).
-3. **Network Access** → Add IP Address → **Allow access from anywhere (0.0.0.0/0)**. O Vercel não tem IP fixo; a proteção fica por conta da senha do banco.
-4. **Connect → Drivers** → copie a connection string, algo como
-   `mongodb+srv://USUARIO:SENHA@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority`
-   Esse é o `MONGO_URL`.
-
-> O M0 tem 512 MB. Fotos de imóveis ficam no banco: com muitas imobiliárias, suba para um plano pago do Atlas ou mova fotos para armazenamento de objetos.
+> Limite de 1 MiB por documento: fotos e PDFs grandes são divididos automaticamente em pedaços (coleção `_blobs`).
+> O sistema também continua aceitando MongoDB (`MONGO_URL`/`MONGODB_URI`) se um dia quiser voltar; com `FIREBASE_SERVICE_ACCOUNT` preenchida, o Firestore tem prioridade.
 
 ## 2. E-mail: Resend
 
@@ -41,8 +42,8 @@ Tempo estimado: 30 a 40 minutos na primeira vez.
 
 | Variável | Valor | Obrigatória |
 |---|---|---|
-| `MONGO_URL` | connection string do Atlas (dispensável se usou a integração do Vercel, que cria `MONGODB_URI`) | sim* |
-| `DB_NAME` | `sax_crm` (padrão; prefixo dos bancos, não mude depois) | não |
+| `FIREBASE_SERVICE_ACCOUNT` | o conteúdo inteiro do `.json` da conta de serviço (abra no bloco de notas, copie tudo, de `{` até `}`) | sim |
+| `DB_NAME` | `sax_crm` (padrão; nome do banco de controle, não mude depois) | não |
 | `JWT_SECRET` | texto aleatório com 64+ caracteres (assina as sessões) | sim |
 | `APP_ENV` | `producao` | sim |
 | `APP_URL` | `https://SEU-PROJETO.vercel.app` (troque pelo domínio próprio quando tiver) | sim |
@@ -79,13 +80,14 @@ Vercel → Project → **Settings → Domains** → adicione `crm.sax.com.br` e 
 | Google Agenda / avisos de imóvel compatível | Executados na própria requisição (o salvar fica ~0,5 s mais lento quando o Google está conectado). |
 | Tamanho de arquivo | Limite do Vercel: 4,5 MB por envio. Documentos e anexos do chat aceitam até 4 MB; fotos vão uma por vez (o navegador já reduz). Arquivos maiores: pelo Google Drive ("Do Google Drive"). |
 | Primeiro acesso após inatividade | A função "acorda" (1–3 s a mais na primeira chamada). |
-| Backup por empresa | Funciona no Atlas (é replica set). Empresas grandes podem passar de 4,5 MB na resposta; nesse caso use os backups automáticos do Atlas. |
+| Backup por empresa | Funciona. Empresas grandes podem passar de 4,5 MB na resposta; para essas, ative o backup agendado do Firestore (Firestore → Disaster recovery). A restauração não é atômica no Firestore: restaure fora do horário de uso. |
+| Banco indisponível | Abra `https://SEU-PROJETO.vercel.app/api/status`. Deve mostrar `"banco":"firestore"`; se der erro, a mensagem diz o motivo (chave inválida, Firestore não criado etc.). |
 | Plano Hobby | É para uso pessoal/não comercial. Para vender o SAX CRM a imobiliárias, use o **Vercel Pro**. |
 
 ## Rodar localmente
 
 ```bash
 pip install -r backend/requirements-dev.txt
-cd backend && MONGO_URL=mongodb://localhost:27017 DB_NAME=sax_crm JWT_SECRET=dev-secret-com-32-caracteres-ou-mais uvicorn server:app --port 8001
+cd backend && MONGO_URL=mongomock:// DB_NAME=sax_crm JWT_SECRET=dev-secret-com-32-caracteres-ou-mais uvicorn server:app --port 8001
 cd frontend && yarn install && yarn dev   # http://localhost:3000, /api vai para a 8001
 ```

@@ -106,8 +106,15 @@ async def root():
 
 @api_router.get("/status")
 async def health():
-    await controle.command("ping")
-    return {"status": "ok"}
+    """Diagnóstico: abre no navegador para ver se o banco responde."""
+    from lib.db import USA_FIRESTORE
+    from starlette.responses import JSONResponse
+    banco = "firestore" if USA_FIRESTORE else "mongodb"
+    try:
+        await controle.command("ping")
+    except Exception as exc:
+        return JSONResponse({"status": "erro", "banco": banco, "erro": type(exc).__name__, "detalhe": str(exc)[:300]}, status_code=503)
+    return {"status": "ok", "banco": banco, "inicializado": _inicializado}
 
 # Domínios do sistema de gestão imobiliária
 api_router.include_router(auth.router)
@@ -156,14 +163,16 @@ _ultima_falha_inicio = 0.0
 async def _inicializar_na_primeira_requisicao(request, call_next):
     global _ultima_falha_inicio
     import time
-    if SERVERLESS and not _inicializado and time.monotonic() - _ultima_falha_inicio > 30:
+    from lib.firestore_mongo import cache_requisicao
+    cache_requisicao.set({})  # leituras repetidas na mesma requisição não vão de novo ao Firestore
+    if SERVERLESS and not _inicializado and request.url.path != "/api/status" and time.monotonic() - _ultima_falha_inicio > 30:
         try:
             await inicializar()
         except Exception as exc:
             _ultima_falha_inicio = time.monotonic()
             logging.getLogger(__name__).error("Inicialização falhou (banco inacessível?): %s: %s", type(exc).__name__, str(exc)[:300])
             from starlette.responses import JSONResponse
-            return JSONResponse({"detail": "Banco de dados indisponível. Verifique MONGO_URL e o Network Access do MongoDB Atlas.",
+            return JSONResponse({"detail": "Banco de dados indisponível. Abra /api/status para ver o motivo.",
                                  "erro": type(exc).__name__}, status_code=503)
     return await call_next(request)
 app.add_middleware(

@@ -37,6 +37,11 @@ async def rotina(authorization: str | None = Header(None)):
 
     resumo = {"empresas": 0, "emails": 0, "automacoes": 0, "lembretes": 0, "falhas": 0}
     resumo["emails"] += await drenar_fila(controle)
+    try:  # Firestore não tem índice TTL: limpa os contadores de tentativa de login vencidos
+        from models.common import now_utc
+        await controle.rate_limits.delete_many({"expires": {"$lt": now_utc()}})
+    except Exception:
+        logger.exception("limpeza de rate_limits falhou")
     async for empresa in controle.empresas.find({"ativo": True}, {"db_name": 1}):
         nome = empresa["db_name"]
         definir_empresa(nome)

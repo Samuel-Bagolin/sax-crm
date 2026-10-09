@@ -24,17 +24,25 @@ from pymongo import ASCENDING, DESCENDING, IndexModel
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-# MONGO_URL (manual) ou MONGODB_URI (criada sozinha pela integração MongoDB Atlas do Vercel).
-mongo_url = os.environ.get("MONGO_URL") or os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL")
-if not mongo_url:
-    raise RuntimeError("Configure MONGO_URL (ou conecte o MongoDB Atlas em Vercel → Storage, que cria MONGODB_URI)")
-if mongo_url.startswith("mongomock://"):  # somente testes locais sem servidor Mongo
-    from mongomock_motor import AsyncMongoMockClient
+# Banco: Firestore (Firebase) quando há FIREBASE_SERVICE_ACCOUNT ou emulador; senão MongoDB.
+USA_FIRESTORE = bool(os.environ.get("FIREBASE_SERVICE_ACCOUNT") or os.environ.get("FIRESTORE_EMULATOR_HOST")
+                     or (os.environ.get("MONGO_URL") or "").startswith("firestore"))
+if USA_FIRESTORE:
+    from lib.firestore_mongo import cliente_do_ambiente
 
-    client = AsyncMongoMockClient()
+    client = cliente_do_ambiente()
 else:
-    # No Vercel a função precisa responder rápido: falha de conexão aparece em segundos, não em 30 s.
-    client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=8000 if os.environ.get("VERCEL") else 30000)
+    # MONGO_URL (manual) ou MONGODB_URI (criada pela integração MongoDB Atlas do Vercel).
+    mongo_url = os.environ.get("MONGO_URL") or os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL")
+    if not mongo_url:
+        raise RuntimeError("Configure FIREBASE_SERVICE_ACCOUNT (Firebase) ou MONGO_URL (MongoDB)")
+    if mongo_url.startswith("mongomock://"):  # somente testes locais sem servidor Mongo
+        from mongomock_motor import AsyncMongoMockClient
+
+        client = AsyncMongoMockClient()
+    else:
+        # No Vercel a função precisa responder rápido: falha de conexão aparece em segundos, não em 30 s.
+        client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=8000 if os.environ.get("VERCEL") else 30000)
 
 DB_CONTROLE = os.environ.get("DB_NAME") or "sax_crm"
 AMBIENTE = os.environ.get("APP_ENV", "desenvolvimento").lower()

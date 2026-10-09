@@ -36,5 +36,8 @@
       "path": "/api/cron/rotina",
       "schedule": "0 11 * * *"
     }
+  ],
+  "regions": [
+    "gru1"
   ]
 }

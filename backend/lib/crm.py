@@ -67,6 +67,8 @@ async def garantir_crm(banco=None) -> None:
     from lib.automacoes import garantir_padrao
 
     await garantir_padrao(banco)
+    if (await banco.configuracoes.find_one({"id": "singleton"}, {"crm_migracao_v": 1}) or {}).get("crm_migracao_v") == 1:
+        return  # leads antigos já migrados: não varre a coleção a cada inicialização
     padrao = await banco.funis.find_one({"padrao": True}) or await banco.funis.find_one({})
     if not padrao:
         return
@@ -82,6 +84,7 @@ async def garantir_crm(banco=None) -> None:
             "etapa_desde": lead.get("updated_at") or lead.get("created_at") or now_utc(),
             "etiquetas": lead.get("etiquetas") or [],
         }})
+    await banco.configuracoes.update_one({"id": "singleton"}, {"$set": {"crm_migracao_v": 1}})
 
 
 async def garantir_crm_todas() -> None:

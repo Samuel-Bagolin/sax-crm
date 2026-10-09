@@ -113,8 +113,12 @@ def _msg(d: dict) -> Mensagem:
     )
 
 
-async def _nao_lidas(conversa_id: str, usuario_id: str) -> int:
+async def _nao_lidas(conversa_id: str, usuario_id: str, ultima_msg_em=None) -> int:
+    if ultima_msg_em is None:  # conversa sem mensagens: nada a contar (evita consultar o banco)
+        return 0
     leitura = await db.chat_leituras.find_one({"conversa_id": conversa_id, "usuario_id": usuario_id})
+    if leitura and utc_aware(leitura.get("lida_em")) and utc_aware(leitura["lida_em"]) >= utc_aware(ultima_msg_em):
+        return 0
     filtro = {"conversa_id": conversa_id, "autor_id": {"$ne": usuario_id}, "excluida": {"$ne": True}}
     if leitura:
         filtro["em"] = {"$gt": leitura["lida_em"]}
@@ -134,7 +138,7 @@ async def conversas(principal: Principal = Depends(require("equipe:read"))):
             nome = outro.nome if outro else "Conversa"
         saida.append(Conversa(
             id=c["id"], tipo=c["tipo"], nome=nome, todos=bool(c.get("todos")), membros=membros,
-            nao_lidas=await _nao_lidas(c["id"], principal.usuario_id), ultima_msg_texto=c.get("ultima_msg_texto"),
+            nao_lidas=await _nao_lidas(c["id"], principal.usuario_id, c.get("ultima_msg_em")), ultima_msg_texto=c.get("ultima_msg_texto"),
             ultima_msg_autor=c.get("ultima_msg_autor"), ultima_msg_em=utc_aware(c.get("ultima_msg_em")),
         ))
     saida.sort(key=lambda x: (x.id != GERAL_ID, -(x.ultima_msg_em.timestamp() if x.ultima_msg_em else 0)))
@@ -152,8 +156,8 @@ async def pessoas(principal: Principal = Depends(require("equipe:read"))):
 async def total_nao_lidas(principal: Principal = Depends(require("equipe:read"))):
     await _garantir_geral()
     total = 0
-    async for c in db.chat_conversas.find(_filtro_visivel(principal), {"id": 1}):
-        total += await _nao_lidas(c["id"], principal.usuario_id)
+    async for c in db.chat_conversas.find(_filtro_visivel(principal), {"id": 1, "ultima_msg_em": 1}):
+        total += await _nao_lidas(c["id"], principal.usuario_id, c.get("ultima_msg_em"))
     return {"total": total}
 
 
@@ -187,10 +191,14 @@ async def criar_canal(input: NovoCanal, principal: Principal = Depends(require("
 @router.get("/conversas/{conversa_id}/mensagens", response_model=List[Mensagem])
 async def mensagens(conversa_id: str, depois: str | None = None, antes: str | None = None,
                     limite: int = Query(60, ge=1, le=200), principal: Principal = Depends(require("equipe:read"))):
-    await _conversa(conversa_id, principal)
+    conversa = await _conversa(conversa_id, principal)
     filtro: dict = {"conversa_id": conversa_id}
     if depois:
-        filtro["em"] = {"$gt": utc_aware(datetime.fromisoformat(depois.replace("Z", "+00:00")))}
+        marco = utc_aware(datetime.fromisoformat(depois.replace("Z", "+00:00")))
+        ultima = utc_aware(conversa.get("ultima_msg_em"))
+        if not ultima or ultima <= marco:
+            return []  # consulta periódica sem novidade: 1 leitura, nenhuma escrita
+        filtro["em"] = {"$gt": marco}
     if antes:
         filtro["em"] = {"$lt": utc_aware(datetime.fromisoformat(antes.replace("Z", "+00:00")))}
     docs = await db.chat_mensagens.find(filtro, {"anexo": 0}).sort("em", -1).limit(limite).to_list(limite)

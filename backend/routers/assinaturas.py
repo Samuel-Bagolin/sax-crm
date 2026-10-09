@@ -470,7 +470,7 @@ async def assinar(token: str, input: AssinarInput, request: Request):
         bruto = base64.b64decode(conteudo, validate=True)
     except (binascii.Error, ValueError):
         raise HTTPException(422, "Assinatura inválida")
-    if not bruto.startswith(b"\x89PNG\r\n\x1a\n") or len(bruto) > 400_000:
+    if not bruto.startswith(b"\x89PNG\r\n\x1a\n") or len(bruto) > 150_000:  # cabe no limite de 1 MiB por documento do Firestore
         raise HTTPException(422, "Assinatura inválida")
     documento = contrato.get("documento") or {}
     ip = _ip(request)
