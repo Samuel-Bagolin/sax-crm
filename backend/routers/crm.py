@@ -363,7 +363,7 @@ async def criar_atividade(input: AtividadeCreate, background: BackgroundTasks, p
                         f"{TIPO_LABEL[atividade.tipo]} agendada: {atividade.assunto} ({atividade.data[8:10]}/{atividade.data[5:7]}{' ' + atividade.hora if atividade.hora else ''})",
                         principal)
     from routers.google import agendar, sincronizar_atividade
-    agendar(background, sincronizar_atividade, atividade.id)
+    await agendar(background, sincronizar_atividade, atividade.id)
     return atividade
 
 
@@ -388,7 +388,7 @@ async def editar_atividade(atividade_id: str, input: AtividadeUpdate, background
     data["updated_at"] = now_utc()
     await db.atividades.update_one({"id": atividade_id}, {"$set": data})
     from routers.google import agendar, sincronizar_atividade
-    agendar(background, sincronizar_atividade, atividade_id)
+    await agendar(background, sincronizar_atividade, atividade_id)
     return to_atividade(await db.atividades.find_one({"id": atividade_id}))
 
 
@@ -400,7 +400,7 @@ async def excluir_atividade(atividade_id: str, background: BackgroundTasks, prin
     authorize(principal, "atividade:write", doc)
     await db.atividades.delete_one({"id": atividade_id})
     from routers.google import agendar, remover_evento
-    agendar(background, remover_evento, doc.get("google_usuario"), doc.get("google_evento_id"))
+    await agendar(background, remover_evento, doc.get("google_usuario"), doc.get("google_evento_id"))
     return None
 
 

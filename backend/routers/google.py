@@ -252,8 +252,9 @@ async def remover_evento(google_usuario: str | None, evento_id: str | None) -> N
             pass
 
 
-def agendar(background: BackgroundTasks, funcao, *args) -> None:
-    """Roda a sincronização depois da resposta, no banco da mesma empresa."""
+async def agendar(background: BackgroundTasks, funcao, *args) -> None:
+    """Roda a sincronização no banco da mesma empresa: depois da resposta num servidor contínuo,
+    ou na própria requisição no Vercel (função serverless pode congelar após responder)."""
     banco = empresa_atual_db()
 
     async def tarefa():
@@ -265,4 +266,10 @@ def agendar(background: BackgroundTasks, funcao, *args) -> None:
         finally:
             definir_empresa(None)
 
+    if os.environ.get("VERCEL"):
+        try:
+            await funcao(*args)
+        except Exception:
+            logger.exception("sincronização Google falhou")
+        return
     background.add_task(tarefa)

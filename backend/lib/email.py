@@ -1,4 +1,6 @@
-"""Envio de e-mail transacional pela integração gerenciada da Emergent (Resend).
+"""Envio de e-mail transacional pelo Resend (RESEND_API_KEY + EMAIL_FROM).
+
+Compatível com a integração antiga da Emergent (EMERGENT_EMAIL_KEY) se o Resend não estiver configurado.
 
 Destinatários vêm SEMPRE de registros do banco e o corpo de templates do servidor —
 nenhuma rota aceita destinatário/assunto/HTML do chamador (G4).
@@ -18,14 +20,16 @@ from fastapi import HTTPException
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-# Proxy gerenciado da Emergent — CONSTANTE (não vem do ambiente, para sobreviver ao deploy).
+# Proxy gerenciado da Emergent (legado) e API do Resend.
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+RESEND_URL = os.environ.get("RESEND_API_URL", "https://api.resend.com/emails")
+SERVERLESS = bool(os.environ.get("VERCEL"))
 
 
 def _cfg(nome: str) -> str:
     valor = os.environ.get(nome)
     if not valor:
-        raise HTTPException(status_code=503, detail=f"{nome} ausente em backend/.env")
+        raise HTTPException(status_code=503, detail=f"{nome} não configurado nas variáveis de ambiente")
     return valor
 
 
@@ -112,7 +116,7 @@ async def _remetente() -> tuple[str, str | None]:
         doc = await db.configuracoes.find_one({"id": "singleton"})
     except Exception:
         doc = None
-    nome = (doc or {}).get("email_remetente_nome") or _cfg("EMAIL_FROM_NAME")
+    nome = (doc or {}).get("email_remetente_nome") or os.environ.get("EMAIL_FROM_NAME") or "SAX CRM"
     resposta = (doc or {}).get("email_resposta") or os.environ.get("EMAIL_REPLY_TO")
     return nome, resposta
 
@@ -120,6 +124,8 @@ async def _remetente() -> tuple[str, str | None]:
 async def _deliver(*, to: str, subject: str, html: str, delivery_key: str) -> str | None:
     _assert_safe_email(subject, html)  # gate G2/G3 — nunca pular
     from_name, reply_to = await _remetente()
+    if os.environ.get("RESEND_API_KEY"):
+        return await _deliver_resend(to=to, subject=subject, html=html, delivery_key=delivery_key, from_name=from_name, reply_to=reply_to)
     payload = {
         "to": [to],
         "subject": subject,
@@ -147,6 +153,49 @@ async def _deliver(*, to: str, subject: str, html: str, delivery_key: str) -> st
         raise HTTPException(status_code=500, detail="Falha ao enviar o e-mail")
 
 
+async def _deliver_resend(*, to: str, subject: str, html: str, delivery_key: str, from_name: str, reply_to: str | None) -> str | None:
+    remetente = os.environ.get("EMAIL_FROM") or "onboarding@resend.dev"
+    nome = re.sub(r"[<>\"\r\n]", "", from_name)[:80] or "SAX CRM"
+    payload = {"from": f"{nome} <{remetente}>", "to": [to], "subject": subject, "html": html}
+    if reply_to:
+        payload["reply_to"] = reply_to
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(RESEND_URL, json=payload, headers={
+                "Authorization": f"Bearer {os.environ['RESEND_API_KEY']}", "Idempotency-Key": delivery_key[:256]})
+        resp.raise_for_status()
+        return resp.json().get("id")
+    except httpx.HTTPStatusError as e:
+        logger.error("Resend recusou o envio: %s %s", e.response.status_code, e.response.text[:200])
+        raise HTTPException(status_code=502, detail="Falha ao enviar o e-mail")
+    except Exception as e:
+        logger.error("Envio de e-mail incerto: %s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="Falha ao enviar o e-mail")
+
+
+async def drenar_fila(bank, limite: int = 25) -> int:
+    """Uma passada na fila de e-mails de um banco. Retorna quantos foram enviados."""
+    from datetime import timedelta
+    from pymongo import ReturnDocument
+    from models.common import now_utc
+
+    enviados = 0
+    # Processo morreu no meio do envio: não reenviar automaticamente uma segunda cópia.
+    await bank.mail_jobs.update_many({"status": "sending", "lease_until": {"$lt": now_utc()}}, {"$set": {"status": "uncertain"}})
+    for _ in range(limite):
+        job = await bank.mail_jobs.find_one_and_update({"status": "queued", "retry_at": {"$lte": now_utc()}},
+            {"$set": {"status": "sending", "lease_until": now_utc() + timedelta(minutes=2)}}, return_document=ReturnDocument.AFTER)
+        if not job:
+            break
+        try:
+            result = await _deliver(to=job["to"], subject=job["subject"], html=job["html"], delivery_key=job["_id"])
+            await bank.mail_jobs.update_one({"_id": job["_id"]}, {"$set": {"status": "sent", "sent_at": now_utc(), "provider_id": result}, "$unset": {"html": ""}})
+            enviados += 1
+        except Exception as exc:
+            await bank.mail_jobs.update_one({"_id": job["_id"]}, {"$set": {"status": "uncertain", "error_type": type(exc).__name__}})
+    return enviados
+
+
 async def send_email(*, to: str, subject: str, html: str) -> str:
     import hashlib, json
     from lib.db import db
@@ -155,34 +204,25 @@ async def send_email(*, to: str, subject: str, html: str) -> str:
     payload = {"to": to, "subject": subject, "html": html}
     key = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
     await db.mail_jobs.update_one({"_id": key}, {"$setOnInsert": {**payload, "status": "queued", "created_at": now_utc(), "retry_at": now_utc() }}, upsert=True)
+    if SERVERLESS:
+        # Sem processo contínuo (Vercel): entrega agora; a rotina agendada recolhe o que falhar.
+        try:
+            await drenar_fila(db, limite=3)
+        except Exception:
+            logger.exception("envio imediato falhou; fica na fila")
     return key
 
 
 async def mail_worker():
     import asyncio
-    from datetime import timedelta
-    from pymongo import ReturnDocument
     from lib.db import client, controle, definir_empresa
-    from models.common import now_utc
     while True:
         try:
             banks = [controle.name]
             async for company in controle.empresas.find({"ativo": True}): banks.append(company["db_name"])
             for name in banks:
-                bank = client[name]
                 definir_empresa(name if name != controle.name else None)
-                # A process died during delivery: do not automatically send a second copy.
-                await bank.mail_jobs.update_many({"status": "sending", "lease_until": {"$lt": now_utc()}}, {"$set": {"status": "uncertain"}})
-                for _ in range(25):
-                    job = await bank.mail_jobs.find_one_and_update({"status": "queued", "retry_at": {"$lte": now_utc()}},
-                        {"$set": {"status": "sending", "lease_until": now_utc()+timedelta(minutes=2)}}, return_document=ReturnDocument.AFTER)
-                    if not job: break
-                    try:
-                        result = await _deliver(to=job["to"], subject=job["subject"], html=job["html"], delivery_key=job["_id"])
-                        await bank.mail_jobs.update_one({"_id": job["_id"]}, {"$set": {"status": "sent", "sent_at": now_utc(), "provider_id": result}, "$unset": {"html": ""}})
-                    except Exception as exc:
-                        # Operator reviews provider outcome before retrying uncertain deliveries.
-                        await bank.mail_jobs.update_one({"_id": job["_id"]}, {"$set": {"status": "uncertain", "error_type": type(exc).__name__}})
+                await drenar_fila(client[name])
             definir_empresa(None)
         except asyncio.CancelledError:
             raise

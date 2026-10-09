@@ -1,0 +1,18 @@
+# Dependências do backend para o Vercel (função api/index.py). Enxuto de propósito:
+# o pacote da função tem limite de tamanho. Ferramentas de teste ficam em backend/requirements-dev.txt.
+fastapi==0.141.1
+starlette==1.7.0
+pydantic==2.14.0
+motor==3.7.1
+pymongo==4.17.0
+email-validator==2.3.0
+PyJWT==2.15.1
+passlib==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.32
+cryptography==50.0.2
+httpx==0.28.1
+reportlab==4.2.5
+pillow==12.3.0
+tzdata==2026.5
+python-dotenv==1.2.4

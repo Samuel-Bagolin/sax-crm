@@ -58,7 +58,7 @@ async def _criar_atividade(regra: Automacao, *, negocio: dict | None = None, ent
     await db.atividades.insert_one({**atividade.model_dump(), "automacao_id": regra.id})
     if atividade.negocio_id:
         await registrar(atividade.negocio_id, "automacao", f"Automação “{regra.nome}” criou: {regra.assunto} ({_br(atividade.data)})")
-    _sincronizar_google(atividade.id)
+    await _sincronizar_google(atividade.id)
     return atividade.id
 
 
@@ -66,7 +66,7 @@ def _br(iso: str) -> str:
     return f"{iso[8:10]}/{iso[5:7]}"
 
 
-def _sincronizar_google(atividade_id: str) -> None:
+async def _sincronizar_google(atividade_id: str) -> None:
     """Leva a atividade automática ao Google Agenda do responsável, sem segurar a requisição."""
     async def tarefa():
         try:
@@ -76,6 +76,9 @@ def _sincronizar_google(atividade_id: str) -> None:
         except Exception:
             logger.debug("sincronização Google da automação falhou", exc_info=True)
 
+    if os.environ.get("VERCEL"):
+        await tarefa()  # serverless: sem tarefas soltas depois da resposta
+        return
     try:
         asyncio.get_running_loop().create_task(tarefa())
     except RuntimeError:

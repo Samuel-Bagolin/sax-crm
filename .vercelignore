@@ -1,0 +1,10 @@
+tests/
+memory/
+backend/tests/
+backend/seed.py
+backend/audit_readonly.py
+backend/migrar_para_empresa.py
+frontend/node_modules/
+**/__pycache__/
+*.md
+!README.md

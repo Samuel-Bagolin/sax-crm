@@ -21,16 +21,54 @@ from lib.security import SecurityMiddleware
 from lib.email import mail_worker
 
 # Módulos do monolito modular — um router por domínio, todos registrados sob /api
-from routers import fotos_imovel, match, planos, portais, propostas, proprietario
+from routers import rotina, fotos_imovel, match, planos, portais, propostas, proprietario
 from routers import agenda, assinaturas, relatorios, google, documentos, chat, auth, config, contratos, crm, empresas, financeiro, imoveis, leads, pessoas, usuarios, operacao
 from lib.crm import garantir_crm_todas
 
 
 # Startup runs before the yield, shutdown after it. Add your own setup/teardown here.
+SERVERLESS = bool(os.environ.get("VERCEL"))
+_inicializado = False
+_trava_inicio = asyncio.Lock()
+
+
+async def inicializar() -> None:
+    """Índices e dados padrão do CRM. Idempotente; roda uma vez por instância."""
+    global _inicializado
+    if _inicializado:
+        return
+    async with _trava_inicio:
+        if not _inicializado:
+            await ensure_indexes()
+            await garantir_crm_todas()
+            await _primeiro_administrador()
+            _inicializado = True
+
+
+async def _primeiro_administrador() -> None:
+    """Banco novo (ex.: MongoDB Atlas vazio): cria o Administrador de Sistema a partir de
+    ADMIN_INICIAL_EMAIL/ADMIN_INICIAL_SENHA. Só age se ainda não existir nenhum."""
+    email = (os.environ.get("ADMIN_INICIAL_EMAIL") or "").strip().lower()
+    senha = os.environ.get("ADMIN_INICIAL_SENHA") or ""
+    if not email or len(senha) < 10:
+        return
+    if await controle.usuarios.find_one({"papel": "sysadmin"}, {"_id": 1}):
+        return
+    from lib.auth import hash_senha
+    from models.usuarios import Usuario
+    nome = os.environ.get("ADMIN_INICIAL_NOME") or "Administrador"
+    await controle.usuarios.insert_one(Usuario(nome=nome, email=email, senha_hash=hash_senha(senha), papel="sysadmin").model_dump())
+    logging.getLogger(__name__).warning("Administrador de Sistema inicial criado: %s (remova ADMIN_INICIAL_SENHA das variáveis)", email)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await ensure_indexes()
-    await garantir_crm_todas()
+    if SERVERLESS:
+        # Vercel: sem tarefas contínuas; a inicialização acontece na primeira requisição
+        # e o trabalho periódico vem do Vercel Cron (/api/cron/rotina).
+        yield
+        return
+    await inicializar()
     worker = asyncio.create_task(mail_worker())
     from lib.automacoes import worker as automacoes_worker
     rotina = asyncio.create_task(automacoes_worker())
@@ -103,11 +141,22 @@ api_router.include_router(portais.publico_router)
 api_router.include_router(proprietario.router)
 api_router.include_router(proprietario.publico_router)
 api_router.include_router(planos.router)
+api_router.include_router(rotina.router)
 
 # Include the router in the main app
 app.include_router(api_router)
 
 app.add_middleware(SecurityMiddleware)
+
+
+@app.middleware("http")
+async def _inicializar_na_primeira_requisicao(request, call_next):
+    if SERVERLESS and not _inicializado:
+        try:
+            await inicializar()
+        except Exception:
+            logging.getLogger(__name__).exception("inicialização falhou; tenta de novo na próxima requisição")
+    return await call_next(request)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

@@ -118,7 +118,7 @@ async def create_visita(input: VisitaCreate, background: BackgroundTasks, princi
         from lib.crm import registrar
         await registrar(visita.lead_id, "visita", f"Visita agendada para {visita.data[8:10]}/{visita.data[5:7]} às {visita.hora}: {visita.titulo}", principal)
     from routers.google import agendar, sincronizar_visita
-    agendar(background, sincronizar_visita, visita.id)
+    await agendar(background, sincronizar_visita, visita.id)
     return visita
 
 
@@ -143,7 +143,7 @@ async def update_visita(
         await db.visitas.update_one({"id": visita_id}, {"$set": data})
     atual = await db.visitas.find_one({"id": visita_id})
     from routers.google import agendar, sincronizar_visita
-    agendar(background, sincronizar_visita, visita_id)
+    await agendar(background, sincronizar_visita, visita_id)
     return to_visita(atual)
 
 
@@ -155,7 +155,7 @@ async def delete_visita(visita_id: str, background: BackgroundTasks, principal: 
     authorize(principal, "visita:write", doc)
     await db.visitas.delete_one({"id": visita_id})
     from routers.google import agendar, remover_evento
-    agendar(background, remover_evento, doc.get("google_usuario"), doc.get("google_evento_id"))
+    await agendar(background, remover_evento, doc.get("google_usuario"), doc.get("google_evento_id"))
     return None
 
 
@@ -338,6 +338,9 @@ async def cron_lembretes_visitas(
 
     run_id = x_webhook_id or "manual"
     # Idempotência: a marca `lembrete_enviado_em` impede reenvio da mesma visita.
+    if os.environ.get("VERCEL"):
+        await _tarefa_lembretes(_amanha(), run_id)
+        return {"status": "done", "run_id": run_id}
     background.add_task(_tarefa_lembretes, _amanha(), run_id)
     return {"status": "accepted", "run_id": run_id}
 

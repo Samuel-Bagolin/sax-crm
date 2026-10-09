@@ -22,8 +22,10 @@ from models.common import new_id, now_utc, utc_aware
 
 router = APIRouter(tags=["documentos"])
 
-LIMITE_CRM = 8 * 1024 * 1024
-LIMITE_DRIVE = 25 * 1024 * 1024
+# No Vercel o corpo de uma requisição é limitado a 4,5 MB; num servidor contínuo os limites são maiores.
+_SERVERLESS = bool(__import__("os").environ.get("VERCEL"))
+LIMITE_CRM = (4 if _SERVERLESS else 8) * 1024 * 1024
+LIMITE_DRIVE = (4 if _SERVERLESS else 25) * 1024 * 1024
 TIPOS_PERMITIDOS = re.compile(r"^(application/pdf|image/(png|jpeg|webp|heic)|application/(msword|vnd\.openxmlformats-officedocument\.[a-z.]+|vnd\.ms-excel|zip)|text/plain|application/vnd\.google-apps\.[a-z]+)$")
 
 
@@ -127,13 +129,13 @@ async def upload(
     registro = doc.model_dump()
     if tem_google:
         if len(conteudo) > LIMITE_DRIVE:
-            raise HTTPException(413, "Arquivo acima de 25 MB")
+            raise HTTPException(413, f"Arquivo acima de {LIMITE_DRIVE // (1024 * 1024)} MB. Envie direto pelo Google Drive e use “Do Google Drive”.")
         pasta = await _pasta_drive(principal.usuario_id, negocio, contrato)
         meta = await google.enviar_arquivo(principal.usuario_id, nome, mime, conteudo, pasta)
         registro.update(drive_file_id=meta["id"], drive_link=meta.get("webViewLink"), drive_dono=principal.usuario_id)
     else:
         if len(conteudo) > LIMITE_CRM:
-            raise HTTPException(413, "Arquivo acima de 8 MB. Conecte o Google Drive para enviar arquivos maiores.")
+            raise HTTPException(413, f"Arquivo acima de {LIMITE_CRM // (1024 * 1024)} MB. Envie pelo Google Drive e use “Do Google Drive”.")
         registro["conteudo"] = base64.b64encode(conteudo).decode()
     await db.documentos.insert_one(registro)
     if negocio_id:

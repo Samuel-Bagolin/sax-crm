@@ -20,7 +20,7 @@ from models.common import new_id, now_utc, utc_aware
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 GERAL_ID = "geral"
-LIMITE_ANEXO = 5 * 1024 * 1024
+LIMITE_ANEXO = 4 * 1024 * 1024  # cabe no limite de 4,5 MB por requisição do Vercel
 MIMES_ANEXO = re.compile(r"^(image/(png|jpeg|webp|gif)|application/pdf)$")
 
 
@@ -237,7 +237,7 @@ async def enviar_anexo(conversa_id: str, arquivo: UploadFile = File(...), texto:
         raise HTTPException(415, "No chat, envie imagem ou PDF. Outros arquivos vão nos documentos do negócio.")
     conteudo = await arquivo.read(LIMITE_ANEXO + 1)
     if len(conteudo) > LIMITE_ANEXO:
-        raise HTTPException(413, "Arquivo acima de 5 MB")
+        raise HTTPException(413, "Arquivo acima de 4 MB")
     anexo = {"anexo": base64.b64encode(conteudo).decode(), "anexo_nome": (arquivo.filename or "arquivo")[:120], "anexo_mime": mime}
     return await _gravar(conversa, principal, texto[:4000], None, anexo)
 

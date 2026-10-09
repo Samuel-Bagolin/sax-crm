@@ -1,4 +1,6 @@
-# CedroNexxo ERP imobiliário
+# SAX CRM (CedroNexxo) — CRM e ERP imobiliário
+
+**Publicação no Vercel: siga [`DEPLOY_VERCEL.md`](DEPLOY_VERCEL.md).**
 
 Aplicação React/TypeScript (Vite) com API FastAPI/Python e MongoDB/Motor. Cada empresa possui banco próprio; o banco de controle mantém empresas, administradores de sistema e o índice global de e-mails.
 
@@ -16,7 +18,7 @@ O financeiro registra comissões da imobiliária. Não equivale a uma apuração
 
 ## Execução
 
-Instale `backend/requirements.txt` no ambiente Python e as dependências do `frontend/package.json` com o lockfile existente. API: `cd backend && uvicorn server:app --host 0.0.0.0 --port 8001`. Frontend: `cd frontend && yarn dev`. A UI usa `/api`, encaminhado ao backend pelo Vite/ingress.
+Local: `pip install -r backend/requirements-dev.txt` e `cd frontend && npm ci`. API: `cd backend && uvicorn server:app --host 0.0.0.0 --port 8001`. Frontend: `cd frontend && npm run dev`. A UI usa `/api`, encaminhado ao backend pelo Vite/ingress.
 
 Configurações de ambiente (não versionar valores secretos):
 
@@ -25,7 +27,7 @@ Configurações de ambiente (não versionar valores secretos):
 - `APP_URL`: origem HTTPS real do ERP, usada nos convites e lembretes. Sem fallback para previews antigos.
 - `CORS_ORIGINS`: origens explícitas separadas por vírgula; não aceita wildcard com credenciais.
 - `APP_TZ`: padrão `America/Sao_Paulo`.
-- `EMERGENT_EMAIL_KEY`, `EMAIL_FROM_NAME`, `EMAIL_REPLY_TO`: integração de e-mail existente.
+- `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_FROM_NAME`, `EMAIL_REPLY_TO`: envio de e-mail pelo Resend (a antiga `EMERGENT_EMAIL_KEY` continua aceita).
 - `BACKUP_ENCRYPTION_KEY`: chave Fernet válida, provisionada e guardada em cofre pelo operador. A perda da chave impede decifrar os backups.
 
 ## Garantias e operação

@@ -42,12 +42,18 @@ export function FotosGaleria({ imovelId }: { imovelId: string }) {
     if (!lista.length) return;
     setEnviando(lista.length);
     try {
-      const fd = new FormData();
-      for (const f of lista) fd.append("arquivos", await reduzirFoto(f));
-      const r = await fetch(`/api/imoveis/${imovelId}/fotos`, { method: "POST", body: fd });
-      const corpo = await r.json().catch(() => null);
-      if (!r.ok) throw new Error((corpo && typeof corpo.detail === "string" && corpo.detail) || "Falha no envio");
-      atualizar(corpo as FotoImovel[]);
+      // Uma foto por requisição: cabe no limite de 4,5 MB por envio do Vercel.
+      let ultima: FotoImovel[] | null = null;
+      for (const f of lista) {
+        const fd = new FormData();
+        fd.append("arquivos", await reduzirFoto(f));
+        const r = await fetch(`/api/imoveis/${imovelId}/fotos`, { method: "POST", body: fd });
+        const corpo = await r.json().catch(() => null);
+        if (!r.ok) throw new Error((corpo && typeof corpo.detail === "string" && corpo.detail) || "Falha no envio");
+        ultima = corpo as FotoImovel[];
+        setEnviando((n) => Math.max(0, n - 1));
+      }
+      if (ultima) atualizar(ultima);
       toast.success(`${lista.length} foto(s) adicionada(s)`);
     } catch (e) {
       toast.error((e as Error).message);

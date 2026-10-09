@@ -135,7 +135,7 @@ async def get_imovel(imovel_id: str, principal: Principal = Depends(require("imo
     )
 
 
-def _depois_de_salvar(background: BackgroundTasks, imovel_id: str) -> None:
+async def _depois_de_salvar(background: BackgroundTasks, imovel_id: str) -> None:
     """Avisa, em segundo plano, os negócios cujo perfil combina com o imóvel."""
     from lib.db import definir_empresa, empresa_atual_db
     from routers.match import avisar_novos_compativeis
@@ -152,6 +152,14 @@ def _depois_de_salvar(background: BackgroundTasks, imovel_id: str) -> None:
         finally:
             definir_empresa(None)
 
+    import os
+    if os.environ.get("VERCEL"):
+        try:
+            await avisar_novos_compativeis(imovel_id)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("aviso de compatíveis falhou")
+        return
     background.add_task(tarefa)
 
 
@@ -164,7 +172,7 @@ async def create_imovel(input: ImovelCreate, background: BackgroundTasks, princi
     await reference("pessoas", input.proprietario_id, principal)
     imovel = Imovel(**input.model_dump(), codigo=await _proximo_codigo(input.tipo))
     await db.imoveis.insert_one(imovel.model_dump())
-    _depois_de_salvar(background, imovel.id)
+    await _depois_de_salvar(background, imovel.id)
     return imovel
 
 
@@ -186,7 +194,7 @@ async def update_imovel(
     atualizado = await db.imoveis.find_one({"id": imovel_id})
     campos_match = {"tipo", "finalidade", "status", "bairro", "cidade", "quartos", "vagas", "area_util", "valor_venda", "valor_aluguel"}
     if any(k in data and data[k] != doc.get(k) for k in campos_match):
-        _depois_de_salvar(background, imovel_id)
+        await _depois_de_salvar(background, imovel_id)
     return to_imovel(atualizado)
 
 
