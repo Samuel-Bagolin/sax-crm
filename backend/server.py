@@ -149,13 +149,22 @@ app.include_router(api_router)
 app.add_middleware(SecurityMiddleware)
 
 
+_ultima_falha_inicio = 0.0
+
+
 @app.middleware("http")
 async def _inicializar_na_primeira_requisicao(request, call_next):
-    if SERVERLESS and not _inicializado:
+    global _ultima_falha_inicio
+    import time
+    if SERVERLESS and not _inicializado and time.monotonic() - _ultima_falha_inicio > 30:
         try:
             await inicializar()
-        except Exception:
-            logging.getLogger(__name__).exception("inicialização falhou; tenta de novo na próxima requisição")
+        except Exception as exc:
+            _ultima_falha_inicio = time.monotonic()
+            logging.getLogger(__name__).error("Inicialização falhou (banco inacessível?): %s: %s", type(exc).__name__, str(exc)[:300])
+            from starlette.responses import JSONResponse
+            return JSONResponse({"detail": "Banco de dados indisponível. Verifique MONGO_URL e o Network Access do MongoDB Atlas.",
+                                 "erro": type(exc).__name__}, status_code=503)
     return await call_next(request)
 app.add_middleware(
     CORSMiddleware,

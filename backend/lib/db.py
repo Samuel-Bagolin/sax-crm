@@ -30,7 +30,8 @@ if mongo_url.startswith("mongomock://"):  # somente testes locais sem servidor M
 
     client = AsyncMongoMockClient()
 else:
-    client = AsyncIOMotorClient(mongo_url)
+    # No Vercel a função precisa responder rápido: falha de conexão aparece em segundos, não em 30 s.
+    client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=8000 if os.environ.get("VERCEL") else 30000)
 
 DB_CONTROLE = os.environ["DB_NAME"]
 AMBIENTE = os.environ.get("APP_ENV", "desenvolvimento").lower()
