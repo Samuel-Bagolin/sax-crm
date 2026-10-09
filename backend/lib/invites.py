@@ -5,7 +5,7 @@ import secrets
 from datetime import timedelta
 from html import escape
 from fastapi import HTTPException
-from lib.email import send_email
+from lib.email import email_configurado, send_email
 from models.common import now_utc
 
 
@@ -16,7 +16,8 @@ def app_url():
     return url
 
 
-async def invite(bank, user: dict, company_name: str):
+async def invite(bank, user: dict, company_name: str) -> str:
+    """Gera o link de ativação (uso único, 24 h), envia por e-mail se houver provedor e devolve o link."""
     base_url = app_url()
     token = secrets.token_urlsafe(32)
     digest = hashlib.sha256(token.encode()).hexdigest()
@@ -24,6 +25,8 @@ async def invite(bank, user: dict, company_name: str):
         "activation_digest": digest, "activation_expires": now_utc() + timedelta(hours=24)}})
     url = base_url + "/ativar-acesso#token=" + token
     # Existing password/session remain valid until the one-time link is consumed.
+    if not email_configurado():
+        return url  # sem e-mail configurado: quem chamou mostra o link para enviar por outro meio
     await send_email(to=user["email"], subject=f"Ative seu acesso — {company_name}",
         html=f"<p>Olá {escape(user['nome'])}.</p><p><a href='{url}'>Definir senha de acesso</a></p><p>O link é de uso único e vence em 24 horas.</p>")
-    return True
+    return url

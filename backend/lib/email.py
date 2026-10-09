@@ -196,6 +196,11 @@ async def drenar_fila(bank, limite: int = 25) -> int:
     return enviados
 
 
+def email_configurado() -> bool:
+    """Há um provedor de e-mail configurado (Resend ou a integração antiga)?"""
+    return bool((os.environ.get("RESEND_API_KEY") and os.environ.get("EMAIL_FROM")) or os.environ.get("EMERGENT_EMAIL_KEY"))
+
+
 async def send_email(*, to: str, subject: str, html: str) -> str:
     import hashlib, json
     from lib.db import db

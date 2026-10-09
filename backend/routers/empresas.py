@@ -74,9 +74,10 @@ def _app_url() -> str:
     return url if url.startswith("https://") else "https://imob-erp-lite.preview.emergentagent.com"
 
 
-async def enviar_convite_gestor(*, empresa_nome: str, nome: str, email: str, senha: str) -> bool:
+async def enviar_convite_gestor(*, empresa_nome: str, nome: str, email: str, senha: str) -> str | None:
+    """Devolve o link de ativação (ou None se não deu para gerar)."""
     index = await controle.usuarios_index.find_one({"email": email})
-    if not index: return False
+    if not index: return None
     bank = client[index["db_name"]]
     user = await bank.usuarios.find_one({"email": email})
     try:
@@ -85,7 +86,7 @@ async def enviar_convite_gestor(*, empresa_nome: str, nome: str, email: str, sen
         return await invite(bank, user, empresa_nome)
     except Exception:
         logger.error("Convite não enfileirado; gestor pode solicitar recuperação")
-        return False
+        return None
 
 
 CAMPOS_DATA = {
@@ -230,14 +231,16 @@ async def create_empresa(input: EmpresaCreate, principal: Principal = Depends(re
     await controle.empresas.insert_one(empresa.model_dump())
     await indexar_usuario(email, empresa.id, db_name)
 
-    convite = False
-    if input.enviar_convite:
-        convite = await enviar_convite_gestor(
+    link = None
+    if input.enviar_convite and gestor["activation_required"]:
+        link = await enviar_convite_gestor(
             empresa_nome=empresa.nome, nome=gestor["nome"], email=email, senha=senha
         )
+    from lib.email import email_configurado
+    convite = bool(link) and email_configurado()
 
     logger.info("empresa criada por %s: %s (convite=%s)", principal.email, slug, convite)
-    return await _resumo(empresa.model_dump(), convite_enviado=convite)
+    return await _resumo(empresa.model_dump(), convite_enviado=convite, link_ativacao=link)
 
 
 @router.post("/{empresa_id}/reenviar-convite")
@@ -255,10 +258,11 @@ async def reenviar_convite(empresa_id: str, principal: Principal = Depends(requi
     from lib.db import definir_empresa
     definir_empresa(banco.name)
     try:
-        await invite(banco, gestor, empresa["nome"])
+        link = await invite(banco, gestor, empresa["nome"])
     except Exception:
         raise HTTPException(502, "Não foi possível enfileirar o convite; o acesso anterior foi preservado")
-    return {"enviado": True, "email": gestor["email"]}
+    from lib.email import email_configurado
+    return {"enviado": email_configurado(), "email": gestor["email"], "nome": gestor.get("nome"), "link_ativacao": link}
 
 
 

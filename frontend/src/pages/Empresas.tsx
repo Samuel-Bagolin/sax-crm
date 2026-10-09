@@ -45,6 +45,7 @@ export default function Empresas() {
   const qc = useQueryClient();
   const [modal, setModal] = useState(false);
   const [usoAberto, setUsoAberto] = useState<string | null>(null);
+  const [linkAtivacao, setLinkAtivacao] = useState<{ empresa: string; email: string; link: string; enviado: boolean } | null>(null);
   const { data: catalogo } = useCatalogoPlanos();
   const [form, setForm] = useState({
     plano: "profissional",
@@ -84,10 +85,9 @@ export default function Empresas() {
       setModal(false);
       setForm({ plano: "profissional", nome: "", slug: "", cnpj: "", admin_nome: "", admin_email: "", admin_senha: "" });
       toast.success(`Empresa ${e.nome} criada`, {
-        description: e.convite_enviado
-          ? `Link de ativação enfileirado para ${form.admin_email}`
-          : `Banco próprio: ${e.db_name}. Convite não enviado — confira o e-mail do gestor.`,
+        description: e.convite_enviado ? `Link de ativação enviado para ${form.admin_email}` : undefined,
       });
+      if (e.link_ativacao) setLinkAtivacao({ empresa: e.nome, email: form.admin_email.trim(), link: e.link_ativacao, enviado: e.convite_enviado });
     },
     onError: (err) => toast.error(detalheErro(err) ?? "Não foi possível criar a empresa."),
   });
@@ -130,8 +130,12 @@ export default function Empresas() {
   });
 
   const reenviar = useMutation({
-    mutationFn: (e: EmpresaResumo) => apiPost<{ enviado: boolean; email: string }>(`/empresas/${e.id}/reenviar-convite`),
-    onSuccess: (r) => toast.success(`Novo link de ativação enfileirado para ${r.email}.`),
+    mutationFn: (e: EmpresaResumo) =>
+      apiPost<{ enviado: boolean; email: string; link_ativacao: string | null }>(`/empresas/${e.id}/reenviar-convite`).then((r) => ({ ...r, empresa: e.nome })),
+    onSuccess: (r) => {
+      if (r.enviado) toast.success(`Novo link de ativação enviado para ${r.email}.`);
+      if (r.link_ativacao) setLinkAtivacao({ empresa: r.empresa, email: r.email, link: r.link_ativacao, enviado: r.enviado });
+    },
     onError: (err) => toast.error(detalheErro(err) ?? "Não foi possível reenviar o convite."),
   });
 
@@ -404,6 +408,49 @@ export default function Empresas() {
           <p>· Excluir uma empresa apaga o banco dela, mediante confirmação do identificador.</p>
         </CardContent>
       </Card>
+
+      <Dialog open={!!linkAtivacao} onOpenChange={(o) => !o && setLinkAtivacao(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Link de ativação do gestor</DialogTitle>
+            <DialogDescription>
+              {linkAtivacao?.enviado
+                ? `Também enviamos por e-mail para ${linkAtivacao?.email}. Se não chegar, mande este link pelo WhatsApp.`
+                : `O envio de e-mail ainda não está configurado. Mande este link para ${linkAtivacao?.email} pelo WhatsApp ou outro canal.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <Input readOnly value={linkAtivacao?.link ?? ""} onFocus={(ev) => ev.currentTarget.select()} data-testid="link-ativacao" />
+            <p className="text-xs text-muted-foreground">
+              O link é de uso único e vence em 24 horas. Com ele, o gestor cria a própria senha. Não publique em grupos.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(linkAtivacao?.link ?? "");
+                    toast.success("Link copiado");
+                  } catch {
+                    toast.error("Não foi possível copiar; selecione o texto e copie.");
+                  }
+                }}
+              >
+                Copiar link
+              </Button>
+              <a
+                  className={buttonVariants({ variant: "outline" })}
+                  href={`https://wa.me/?text=${encodeURIComponent(
+                    `Olá! Seu acesso ao SAX (${linkAtivacao?.empresa}) está pronto. Crie sua senha por este link (vale 24 h): ${linkAtivacao?.link}`,
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Enviar pelo WhatsApp
+                </a>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={modal} onOpenChange={(o) => !o && setModal(false)}>
         <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-2xl">

@@ -76,6 +76,7 @@ class EmpresaResumo(Empresa):
     leads: int = 0
     contratos: int = 0
     convite_enviado: bool = False
+    link_ativacao: str | None = None  # só na resposta da criação, para o Administrador de Sistema
 
 
 class UsoEmpresa(BaseModel):

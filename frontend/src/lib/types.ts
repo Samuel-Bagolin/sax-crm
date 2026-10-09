@@ -152,6 +152,7 @@ export interface EmpresaResumo extends Empresa {
   leads: number;
   contratos: number;
   convite_enviado: boolean;
+  link_ativacao?: string | null;
 }
 
 export interface UsoEmpresa {
