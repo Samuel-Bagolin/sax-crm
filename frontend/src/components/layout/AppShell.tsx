@@ -46,6 +46,7 @@ import { useConfig } from "@/lib/useConfig";
 import { isoLocal } from "@/lib/crm";
 import type { Atividade, Entrada } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ehPadrao, variaveisMenu } from "@/lib/coresMenu";
 
 type Nivel = "todos" | "admin" | "sysadmin";
 interface ItemNav {
@@ -271,6 +272,16 @@ export default function AppShell() {
     else raiz.style.removeProperty("--primary");
     document.title = config.nome_software;
   }, [config.cor_primaria, config.nome_software]);
+
+  // Cores do menu lateral (Sistema → Identidade visual). Padrão: as do tema (roxo SAX + laranja).
+  useEffect(() => {
+    const raiz = document.documentElement;
+    const vars = ehPadrao(config.cor_menu, config.cor_menu_destaque) ? null : variaveisMenu(config.cor_menu, config.cor_menu_destaque);
+    const nomes = Object.keys(variaveisMenu("#000000", "#000000")!);
+    nomes.forEach((n) => raiz.style.removeProperty(n));
+    if (vars) Object.entries(vars).forEach(([n, v]) => raiz.style.setProperty(n, v));
+    return () => nomes.forEach((n) => raiz.style.removeProperty(n));
+  }, [config.cor_menu, config.cor_menu_destaque]);
 
   const caminho = location.pathname;
   const titulo = caminho.startsWith("/negocios/")

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { PALETAS_MENU, variaveisMenu } from "@/lib/coresMenu";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -89,6 +91,8 @@ export default function Configuracoes() {
         cor_painel: form!.cor_painel,
         cor_fonte: form!.cor_fonte,
         cor_primaria: form!.cor_primaria,
+        cor_menu: form!.cor_menu,
+        cor_menu_destaque: form!.cor_menu_destaque,
         imagem_fundo_login: form!.imagem_fundo_login || null,
         email_remetente_nome: form!.email_remetente_nome,
         email_resposta: form!.email_resposta || null,
@@ -201,22 +205,55 @@ export default function Configuracoes() {
                 </div>
               </div>
 
+              <div className="grid gap-3 rounded-lg border p-4" data-testid="config-cores-menu">
+                <div>
+                  <p className="text-sm font-semibold">Cores do menu lateral</p>
+                  <p className="text-xs text-muted-foreground">
+                    Escolha uma combinação pronta ou defina as suas. O texto do menu ajusta o contraste sozinho.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {PALETAS_MENU.map((p) => {
+                    const ativa = form.cor_menu?.toLowerCase() === p.fundo && form.cor_menu_destaque?.toLowerCase() === p.destaque;
+                    return (
+                      <button
+                        key={p.nome}
+                        type="button"
+                        onClick={() => {
+                          set("cor_menu", p.fundo);
+                          set("cor_menu_destaque", p.destaque);
+                        }}
+                        className={cn(
+                          "flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs",
+                          ativa ? "border-primary ring-2 ring-primary/20" : "hover:bg-muted",
+                        )}
+                        data-testid={`paleta-menu-${p.nome}`}
+                      >
+                        <span className="flex h-5 w-8 overflow-hidden rounded border">
+                          <span className="h-full w-2/3" style={{ background: p.fundo }} />
+                          <span className="h-full w-1/3" style={{ background: p.destaque }} />
+                        </span>
+                        {p.nome}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                  <CorCampo id="config-cor-menu" rotulo="Fundo do menu" valor={form.cor_menu ?? ""} onChange={(v) => set("cor_menu", v)} />
+                  <CorCampo
+                    id="config-cor-menu-destaque"
+                    rotulo="Destaque do menu (item ativo e contadores)"
+                    valor={form.cor_menu_destaque ?? ""}
+                    onChange={(v) => set("cor_menu_destaque", v)}
+                  />
+                  <PreviaMenu fundo={form.cor_menu} destaque={form.cor_menu_destaque} />
+                </div>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-3">
                 <CorCampo
-                  id="config-cor-painel"
-                  rotulo="Cor de fundo dos painéis"
-                  valor={form.cor_painel}
-                  onChange={(v) => set("cor_painel", v)}
-                />
-                <CorCampo
-                  id="config-cor-fonte"
-                  rotulo="Cor das fontes"
-                  valor={form.cor_fonte}
-                  onChange={(v) => set("cor_fonte", v)}
-                />
-                <CorCampo
                   id="config-cor-primaria"
-                  rotulo="Cor de destaque"
+                  rotulo="Cor dos botões e links"
                   valor={form.cor_primaria}
                   onChange={(v) => set("cor_primaria", v)}
                 />
@@ -513,6 +550,25 @@ export default function Configuracoes() {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function PreviaMenu({ fundo, destaque }: { fundo: string; destaque: string }) {
+  const v = variaveisMenu(fundo, destaque);
+  if (!v) return <div className="h-[92px] w-[64px] rounded-md border bg-muted" />;
+  return (
+    <div
+      className="flex h-[92px] w-[64px] flex-col items-center gap-1.5 rounded-md border p-2"
+      style={{ background: v["--sidebar"] }}
+      aria-label="Prévia do menu"
+    >
+      <span className="text-[11px] font-black" style={{ color: v["--sidebar-primary"] }}>SAX</span>
+      <span className="relative h-4 w-full rounded" style={{ background: v["--sidebar-accent"] }}>
+        <span className="absolute inset-y-0.5 left-0 w-[2px] rounded" style={{ background: v["--sidebar-primary"] }} />
+      </span>
+      <span className="h-1.5 w-8 rounded" style={{ background: v["--sidebar-foreground"], opacity: 0.6 }} />
+      <span className="h-1.5 w-8 rounded" style={{ background: v["--sidebar-foreground"], opacity: 0.6 }} />
     </div>
   );
 }

@@ -14,7 +14,7 @@ import { FormTrocarSenha } from "@/components/shared/TrocarSenha";
 
 export default function Perfil() {
   const qc = useQueryClient();
-  const { data: eu } = useQuery({ queryKey: ["perfil"], queryFn: () => apiGet<UsuarioPublico>("/perfil") });
+  const { data: eu, isError, refetch } = useQuery({ queryKey: ["perfil"], queryFn: () => apiGet<UsuarioPublico>("/perfil"), retry: 1 });
   const [f, setF] = useState({ nome: "", telefone: "", cargo: "", creci: "" });
   const [foto, setFoto] = useState(false);
 
@@ -47,6 +47,15 @@ export default function Perfil() {
   });
   const removerFoto = useMutation({ mutationFn: () => apiDelete(`/usuarios/${eu!.id}/foto`), onSuccess: invalidar });
 
+  if (isError)
+    return (
+      <div className="mx-auto max-w-md rounded-lg border bg-card p-6 text-center">
+        <p className="font-semibold">Não foi possível carregar o seu perfil.</p>
+        <Button className="mt-4" variant="outline" onClick={() => refetch()}>
+          Tentar de novo
+        </Button>
+      </div>
+    );
   if (!eu) return <div className="h-64 animate-pulse rounded-lg bg-muted" />;
 
   return (

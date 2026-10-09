@@ -195,6 +195,8 @@ export interface ConfiguracaoPublica {
   cor_painel: string;
   cor_fonte: string;
   cor_primaria: string;
+  cor_menu: string;
+  cor_menu_destaque: string;
   imagem_fundo_login: string | null;
   tem_logo: boolean;
 }

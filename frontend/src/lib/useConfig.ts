@@ -18,6 +18,8 @@ export const PADRAO: ConfiguracaoPublica = {
   cor_painel: "#ffffff",
   cor_fonte: "#1c1c1c",
   cor_primaria: "#4a03a2",
+  cor_menu: "#4a03a2",
+  cor_menu_destaque: "#ff7a00",
   imagem_fundo_login: null,
   tem_logo: false,
 };

@@ -208,39 +208,46 @@ def _pode_editar_foto(principal: Principal, usuario_id: str, alvo: dict) -> None
     _exige_sysadmin_para_alvo(principal, alvo)
 
 
-async def _gravar_foto(usuario_id: str, bruto: bytes | None, mime: str | None) -> dict:
+def _banco_do_usuario(principal: Principal, usuario_id: str):
+    """O Administrador de Sistema vive no banco de controle, mesmo quando está dentro de uma empresa."""
+    return controle if (principal.is_sysadmin and usuario_id == principal.usuario_id) else db
+
+
+async def _gravar_foto(banco, usuario_id: str, bruto: bytes | None, mime: str | None) -> dict:
     if bruto is None:
-        await db.fotos_usuario.delete_one({"_id": usuario_id})
-        await db.usuarios.update_one({"id": usuario_id}, {"$set": {"tem_foto": False}, "$inc": {"foto_v": 1}})
+        await banco.fotos_usuario.delete_one({"_id": usuario_id})
+        await banco.usuarios.update_one({"id": usuario_id}, {"$set": {"tem_foto": False}, "$inc": {"foto_v": 1}})
     else:
-        await db.fotos_usuario.update_one({"_id": usuario_id}, {"$set": {
+        await banco.fotos_usuario.update_one({"_id": usuario_id}, {"$set": {
             "base64": base64.b64encode(bruto).decode(), "mime": mime, "em": now_utc()}}, upsert=True)
-        await db.usuarios.update_one({"id": usuario_id}, {"$set": {"tem_foto": True}, "$inc": {"foto_v": 1}})
-    return await db.usuarios.find_one({"id": usuario_id}, {"senha_hash": 0})
+        await banco.usuarios.update_one({"id": usuario_id}, {"$set": {"tem_foto": True}, "$inc": {"foto_v": 1}})
+    return await banco.usuarios.find_one({"id": usuario_id}, {"senha_hash": 0})
 
 
 @router.put("/{usuario_id}/foto", response_model=UsuarioPublico)
 async def enviar_foto(usuario_id: str, input: FotoInput, principal: Principal = Depends(principal_atual)):
-    alvo = await db.usuarios.find_one({"id": usuario_id}, {"senha_hash": 0})
+    banco = _banco_do_usuario(principal, usuario_id)
+    alvo = await banco.usuarios.find_one({"id": usuario_id}, {"senha_hash": 0})
     if not alvo:
         raise HTTPException(404, "Usuário não encontrado")
     _pode_editar_foto(principal, usuario_id, alvo)
-    return publico(await _gravar_foto(usuario_id, _decodificar_foto(input), input.mime))
+    return publico(await _gravar_foto(banco, usuario_id, _decodificar_foto(input), input.mime))
 
 
 @router.delete("/{usuario_id}/foto", response_model=UsuarioPublico)
 async def remover_foto(usuario_id: str, principal: Principal = Depends(principal_atual)):
-    alvo = await db.usuarios.find_one({"id": usuario_id}, {"senha_hash": 0})
+    banco = _banco_do_usuario(principal, usuario_id)
+    alvo = await banco.usuarios.find_one({"id": usuario_id}, {"senha_hash": 0})
     if not alvo:
         raise HTTPException(404, "Usuário não encontrado")
     _pode_editar_foto(principal, usuario_id, alvo)
-    return publico(await _gravar_foto(usuario_id, None, None))
+    return publico(await _gravar_foto(banco, usuario_id, None, None))
 
 
 @router.get("/{usuario_id}/foto")
 async def obter_foto(usuario_id: str, principal: Principal = Depends(principal_atual)):
     """Foto de qualquer usuário da MESMA empresa (o banco do request já é o da empresa)."""
-    doc = await db.fotos_usuario.find_one({"_id": usuario_id})
+    doc = await _banco_do_usuario(principal, usuario_id).fotos_usuario.find_one({"_id": usuario_id})
     if not doc:
         raise HTTPException(404, "Sem foto")
     return RawResponse(content=base64.b64decode(doc["base64"]), media_type=doc.get("mime") or "image/jpeg",
@@ -252,7 +259,7 @@ perfil_router = APIRouter(prefix="/perfil", tags=["usuarios"])
 
 @perfil_router.get("", response_model=UsuarioPublico)
 async def meu_perfil(principal: Principal = Depends(principal_atual)):
-    doc = await db.usuarios.find_one({"id": principal.usuario_id}, {"senha_hash": 0})
+    doc = await _banco_do_usuario(principal, principal.usuario_id).usuarios.find_one({"id": principal.usuario_id}, {"senha_hash": 0})
     if not doc:
         raise HTTPException(404, "Usuário não encontrado")
     return publico(doc)
@@ -263,10 +270,11 @@ async def editar_perfil(input: PerfilUpdate, principal: Principal = Depends(prin
     data = {k: (v.strip() if isinstance(v, str) else v) for k, v in input.model_dump(exclude_unset=True).items()}
     if "nome" in data and not data["nome"]:
         raise HTTPException(422, "Informe o nome")
+    banco = _banco_do_usuario(principal, principal.usuario_id)
     if data:
-        await db.usuarios.update_one({"id": principal.usuario_id}, {"$set": data})
-        if principal.pessoa_id:
+        await banco.usuarios.update_one({"id": principal.usuario_id}, {"$set": data})
+        if principal.pessoa_id and banco is db:
             espelho = {k: data[k] for k in ("nome", "telefone") if k in data}
             if espelho:
                 await db.pessoas.update_one({"id": principal.pessoa_id}, {"$set": espelho})
-    return publico(await db.usuarios.find_one({"id": principal.usuario_id}, {"senha_hash": 0}))
+    return publico(await banco.usuarios.find_one({"id": principal.usuario_id}, {"senha_hash": 0}))

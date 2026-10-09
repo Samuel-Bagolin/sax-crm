@@ -38,6 +38,9 @@ class Configuracao(BaseModel):
     cor_painel: str = "#ffffff"
     cor_fonte: str = "#1c1c1c"
     cor_primaria: str = "#4a03a2"
+    # Menu lateral (fundo e destaque do item ativo / contadores)
+    cor_menu: str = "#4a03a2"
+    cor_menu_destaque: str = "#ff7a00"
     imagem_fundo_login: str | None = None
     # E-mail (envio gerenciado pela Emergent — aqui só remetente visível e resposta)
     email_remetente_nome: str = "ImobiERP Lite"
@@ -65,6 +68,8 @@ class ConfiguracaoUpdate(BaseModel):
     cor_painel: str | None = None
     cor_fonte: str | None = None
     cor_primaria: str | None = None
+    cor_menu: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
+    cor_menu_destaque: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
     imagem_fundo_login: str | None = None
     email_remetente_nome: str | None = None
     email_resposta: str | None = None
@@ -85,6 +90,8 @@ class ConfiguracaoPublica(BaseModel):
     cor_painel: str
     cor_fonte: str
     cor_primaria: str
+    cor_menu: str = "#4a03a2"
+    cor_menu_destaque: str = "#ff7a00"
     imagem_fundo_login: str | None = None
     tem_logo: bool = False
 

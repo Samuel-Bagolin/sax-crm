@@ -169,6 +169,8 @@ ROTULOS_CAMPO = {
     "cor_painel": "Cor de fundo dos painéis",
     "cor_fonte": "Cor das fontes",
     "cor_primaria": "Cor de destaque",
+    "cor_menu": "Cor do menu lateral",
+    "cor_menu_destaque": "Cor de destaque do menu",
     "imagem_fundo_login": "Imagem de fundo do login",
     "email_remetente_nome": "Nome do remetente",
     "email_resposta": "E-mail de resposta",
