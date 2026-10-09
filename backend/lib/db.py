@@ -24,7 +24,10 @@ from pymongo import ASCENDING, DESCENDING, IndexModel
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-mongo_url = os.environ["MONGO_URL"]
+# MONGO_URL (manual) ou MONGODB_URI (criada sozinha pela integração MongoDB Atlas do Vercel).
+mongo_url = os.environ.get("MONGO_URL") or os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL")
+if not mongo_url:
+    raise RuntimeError("Configure MONGO_URL (ou conecte o MongoDB Atlas em Vercel → Storage, que cria MONGODB_URI)")
 if mongo_url.startswith("mongomock://"):  # somente testes locais sem servidor Mongo
     from mongomock_motor import AsyncMongoMockClient
 
@@ -33,7 +36,7 @@ else:
     # No Vercel a função precisa responder rápido: falha de conexão aparece em segundos, não em 30 s.
     client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=8000 if os.environ.get("VERCEL") else 30000)
 
-DB_CONTROLE = os.environ["DB_NAME"]
+DB_CONTROLE = os.environ.get("DB_NAME") or "sax_crm"
 AMBIENTE = os.environ.get("APP_ENV", "desenvolvimento").lower()
 
 controle: AsyncIOMotorDatabase = client[DB_CONTROLE]

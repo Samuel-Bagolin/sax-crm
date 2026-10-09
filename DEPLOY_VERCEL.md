@@ -6,6 +6,10 @@ Tempo estimado: 30 a 40 minutos na primeira vez.
 
 ## 1. Banco de dados: MongoDB Atlas (gratuito para começar)
 
+**Jeito mais fácil (recomendado):** depois de criar o projeto no Vercel, abra **Storage → Create Database → MongoDB Atlas** (Marketplace), escolha o plano gratuito e conecte ao projeto `sax-crm`. O Vercel cria o banco, libera o acesso e grava a variável `MONGODB_URI` sozinho; o sistema já lê essa variável. Depois é só fazer **Redeploy**. Pule o restante desta seção.
+
+**Jeito manual:**
+
 1. Crie uma conta em https://www.mongodb.com/cloud/atlas e um cluster **M0 (Free)**. Escolha a região **São Paulo (sa-east-1)** se estiver disponível; senão, uma região dos EUA.
 2. **Database Access** → Add New Database User → usuário e senha fortes (anote).
 3. **Network Access** → Add IP Address → **Allow access from anywhere (0.0.0.0/0)**. O Vercel não tem IP fixo; a proteção fica por conta da senha do banco.
@@ -37,8 +41,8 @@ Tempo estimado: 30 a 40 minutos na primeira vez.
 
 | Variável | Valor | Obrigatória |
 |---|---|---|
-| `MONGO_URL` | connection string do Atlas | sim |
-| `DB_NAME` | `sax_crm` (prefixo dos bancos; não mude depois) | sim |
+| `MONGO_URL` | connection string do Atlas (dispensável se usou a integração do Vercel, que cria `MONGODB_URI`) | sim* |
+| `DB_NAME` | `sax_crm` (padrão; prefixo dos bancos, não mude depois) | não |
 | `JWT_SECRET` | texto aleatório com 64+ caracteres (assina as sessões) | sim |
 | `APP_ENV` | `producao` | sim |
 | `APP_URL` | `https://SEU-PROJETO.vercel.app` (troque pelo domínio próprio quando tiver) | sim |
