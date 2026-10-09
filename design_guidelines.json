@@ -1,0 +1,392 @@
+{
+  "project_name": "ImobiERP Lite",
+  "locale": {
+    "language": "pt-BR",
+    "currency": "BRL",
+    "currency_symbol": "R$",
+    "date_format": "dd/MM/yyyy",
+    "number_format": "1.234,56"
+  },
+  "context_type": "dashboard/saas_app",
+  "theme_mode": "light_with_dark_toggle",
+  "colors": {
+    "surfaces": [
+      {
+        "name": "page",
+        "kind": "solid",
+        "bg": "#F8FAFC",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#64748B",
+        "roles": {
+          "border": "#E2E8F0",
+          "link": "#0284C7",
+          "error": "#DC2626",
+          "success": "#16A34A",
+          "warning": "#D97706"
+        }
+      },
+      {
+        "name": "panel",
+        "kind": "solid",
+        "bg": "#FFFFFF",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#64748B",
+        "roles": {
+          "border": "#E2E8F0",
+          "link": "#0284C7",
+          "error": "#DC2626",
+          "success": "#16A34A",
+          "warning": "#D97706"
+        }
+      },
+      {
+        "name": "sidebar",
+        "kind": "solid",
+        "bg": "#0B132B",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#94A3B8",
+        "roles": {
+          "border": "#1E293B",
+          "link": "#38BDF8",
+          "error": "#F87171",
+          "success": "#4ADE80",
+          "warning": "#FBBF24"
+        }
+      },
+      {
+        "name": "card_header_muted",
+        "kind": "solid",
+        "bg": "#F1F5F9",
+        "on_bg": "#1E293B",
+        "on_bg_muted": "#64748B"
+      },
+      {
+        "name": "status_captado",
+        "kind": "solid",
+        "bg": "#EFF6FF",
+        "on_bg": "#1D4ED8",
+        "on_bg_muted": "#3B82F6"
+      },
+      {
+        "name": "status_publicado",
+        "kind": "solid",
+        "bg": "#ECFDF5",
+        "on_bg": "#047857",
+        "on_bg_muted": "#10B981"
+      },
+      {
+        "name": "status_vendido",
+        "kind": "solid",
+        "bg": "#FEF3C7",
+        "on_bg": "#B45309",
+        "on_bg_muted": "#F59E0B"
+      },
+      {
+        "name": "status_alugado",
+        "kind": "solid",
+        "bg": "#FAF5FF",
+        "on_bg": "#7E22CE",
+        "on_bg_muted": "#A855F7"
+      },
+      {
+        "name": "badge_receita",
+        "kind": "solid",
+        "bg": "#DCFCE7",
+        "on_bg": "#15803D",
+        "on_bg_muted": "#16A34A"
+      },
+      {
+        "name": "badge_despesa",
+        "kind": "solid",
+        "bg": "#FEE2E2",
+        "on_bg": "#B91C1C",
+        "on_bg_muted": "#DC2626"
+      },
+      {
+        "name": "inverse",
+        "kind": "solid",
+        "bg": "#0F172A",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#94A3B8"
+      }
+    ],
+    "accent": "#0284C7",
+    "on_accent": "#FFFFFF",
+    "secondary_accent": "#0D9488",
+    "on_secondary_accent": "#FFFFFF"
+  },
+  "typography": {
+    "font_heading": "'Manrope Variable', sans-serif",
+    "font_body": "'IBM Plex Sans', sans-serif",
+    "font_mono": "'IBM Plex Mono', monospace",
+    "css_import_statement": "@import \"@fontsource-variable/manrope\";\n@import \"@fontsource/ibm-plex-sans\";\n@import \"@fontsource/ibm-plex-mono\";",
+    "scale_px": {
+      "display": 48,
+      "h1": 36,
+      "h2": 28,
+      "h3": 20,
+      "h4": 18,
+      "body": 16,
+      "caption": 14
+    },
+    "rules": {
+      "headings": "font-heading font-bold tracking-tight text-slate-900 dark:text-slate-100",
+      "labels": "text-xs font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400",
+      "numbers_finance": "font-mono font-medium tracking-tight",
+      "body": "font-sans text-sm md:text-base leading-relaxed text-slate-700 dark:text-slate-300"
+    }
+  },
+  "entry_surfaces": {
+    "/": "Sidebar shell layout with top header breadcrumbs/actions and high-density KPI stats grid over recent properties and sales funnel snapshot",
+    "/imoveis": "Data table view + grid card toggle with status filter badges (Captado, Publicado, Vendido, Alugado), search bar, and slide-over property sheet modal with owner link",
+    "/crm": "5-column Kanban board (Novo, Em Atendimento, Visita, Proposta, Ganho/Perdido) with lead card metrics, drag/move actions, average closing time banner, and lead origin chart",
+    "/financeiro": "Tabbed financial hub: Tab 1 Lançamentos (Payable/Receivable list + registration form), Tab 2 Plano de Contas (interactive tree hierarchy), Tab 3 Relatórios (Cash Flow chart & Receita vs Despesa por Imóvel)"
+  },
+  "navigation_structure": {
+    "sidebar_width": "w-64",
+    "app_name": "ImobiERP Lite",
+    "brand_tagline": "Gestão Imobiliária Ágil",
+    "items": [
+      {
+        "label": "Visão Geral",
+        "path": "/",
+        "icon": "LayoutDashboard",
+        "test_id": "nav-link-dashboard"
+      },
+      {
+        "label": "Imóveis",
+        "path": "/imoveis",
+        "icon": "Building2",
+        "test_id": "nav-link-imoveis",
+        "badge": "Operacional"
+      },
+      {
+        "label": "CRM & Funil",
+        "path": "/crm",
+        "icon": "KanbanSquare",
+        "test_id": "nav-link-crm",
+        "badge": "Leads"
+      },
+      {
+        "label": "Financeiro",
+        "path": "/financeiro",
+        "icon": "CircleDollarSign",
+        "test_id": "nav-link-financeiro",
+        "children": [
+          {"label": "Lançamentos (Pagar/Receber)", "tab": "lancamentos"},
+          {"label": "Plano de Contas", "tab": "plano-contas"},
+          {"label": "Relatórios & DRE Imóvel", "tab": "relatorios"}
+        ]
+      }
+    ],
+    "header_actions": [
+      {
+        "label": "+ Novo Imóvel",
+        "action": "open_property_modal",
+        "test_id": "btn-quick-new-property",
+        "variant": "outline"
+      },
+      {
+        "label": "+ Novo Lead",
+        "action": "open_lead_modal",
+        "test_id": "btn-quick-new-lead",
+        "variant": "outline"
+      },
+      {
+        "label": "+ Novo Lançamento",
+        "action": "open_transaction_modal",
+        "test_id": "btn-quick-new-transaction",
+        "variant": "primary"
+      }
+    ]
+  },
+  "modules_design": {
+    "module_1_operacoes": {
+      "title": "Módulo Operacional — Imóveis & Proprietários",
+      "status_badges": [
+        {"status": "captado", "label": "Captado", "bg": "bg-blue-50 text-blue-700 border-blue-200"},
+        {"status": "publicado", "label": "Publicado", "bg": "bg-emerald-50 text-emerald-700 border-emerald-200"},
+        {"status": "vendido", "label": "Vendido", "bg": "bg-amber-50 text-amber-700 border-amber-200"},
+        {"status": "alugado", "label": "Alugado", "bg": "bg-purple-50 text-purple-700 border-purple-200"}
+      ],
+      "key_features": [
+        "Ficha completa do imóvel associada ao proprietário (Nome, CPF/CNPJ, Telefone WhatsApp, E-mail)",
+        "Dados do Imóvel: Tipo (Apartamento, Casa, Terreno, Comercial), Finalidade (Venda, Locação, Ambos), Valores (Venda, Aluguel, IPTU, Condomínio), Endereço completo com CEP e Bairro, Metragem útil/total, Quartos, Suítes, Vagas",
+        "Upload de fotos ou seleção de imagem de capa",
+        "Filtros rápidos por Status, Tipo, Bairro, e Faixa de Preço",
+        "Visualização em Tabela densa com ordenação ou Cards Visuais com thumbnail"
+      ]
+    },
+    "module_2_crm": {
+      "title": "Módulo CRM — Funil de Leads & Métricas Automáticas",
+      "kanban_columns": [
+        {"id": "novo", "title": "Novo Lead", "color_accent": "border-t-sky-500"},
+        {"id": "atendimento", "title": "Em Atendimento", "color_accent": "border-t-blue-500"},
+        {"id": "visita", "title": "Visita Agendada", "color_accent": "border-t-amber-500"},
+        {"id": "proposta", "title": "Proposta Enviada", "color_accent": "border-t-purple-500"},
+        {"id": "fechado_ganho", "title": "Ganho (Fechado)", "color_accent": "border-t-emerald-500"},
+        {"id": "fechado_perdido", "title": "Perdido", "color_accent": "border-t-rose-500"}
+      ],
+      "lead_sources": [
+        "Portal ZAP",
+        "VivaReal",
+        "OLX",
+        "Instagram / Facebook Ads",
+        "Indicação / Carteira",
+        "Placa no Local",
+        "Site Imobiliária"
+      ],
+      "automatic_metrics": [
+        {
+          "name": "Tempo Médio para Fechamento",
+          "description": "Calculado a partir de created_at até closed_at (ex: 22 dias)",
+          "widget_type": "metric_card_highlight"
+        },
+        {
+          "name": "Taxa de Conversão por Etapa",
+          "description": "Percentual de leads que avançam de Visita para Proposta e Ganho",
+          "widget_type": "funnel_bar_chart"
+        },
+        {
+          "name": "Origem de Leads",
+          "description": "Distribuição percentual por canal de aquisição (Recharts Donut/Bar)",
+          "widget_type": "pie_or_bar_chart"
+        }
+      ]
+    },
+    "module_3_financeiro": {
+      "title": "Módulo Financeiro — Plano de Contas & DRE por Imóvel",
+      "sub_views": [
+        {
+          "name": "Lançamentos (Pagar / Receber)",
+          "features": [
+            "Contas a Pagar e Contas a Receber com status: Pendente, Pago, Vencido",
+            "Vínculo obrigatório ou opcional com Imóvel específico para custeio",
+            "Classificação no Plano de Contas (ex: 1.01 Comissão Venda, 2.03 Manutenção)",
+            "Data de Vencimento, Data de Pagamento, Valor Previsto vs Realizado, Comprovante"
+          ]
+        },
+        {
+          "name": "Plano de Contas Dinâmico",
+          "features": [
+            "Estrutura em árvore hierárquica (Nível 1 Sintético: 1. Receitas Operacionais, 2. Despesas Operacionais, 3. Custos de Imóveis; Nível 2 Analítico)",
+            "Adição, edição e exclusão de categorias dinâmicas",
+            "Indicador visual de tipo (Entrada/Saída)"
+          ]
+        },
+        {
+          "name": "Relatórios & Fluxo de Caixa",
+          "features": [
+            "Gráfico de Fluxo de Caixa Mensal (Receitas vs Despesas vs Saldo Líquido)",
+            "Relatório 'Receita vs Despesa por Imóvel': tabela e gráfico comparativo calculando o Lucro Líquido Real gerado por cada imóvel em carteira",
+            "Exportação em CSV/Excel (usando openpyxl no backend)"
+          ]
+        }
+      ]
+    }
+  },
+  "image_urls": [
+    {
+      "category": "property_covers",
+      "description": "Apartamento moderno de alto padrão para listagem de imóvel",
+      "url": "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBhcGFydG1lbnQlMjBidWlsZGluZ3xlbnwwfHx8fDE3OTA5NDI4NDd8MA&ixlib=rb-4.1.0&q=85"
+    },
+    {
+      "category": "property_covers",
+      "description": "Edifício contemporâneo com sacadas de vidro",
+      "url": "https://images.unsplash.com/photo-1624204386084-dd8c05e32226?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjBhcGFydG1lbnQlMjBidWlsZGluZ3xlbnwwfHx8fDE3OTA5NDI4NDd8MA&ixlib=rb-4.1.0&q=85"
+    },
+    {
+      "category": "property_covers",
+      "description": "Casa moderna de condomínio fechado com piscina e madeira",
+      "url": "https://images.unsplash.com/photo-1760067537255-64d36262cb0a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHw0fHxicmF6aWwlMjBob3VzZSUyMGx1eHVyeSUyMHByb3BlcnR5fGVufDB8fHx8MTc5MDk0Mjg0OHww&ixlib=rb-4.1.0&q=85"
+    },
+    {
+      "category": "property_covers",
+      "description": "Residência contemporânea com fachada em pedra e madeira",
+      "url": "https://images.unsplash.com/photo-1760067537293-6b30141d6a52?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwyfHxicmF6aWwlMjBob3VzZSUyMGx1eHVyeSUyMHByb3BlcnR5fGVufDB8fHx8MTc5MDk0Mjg0OHww&ixlib=rb-4.1.0&q=85"
+    }
+  ],
+  "component_structure": {
+    "shell": "frontend/src/components/layout/AppShell.tsx",
+    "sidebar": "frontend/src/components/layout/Sidebar.tsx",
+    "header": "frontend/src/components/layout/Header.tsx",
+    "pages": {
+      "dashboard": "frontend/src/pages/Dashboard.tsx",
+      "imoveis": "frontend/src/pages/Imoveis.tsx",
+      "crm": "frontend/src/pages/CrmFunil.tsx",
+      "financeiro": "frontend/src/pages/Financeiro.tsx"
+    },
+    "modals_and_drawers": [
+      "frontend/src/components/imoveis/PropertyModal.tsx",
+      "frontend/src/components/imoveis/PropertyDetailSheet.tsx",
+      "frontend/src/components/crm/LeadModal.tsx",
+      "frontend/src/components/crm/LeadDetailDialog.tsx",
+      "frontend/src/components/financeiro/TransactionModal.tsx",
+      "frontend/src/components/financeiro/PlanoContasNodeModal.tsx"
+    ],
+    "widgets": [
+      "frontend/src/components/dashboard/StatCard.tsx",
+      "frontend/src/components/dashboard/ReceitaDespesaChart.tsx",
+      "frontend/src/components/crm/KanbanColumn.tsx",
+      "frontend/src/components/crm/KanbanCard.tsx",
+      "frontend/src/components/financeiro/PlanoContasTree.tsx",
+      "frontend/src/components/financeiro/ImovelDRETable.tsx"
+    ]
+  },
+  "grids_and_spacing": {
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6",
+    "kanban_grid": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 xl:grid-cols-6 gap-4 min-h-[650px] overflow-x-auto pb-4",
+    "property_grid": "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6",
+    "finance_grid": "grid grid-cols-1 lg:grid-cols-3 gap-6",
+    "card_padding": "p-5 sm:p-6",
+    "container_padding": "p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"
+  },
+  "motion_and_interactions": {
+    "tab_transition": "animate-in fade-in duration-200",
+    "modal_backdrop": "backdrop-blur-sm bg-slate-900/40",
+    "kanban_card_hover": "hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 cursor-grab active:cursor-grabbing",
+    "table_row_hover": "hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors",
+    "button_press": "active:scale-[0.98] transition-transform duration-100"
+  },
+  "accessibility": {
+    "contrast_standard": "WCAG AA (minimum 4.5:1 for normal text, 3:1 for large text & badges)",
+    "data_testids_convention": "kebab-case formatted per element role and entity",
+    "required_testids": [
+      "nav-link-dashboard",
+      "nav-link-imoveis",
+      "nav-link-crm",
+      "nav-link-financeiro",
+      "btn-new-property",
+      "btn-new-lead",
+      "btn-new-transaction",
+      "imovel-status-select",
+      "imovel-owner-name-input",
+      "imovel-price-input",
+      "crm-kanban-board",
+      "crm-col-novo",
+      "crm-col-atendimento",
+      "crm-col-visita",
+      "crm-col-proposta",
+      "crm-col-fechado_ganho",
+      "crm-col-fechado_perdido",
+      "crm-avg-close-time-metric",
+      "crm-lead-origin-chart",
+      "financeiro-tab-lancamentos",
+      "financeiro-tab-plano-contas",
+      "financeiro-tab-relatorios",
+      "financeiro-property-dre-table",
+      "financeiro-cashflow-chart"
+    ]
+  },
+  "instructions_to_main_agent": {
+    "stack": "farm-ts (FastAPI backend + Vite React 19 frontend with Tailwind v4, shadcn/ui on @base-ui/react, Lucide icons, Recharts)",
+    "css_theme_file": "/app/frontend/src/index.css",
+    "font_setup": "Import Manrope Variable for headings, IBM Plex Sans for body, and IBM Plex Mono for values/currency from @fontsource",
+    "currency_formatting": "Always format currency using BRL format: Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })",
+    "date_formatting": "Use pt-BR format (dd/MM/yyyy) for dates and relative format (ex: 'Há 3 dias')",
+    "seed_data_recommendation": "Seed at least: 8 Imóveis with varying statuses and Brazilian addresses (ex: São Paulo, Rio de Janeiro, Florianópolis), 12 Leads distributed across the 5 Kanban stages with calculated closing times, 15 Financial transactions linked to properties, and a 3-level Plano de Contas tree",
+    "responsive_rule": "Ensure sidebar can be collapsed to icon-only or hamburger drawer on mobile/tablet viewports (< 1024px)",
+    "toast_feedback": "Use sonner toast for creation, updates, and status transitions with positive feedback in Brazilian Portuguese (ex: 'Imóvel cadastrado com sucesso!', 'Lead movido para Visita')"
+  }
+}
