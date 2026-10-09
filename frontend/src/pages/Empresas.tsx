@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCatalogoPlanos } from "@/lib/diferenciais";
+import { CatalogoComercial, ComercialDialog } from "@/components/empresas/Comercial";
 import { cn } from "@/lib/utils";
 
 function Uso({ rotulo, uso, limite }: { rotulo: string; uso: number; limite: number | null }) {
@@ -45,6 +46,8 @@ export default function Empresas() {
   const qc = useQueryClient();
   const [modal, setModal] = useState(false);
   const [usoAberto, setUsoAberto] = useState<string | null>(null);
+  const [comercial, setComercial] = useState<EmpresaResumo | null>(null);
+  const [aba, setAba] = useState<"empresas" | "planos">("empresas");
   const [linkAtivacao, setLinkAtivacao] = useState<{ empresa: string; email: string; link: string; enviado: boolean } | null>(null);
   const { data: catalogo } = useCatalogoPlanos();
   const [form, setForm] = useState({
@@ -195,6 +198,21 @@ export default function Empresas() {
         </Button>
       </div>
 
+      <div className="flex w-fit rounded-lg bg-muted p-1" role="tablist" aria-label="Seções">
+        {([
+          ["empresas", "Empresas"],
+          ["planos", "Planos e adicionais"],
+        ] as const).map(([v, r]) => (
+          <button key={v} role="tab" aria-selected={aba === v} onClick={() => setAba(v)} className={cn("rounded-md px-4 py-1.5 text-sm font-medium", aba === v ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")} data-testid={`aba-${v}`}>
+            {r}
+          </button>
+        ))}
+      </div>
+
+      {aba === "planos" ? (
+        <CatalogoComercial />
+      ) : (
+      <>
       {empresas.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="empresas-receita">
           {(() => {
@@ -243,24 +261,18 @@ export default function Empresas() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-2 rounded-md border p-2.5" data-testid={`empresa-plano-${e.slug}`}>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={e.plano_aplicado ? e.plano : "legado"}
-                    onChange={(ev) => {
-                      if (window.confirm(`Mudar ${e.nome} para o plano ${ev.target.selectedOptions[0].text}? Os módulos da empresa serão ajustados ao plano.`))
-                        mudarPlano.mutate({ e, plano: ev.target.value });
-                    }}
-                    className="h-8 flex-1 rounded-md border bg-background px-2 text-sm font-medium"
-                    aria-label={`Plano de ${e.nome}`}
-                  >
-                    {catalogo?.planos.map((p) => (
-                      <option key={p.chave} value={p.chave}>
-                        {p.nome}
-                      </option>
-                    ))}
-                    <option value="legado">Legado (sem limites)</option>
-                  </select>
-                  <span className="num text-sm font-semibold">{e.plano_aplicado && e.plano_preco ? `${brl(e.plano_preco)}/mês` : "—"}</span>
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold">{e.plano_aplicado ? `Plano ${e.plano_nome}` : "Legado (sem limites)"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {e.valores
+                        ? `${brl(e.valores.total)}${e.valores.periodicidade === "anual" ? "/ano" : "/mês"}${e.valores.desconto ? `, com ${brl(e.valores.desconto)} de desconto` : ""}${e.comercial?.adicionais?.length ? `, ${e.comercial.adicionais.length} adicional(is)` : ""}`
+                        : "Sem condições comerciais"}
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={() => setComercial(e)} data-testid={`empresa-comercial-${e.slug}`}>
+                    Condições
+                  </Button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Uso rotulo="Usuários ativos" uso={e.usuarios_ativos} limite={e.limite_usuarios} />
@@ -402,12 +414,16 @@ export default function Empresas() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm text-muted-foreground">
-          <p>· Cada empresa tem um banco de dados próprio — nenhuma consulta cruza empresas.</p>
-          <p>· A empresa vem do token de sessão, nunca de um campo da tela.</p>
-          <p>· O acesso de suporte fica registrado e exibe faixa de aviso enquanto está ativo.</p>
-          <p>· Excluir uma empresa apaga o banco dela, mediante confirmação do identificador.</p>
+          <p>Cada empresa tem um banco de dados próprio. Nenhuma consulta cruza empresas.</p>
+          <p>A empresa vem do token de sessão, nunca de um campo da tela.</p>
+          <p>O acesso de suporte fica registrado e exibe uma faixa de aviso enquanto está ativo.</p>
+          <p>Excluir uma empresa apaga o banco dela, mediante confirmação do identificador.</p>
         </CardContent>
       </Card>
+      </>
+      )}
+
+      <ComercialDialog empresa={comercial} onClose={() => setComercial(null)} />
 
       <Dialog open={!!linkAtivacao} onOpenChange={(o) => !o && setLinkAtivacao(null)}>
         <DialogContent className="sm:max-w-lg">

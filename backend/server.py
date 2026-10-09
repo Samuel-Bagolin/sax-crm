@@ -21,7 +21,7 @@ from lib.security import SecurityMiddleware
 from lib.email import mail_worker
 
 # Módulos do monolito modular — um router por domínio, todos registrados sob /api
-from routers import rotina, fotos_imovel, match, planos, portais, propostas, proprietario
+from routers import proprietarios, rotina, fotos_imovel, match, planos, portais, propostas, proprietario
 from routers import agenda, assinaturas, relatorios, google, documentos, chat, auth, config, contratos, crm, empresas, financeiro, imoveis, leads, pessoas, usuarios, operacao
 from lib.crm import garantir_crm_todas
 
@@ -46,6 +46,8 @@ async def inicializar() -> None:
             await garantir_crm_todas()
             await _primeiro_administrador()
             await _migrar_marca()
+            from lib.planos import carregar_catalogo
+            await carregar_catalogo(forcar=True)
             _inicializado = True
 
 
@@ -153,6 +155,7 @@ api_router.include_router(auth.router)
 api_router.include_router(usuarios.router)
 api_router.include_router(pessoas.router)
 api_router.include_router(imoveis.router)
+api_router.include_router(proprietarios.router)
 api_router.include_router(leads.router)
 api_router.include_router(financeiro.router)
 api_router.include_router(agenda.router)

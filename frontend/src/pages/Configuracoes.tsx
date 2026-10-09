@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Copy, History, KeyRound, Palette, Puzzle, Send, Smartphone } from "lucide-react";
+import { Copy, Eye, EyeOff, History, KeyRound, Palette, Puzzle, Send, Smartphone } from "lucide-react";
 import { apiDelete, apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
 import type { Configuracao, ConfigLog } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,9 @@ export default function Configuracoes() {
   });
   const [form, setForm] = useState<Configuracao | null>(null);
   const [logoVersao, setLogoVersao] = useState(0);
+  const [mostrarChave, setMostrarChave] = useState(false);
+  const chave = form?.site_api_key ?? "";
+  const chaveMascarada = chave ? `${chave.slice(0, 4)}${"•".repeat(Math.max(8, chave.length - 8))}${chave.slice(-4)}` : "";
   const temLogo = !!data?.logo_mime;
 
   const invalidarConfig = () => {
@@ -476,10 +479,19 @@ export default function Configuracoes() {
                 <div className="flex gap-2">
                   <Input
                     readOnly
-                    value={form.site_api_key ?? ""}
+                    value={mostrarChave ? chave : chaveMascarada}
                     className="font-mono text-xs"
                     data-testid="config-api-key"
                   />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setMostrarChave((v) => !v)}
+                    aria-label={mostrarChave ? "Ocultar chave" : "Mostrar chave"}
+                    aria-pressed={mostrarChave}
+                  >
+                    {mostrarChave ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                   <Button
                     variant="outline"
                     size="icon"
@@ -502,7 +514,7 @@ export default function Configuracoes() {
 
               <pre className="overflow-x-auto rounded-md bg-muted/60 p-3 text-[11px] leading-relaxed">
 {`curl -X POST ${webhook} \\
-  -H "X-API-Key: ${form.site_api_key ?? ""}" \\
+  -H "X-API-Key: ${mostrarChave ? chave : "SUA_CHAVE"}" \\
   -H "Content-Type: application/json" \\
   -d '{"nome":"Fulano","email":"fulano@email.com","telefone":"11999990000","codigo_imovel":"AP-0001","mensagem":"Quero visitar"}'`}
               </pre>

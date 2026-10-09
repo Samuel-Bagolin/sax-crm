@@ -10,6 +10,10 @@ export interface PlanoAtual {
   chave: string;
   nome: string;
   preco: number | null;
+  preco_mensal?: number | null;
+  preco_anual?: number | null;
+  ativo?: boolean;
+  ordem?: number;
   implantacao: number | null;
   usuarios: number | null;
   imoveis: number | null;
@@ -20,9 +24,32 @@ export interface PlanoAtual {
   uso_imoveis: number;
 }
 
+export type PlanoCatalogo = Omit<PlanoAtual, "uso_usuarios" | "uso_imoveis">;
+
+export type TipoAdicional = "recurso" | "usuarios" | "imoveis" | "servico";
+
+export interface Adicional {
+  chave: string;
+  nome: string;
+  descricao: string;
+  tipo: TipoAdicional;
+  recurso: Recurso | null;
+  quantidade_por_unidade: number;
+  preco_mensal: number;
+  preco_anual: number | null;
+  ativo: boolean;
+}
+
 export interface CatalogoPlanos {
-  planos: Omit<PlanoAtual, "uso_usuarios" | "uso_imoveis">[];
+  planos: PlanoCatalogo[];
+  adicionais?: Adicional[];
   recursos: Record<Recurso, string>;
+  modulos?: Record<string, string>;
+  tipos_adicional?: Record<TipoAdicional, string>;
+}
+
+export function useCatalogoCompleto() {
+  return useQuery({ queryKey: ["planos", "todos"], queryFn: () => apiGet<CatalogoPlanos>("/planos?todos=true") });
 }
 
 export function usePlano() {

@@ -163,13 +163,25 @@ async def _depois_de_salvar(background: BackgroundTasks, imovel_id: str) -> None
     background.add_task(tarefa)
 
 
+async def _checar_proprietario(pessoa_id: str | None, principal: Principal) -> None:
+    """Qualquer corretor pode vincular um proprietário já cadastrado; outras pessoas seguem o escopo normal."""
+    if not pessoa_id:
+        return
+    doc = await db.pessoas.find_one({"id": pessoa_id}, {"papeis": 1})
+    if not doc:
+        raise HTTPException(422, "Proprietário não encontrado")
+    if "proprietario" not in (doc.get("papeis") or []):
+        await reference("pessoas", pessoa_id, principal)
+        await db.pessoas.update_one({"id": pessoa_id}, {"$addToSet": {"papeis": "proprietario"}})
+
+
 @router.post("", response_model=Imovel, status_code=201)
 async def create_imovel(input: ImovelCreate, background: BackgroundTasks, principal: Principal = Depends(require("imovel:create"))):
     from lib.planos import exigir_limite
 
     if input.status not in ("vendido", "alugado"):
         await exigir_limite("imoveis")
-    await reference("pessoas", input.proprietario_id, principal)
+    await _checar_proprietario(input.proprietario_id, principal)
     imovel = Imovel(**input.model_dump(), codigo=await _proximo_codigo(input.tipo))
     await db.imoveis.insert_one(imovel.model_dump())
     await _depois_de_salvar(background, imovel.id)
@@ -188,7 +200,7 @@ async def update_imovel(
     if doc.get("status") in ("vendido", "alugado") and data.get("status") in ("captado", "publicado"):
         from lib.planos import exigir_limite
         await exigir_limite("imoveis")
-    await reference("pessoas", data.get("proprietario_id"), principal)
+    await _checar_proprietario(data.get("proprietario_id"), principal)
     data["updated_at"] = now_utc()
     await db.imoveis.update_one({"id": imovel_id}, {"$set": data})
     atualizado = await db.imoveis.find_one({"id": imovel_id})

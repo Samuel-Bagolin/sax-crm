@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest:*)",
+      "Bash(yarn build)",
+      "Bash(yarn dev)",
+      "Bash(node_modules/.bin/tsc:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git pull --rebase origin main)"
+    ],
+    "deny": [
+      "Read(./backend/.env)",
+      "Read(./**/*service-account*.json)",
+      "Bash(git push --force:*)"
+    ]
+  }
+}

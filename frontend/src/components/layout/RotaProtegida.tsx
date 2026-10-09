@@ -16,8 +16,8 @@ export default function RotaProtegida({
   const { autenticado, carregando, isAdmin, isSysadmin, principal } = useAuth();
   const { moduloAtivo, carregando: configurando } = useConfig();
   const { pathname } = useLocation();
-  const modules: Record<string, string> = { "/crm": "crm", "/leads": "crm", "/relatorios": "crm", "/crm/configurar": "crm", "/imoveis": "imoveis", "/agenda": "agenda", "/contratos": "contratos", "/financeiro": "financeiro", "/usuarios": "usuarios" };
-  const module = modules[pathname] ?? (pathname.startsWith("/negocios/") ? "crm" : undefined);
+  const modules: Record<string, string> = { "/crm": "crm", "/leads": "crm", "/relatorios": "crm", "/crm/configurar": "crm", "/imoveis": "imoveis", "/proprietarios": "imoveis", "/agenda": "agenda", "/contratos": "contratos", "/financeiro": "financeiro", "/usuarios": "usuarios" };
+  const module = modules[pathname] ?? (pathname.startsWith("/negocios/") ? "crm" : pathname.startsWith("/proprietarios/") ? "imoveis" : undefined);
 
   if (carregando || configurando) {
     return (

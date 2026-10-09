@@ -25,6 +25,7 @@ from lib.tenant import contadores, desindexar_usuario, indexar_usuario, provisio
 from models.common import new_id, now_utc, utc_aware
 from models.empresas import (
     Ambiente,
+    ComercialEmpresa,
     Empresa,
     EmpresaCreate,
     EmpresaResumo,
@@ -183,14 +184,17 @@ async def list_empresas(principal: Principal = Depends(require("empresa:manage")
 
 
 async def _resumo(d: dict, **extra) -> EmpresaResumo:
-    from lib.planos import plano_de
+    from lib.planos import carregar_catalogo, plano_de, valores_comerciais
+
+    await carregar_catalogo()
 
     e = to_empresa(d)
     plano = plano_de(d)
     banco = client[e.db_name]
     return EmpresaResumo(
         **e.model_dump(), **await contadores(e.db_name), **extra,
-        plano_nome=plano["nome"], plano_preco=plano["preco"], limite_usuarios=plano["usuarios"], limite_imoveis=plano["imoveis"],
+        comercial=d.get("comercial"), valores=(valores := valores_comerciais(d)),
+        plano_nome=plano["nome"], plano_preco=(valores["equivalente_mensal"] if valores else plano["preco"]), limite_usuarios=plano["usuarios"], limite_imoveis=plano["imoveis"],
         usuarios_ativos=await banco.usuarios.count_documents({"ativo": {"$ne": False}, "papel": {"$ne": "sysadmin"}}),
         imoveis_carteira=await banco.imoveis.count_documents({"status": {"$nin": ["vendido", "alugado"]}}),
     )
@@ -213,7 +217,9 @@ async def create_empresa(input: EmpresaCreate, principal: Principal = Depends(re
         raise HTTPException(status_code=422, detail="A senha do gestor deve ter ao menos 6 caracteres")
 
     db_name = nome_banco_empresa(slug)
-    from lib.planos import PLANOS
+    from lib.planos import PLANOS, carregar_catalogo
+
+    await carregar_catalogo()
 
     if input.plano not in PLANOS:
         raise HTTPException(422, "Plano inválido")
@@ -362,7 +368,9 @@ async def update_empresa(
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
     from lib.validation import patch_data
     from models.config import MODULOS
-    from lib.planos import PLANOS, RECURSOS
+    from lib.planos import PLANOS, RECURSOS, carregar_catalogo
+
+    await carregar_catalogo()
 
     data = patch_data(input, ("nome", "plano", "ativo", "modulos"))
     if "modulos" in data and any(m not in MODULOS for m in data["modulos"]):
@@ -388,6 +396,30 @@ async def update_empresa(
         data["updated_at"] = now_utc()
         await controle.empresas.update_one({"id": empresa_id}, {"$set": data})
     return to_empresa(await controle.empresas.find_one({"id": empresa_id}))
+
+
+@router.put("/{empresa_id}/comercial", response_model=EmpresaResumo)
+async def condicoes_comerciais(empresa_id: str, input: ComercialEmpresa, principal: Principal = Depends(require("empresa:manage"))):
+    """Periodicidade, adicionais, desconto e taxa de instalação negociados com a empresa."""
+    from lib.planos import ADICIONAIS, carregar_catalogo
+
+    await carregar_catalogo(forcar=True)
+    doc = await controle.empresas.find_one({"id": empresa_id})
+    if not doc:
+        raise HTTPException(404, "Empresa não encontrada")
+    chaves = [a.chave for a in input.adicionais]
+    if any(c not in ADICIONAIS for c in chaves):
+        raise HTTPException(422, "Adicional inválido")
+    if len(chaves) != len(set(chaves)):
+        raise HTTPException(422, "Adicional repetido. Ajuste a quantidade em vez de incluir duas vezes.")
+    if input.desconto_tipo == "percentual" and input.desconto_valor > 100:
+        raise HTTPException(422, "Desconto percentual vai até 100%")
+    dados = input.model_dump()
+    if not input.desconto_tipo:
+        dados["desconto_valor"] = 0
+    await controle.empresas.update_one({"id": empresa_id}, {"$set": {"comercial": dados, "updated_at": now_utc()}})
+    logger.info("condições comerciais da empresa %s alteradas por %s", doc.get("slug"), principal.email)
+    return await _resumo(await controle.empresas.find_one({"id": empresa_id}))
 
 
 @router.delete("/{empresa_id}", status_code=204)

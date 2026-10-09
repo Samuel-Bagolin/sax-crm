@@ -68,6 +68,7 @@ class RelatorioProprietario(BaseModel):
     vitrines: int
     reacoes_positivas: int
     publicado_portais: bool
+    situacao_anuncio: str = "captado"  # portais | publicado | vendido | alugado | captado
     propostas: List[PropostaRelatorio]
     visitas: List[VisitaRelatorio]
     corretor_nome: str | None = None
@@ -153,7 +154,8 @@ async def relatorio(token: str):
         status=im.get("status", "captado"), valor=valor, foto_url=im.get("foto_url"),
         dias_no_mercado=max(0, (now_utc() - criado).days), visitas_realizadas=len(realizadas), visitas_agendadas=len(agendadas),
         interessados=len(interessados), vitrines=len(vitrines), reacoes_positivas=positivas,
-        publicado_portais=bool(im.get("publicar_portais")) and await recurso_liberado("portais"),
+        publicado_portais=(nos_portais := bool(im.get("publicar_portais")) and await recurso_liberado("portais")),
+        situacao_anuncio=("portais" if nos_portais and im.get("status") == "publicado" else im.get("status", "captado")),
         propostas=propostas,
         visitas=[VisitaRelatorio(data=v["data"], status="Agendada" if v in agendadas else "Realizada", retorno=v.get("feedback_proprietario"))
                  for v in visitas_docs[:30]],

@@ -26,6 +26,7 @@ interface Relatorio {
   vitrines: number;
   reacoes_positivas: number;
   publicado_portais: boolean;
+  situacao_anuncio?: string;
   propostas: { data: string; valor: number; situacao: string; autor: string }[];
   visitas: { data: string; status: string; retorno: string | null }[];
   corretor_nome: string | null;
@@ -33,6 +34,13 @@ interface Relatorio {
   gerado_em: string;
 }
 
+const ANUNCIO: Record<string, [string, string]> = {
+  portais: ["Anunciado nos portais", "ZAP Imóveis, VivaReal e OLX"],
+  publicado: ["Anunciado", "Divulgado pela imobiliária aos clientes"],
+  captado: ["Em preparação", "Fotos e anúncio sendo preparados"],
+  vendido: ["Vendido", "Negócio concluído"],
+  alugado: ["Alugado", "Contrato de locação ativo"],
+};
 const STATUS: Record<string, string> = { captado: "Em preparação", publicado: "Anunciado", vendido: "Vendido", alugado: "Alugado" };
 
 export default function RelatorioProprietario() {
@@ -126,8 +134,8 @@ export default function RelatorioProprietario() {
           ))}
           <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
             <Globe className="h-4 w-4 text-slate-400" />
-            <p className="mt-1 text-sm font-semibold">{data.publicado_portais ? "Anunciado nos portais" : "Ainda não anunciado"}</p>
-            <p className="text-xs leading-tight text-slate-600">{data.publicado_portais ? "ZAP Imóveis, VivaReal e OLX" : "Fale com o corretor"}</p>
+            <p className="mt-1 text-sm font-semibold">{ANUNCIO[data.situacao_anuncio ?? (data.publicado_portais ? "portais" : "captado")]?.[0] ?? "Em preparação"}</p>
+            <p className="text-xs leading-tight text-slate-600">{ANUNCIO[data.situacao_anuncio ?? (data.publicado_portais ? "portais" : "captado")]?.[1] ?? "Fale com o corretor"}</p>
           </div>
         </section>
 

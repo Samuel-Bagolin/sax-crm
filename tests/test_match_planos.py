@@ -8,7 +8,7 @@ os.environ.setdefault("DB_NAME", "teste_unitario")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from lib.match import perfil_do_imovel, perfil_vazio, pontuar  # noqa: E402
-from lib.planos import LEGADO, PLANOS, plano_de  # noqa: E402
+from lib.planos import ADICIONAIS, LEGADO, PLANOS_PADRAO, plano_de, valores_comerciais  # noqa: E402
 
 CASA = {"tipo": "casa", "finalidade": "venda", "status": "publicado", "bairro": "Água Verde", "cidade": "Curitiba",
         "quartos": 3, "vagas": 2, "area_util": 120, "valor_venda": 650000}
@@ -47,4 +47,25 @@ def test_planos_legado_e_limites_personalizados():
     assert pro["usuarios"] == 5 and "match" in pro["recursos"] and "portais" not in pro["recursos"]
     ext = plano_de({"plano": "profissional", "plano_aplicado": True, "limites_personalizados": {"usuarios": 8, "recursos_extras": ["portais"]}})
     assert ext["usuarios"] == 8 and "portais" in ext["recursos"]
-    assert PLANOS["essencial"]["preco"] < PLANOS["profissional"]["preco"] < PLANOS["business"]["preco"]
+    assert PLANOS_PADRAO["essencial"]["preco_mensal"] < PLANOS_PADRAO["profissional"]["preco_mensal"] < PLANOS_PADRAO["business"]["preco_mensal"]
+
+
+def test_adicionais_somam_limite_e_liberam_recurso(monkeypatch):
+    monkeypatch.setitem(ADICIONAIS, "portais", {"chave": "portais", "nome": "Portais", "tipo": "recurso", "recurso": "portais", "preco_mensal": 79, "preco_anual": 790})
+    monkeypatch.setitem(ADICIONAIS, "usu5", {"chave": "usu5", "nome": "5 usuários", "tipo": "usuarios", "quantidade_por_unidade": 5, "preco_mensal": 100, "preco_anual": None})
+    emp = {"plano": "profissional", "plano_aplicado": True,
+           "comercial": {"adicionais": [{"chave": "portais", "quantidade": 1}, {"chave": "usu5", "quantidade": 2}]}}
+    p = plano_de(emp)
+    assert p["usuarios"] == 15 and "portais" in p["recursos"]
+    assert "portais" not in plano_de({"plano": "profissional", "plano_aplicado": True})["recursos"]  # catálogo intacto
+
+
+def test_valores_mensal_anual_desconto_e_taxa(monkeypatch):
+    monkeypatch.setitem(ADICIONAIS, "usu5", {"chave": "usu5", "nome": "5 usuários", "tipo": "usuarios", "quantidade_por_unidade": 5, "preco_mensal": 100, "preco_anual": None})
+    base = {"plano": "profissional", "plano_aplicado": True}
+    v = valores_comerciais({**base, "comercial": {"adicionais": [{"chave": "usu5", "quantidade": 2}], "desconto_tipo": "valor", "desconto_valor": 49}})
+    assert v["subtotal"] == 449 and v["desconto"] == 49 and v["total"] == 400 and v["taxa_instalacao"] == 499
+    a = valores_comerciais({**base, "comercial": {"periodicidade": "anual", "desconto_tipo": "percentual", "desconto_valor": 10, "taxa_instalacao": 0}})
+    assert a["subtotal"] == 249 * 12 and a["total"] == round(249 * 12 * 0.9, 2) and a["equivalente_mensal"] == round(a["total"] / 12, 2)
+    assert a["taxa_instalacao"] == 0  # taxa negociada pelo vendedor vence a do plano
+    assert valores_comerciais({"plano": "profissional"}) is None  # legado não tem cobrança

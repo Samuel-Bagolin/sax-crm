@@ -3,6 +3,8 @@ import AppShell from "@/components/layout/AppShell";
 import RotaProtegida from "@/components/layout/RotaProtegida";
 import Dashboard from "@/pages/Dashboard";
 import Imoveis from "@/pages/Imoveis";
+import Proprietarios from "@/pages/Proprietarios";
+import ProprietarioDetalhe from "@/pages/ProprietarioDetalhe";
 import Negocios from "@/pages/Negocios";
 import NegocioDetalhe from "@/pages/NegocioDetalhe";
 import Leads from "@/pages/Leads";
@@ -39,6 +41,8 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/imoveis" element={<Imoveis />} />
+            <Route path="/proprietarios" element={<Proprietarios />} />
+            <Route path="/proprietarios/:id" element={<ProprietarioDetalhe />} />
             <Route path="/crm" element={<Negocios />} />
             <Route path="/negocios/:id" element={<NegocioDetalhe />} />
             <Route path="/leads" element={<Leads />} />

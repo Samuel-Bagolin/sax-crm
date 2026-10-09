@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime
-from typing import List
+from typing import List, Literal
 
 from pydantic import BaseModel, Field, EmailStr
 
@@ -62,6 +62,24 @@ class EmpresaUpdate(BaseModel):
     modulos: List[str] | None = None
 
 
+class AdicionalContratado(BaseModel):
+    chave: str
+    quantidade: int = Field(default=1, ge=1, le=100_000)
+
+
+class ComercialEmpresa(BaseModel):
+    """Condições negociadas pelo vendedor com a imobiliária."""
+
+    periodicidade: Literal["mensal", "anual"] = "mensal"
+    adicionais: List[AdicionalContratado] = Field(default_factory=list)
+    desconto_tipo: Literal["percentual", "valor"] | None = None
+    desconto_valor: float = Field(default=0, ge=0, le=10_000_000)
+    desconto_motivo: str | None = Field(default=None, max_length=300)
+    taxa_instalacao: float | None = Field(default=None, ge=0, le=10_000_000)  # vazio = taxa padrão do plano
+    taxa_instalacao_parcelas: int = Field(default=1, ge=1, le=24)
+    observacoes: str | None = Field(default=None, max_length=2000)
+
+
 class EmpresaResumo(Empresa):
     """Empresa + contadores lidos do banco dela (painel do Administrador de Sistema)."""
 
@@ -75,6 +93,8 @@ class EmpresaResumo(Empresa):
     imoveis: int = 0
     leads: int = 0
     contratos: int = 0
+    comercial: dict | None = None
+    valores: dict | None = None  # plano + adicionais − desconto, no período contratado
     convite_enviado: bool = False
     link_ativacao: str | None = None  # só na resposta da criação, para o Administrador de Sistema
 

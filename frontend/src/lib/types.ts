@@ -10,14 +10,88 @@ export type PlanoTipo = "receita" | "despesa";
 export type TransacaoTipo = "receber" | "pagar";
 export type TransacaoStatus = "pendente" | "pago" | "cancelado";
 
-export interface Pessoa {
-  id: string;
+export interface DadosPessoa {
   nome: string;
   papeis: Papel[];
+  tipo_pessoa?: "pf" | "pj";
   cpf_cnpj: string | null;
   telefone: string | null;
+  telefone2?: string | null;
   email: string | null;
+  rg?: string | null;
+  data_nascimento?: string | null;
+  estado_civil?: string | null;
+  profissao?: string | null;
+  nacionalidade?: string | null;
+  nome_fantasia?: string | null;
+  inscricao_estadual?: string | null;
+  responsavel_nome?: string | null;
+  responsavel_cpf?: string | null;
+  cep?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  banco?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
+  tipo_conta?: "corrente" | "poupanca" | null;
+  pix?: string | null;
+  observacoes?: string | null;
+}
+
+export interface Pessoa extends DadosPessoa {
+  id: string;
   created_at: string;
+}
+
+export interface ProprietarioResumo extends Pessoa {
+  qtd_imoveis: number;
+  qtd_alugados: number;
+  qtd_disponiveis: number;
+  valor_carteira: number;
+}
+
+export interface SituacaoLocacao {
+  contrato_id: string;
+  numero: string;
+  inquilino: string | null;
+  aluguel: number;
+  inicio: string;
+  fim: string | null;
+  meses_total: number;
+  meses_pagos: number;
+  meses_em_atraso: number;
+  proximo_vencimento: string | null;
+}
+
+export interface ImovelDoProprietario {
+  id: string;
+  codigo: string;
+  titulo: string;
+  tipo: ImovelTipo;
+  finalidade: ImovelFinalidade;
+  status: ImovelStatus;
+  bairro: string | null;
+  cidade: string;
+  foto_url: string | null;
+  valor_venda: number | null;
+  valor_aluguel: number | null;
+  publicar_portais: boolean;
+  locacao: SituacaoLocacao | null;
+  contrato_venda: string | null;
+  aluguel_recebido: number | null;
+  lucro_imobiliaria: number | null;
+  despesas: number | null;
+}
+
+export interface FichaProprietario {
+  proprietario: Pessoa;
+  imoveis: ImovelDoProprietario[];
+  totais: { aluguel_recebido: number; lucro_imobiliaria: number; despesas: number; a_receber: number } | null;
+  valor_carteira: number;
 }
 
 export interface Imovel {
@@ -153,6 +227,30 @@ export interface EmpresaResumo extends Empresa {
   contratos: number;
   convite_enviado: boolean;
   link_ativacao?: string | null;
+  comercial?: ComercialEmpresa | null;
+  valores?: ValoresComerciais | null;
+}
+
+export interface ComercialEmpresa {
+  periodicidade: "mensal" | "anual";
+  adicionais: { chave: string; quantidade: number }[];
+  desconto_tipo: "percentual" | "valor" | null;
+  desconto_valor: number;
+  desconto_motivo: string | null;
+  taxa_instalacao: number | null;
+  taxa_instalacao_parcelas: number;
+  observacoes: string | null;
+}
+
+export interface ValoresComerciais {
+  periodicidade: "mensal" | "anual";
+  linhas: { descricao: string; quantidade: number; unitario: number; total: number }[];
+  subtotal: number;
+  desconto: number;
+  total: number;
+  equivalente_mensal: number;
+  taxa_instalacao: number;
+  taxa_instalacao_parcelas: number;
 }
 
 export interface UsoEmpresa {

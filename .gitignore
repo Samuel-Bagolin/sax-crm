@@ -95,3 +95,6 @@ android-sdk/
 .pytest_cache/
 *.tsbuildinfo
 *.pyc
+
+# Claude Code: preferências pessoais ficam fora do Git
+.claude/settings.local.json

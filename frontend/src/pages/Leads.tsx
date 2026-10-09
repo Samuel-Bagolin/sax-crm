@@ -41,9 +41,13 @@ function NovoLeadDialog({ open, onClose }: { open: boolean; onClose: () => void 
   const { data: equipe = [] } = useEquipe();
   const { data: imoveis = [] } = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<Imovel[]>("/imoveis"), enabled: open });
   const [f, setF] = useState({ nome: "", telefone: "", email: "", origem: "", interesse: "compra" as InteresseEntrada, mensagem: "", imovel_id: null as string | null, valor: "", corretor_id: "" });
+  const origemPadrao = config?.origens[0] ?? "Manual";
+  // Limpa o formulário só quando o diálogo abre. Antes, cada atualização da configuração do CRM
+  // (ao voltar para a aba, por exemplo) apagava o que já tinha sido digitado.
   useEffect(() => {
-    if (open) setF({ nome: "", telefone: "", email: "", origem: config?.origens[0] ?? "Manual", interesse: "compra", mensagem: "", imovel_id: null, valor: "", corretor_id: "" });
-  }, [open, config?.origens]);
+    if (open) setF({ nome: "", telefone: "", email: "", origem: origemPadrao, interesse: "compra", mensagem: "", imovel_id: null, valor: "", corretor_id: "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const salvar = useMutation({
     mutationFn: () =>

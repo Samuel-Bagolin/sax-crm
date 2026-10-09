@@ -10,6 +10,7 @@ import {
   FileSignature,
   Handshake,
   Inbox,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   MessageCircle,
@@ -71,6 +72,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
       { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Negócios", nivel: "todos" },
       { to: "/agenda", modulo: "agenda", icon: CalendarDays, nivel: "todos", contador: "atividades" },
       { to: "/imoveis", modulo: "imoveis", icon: Building2, nivel: "todos" },
+      { to: "/proprietarios", modulo: "imoveis", icon: KeyRound, rotulo: "Proprietários", curto: "Donos", nivel: "todos" },
       { to: "/chat", modulo: "chat", icon: MessageCircle, rotulo: "Chat da equipe", curto: "Chat", nivel: "todos", contador: "chat" },
     ],
   },
@@ -102,6 +104,7 @@ const TITULOS: Record<string, string> = {
   "/perfil": "Meu perfil",
   "/relatorios": "Relatórios",
   "/chat": "Chat da equipe",
+  "/proprietarios": "Proprietários",
 };
 const MODULO_POR_ROTA: Record<string, string> = {
   "/": "dashboard",
@@ -286,7 +289,9 @@ export default function AppShell() {
   const caminho = location.pathname;
   const titulo = caminho.startsWith("/negocios/")
     ? "Negócio"
-    : TITULOS[caminho] ?? (MODULO_POR_ROTA[caminho] ? rotulo(MODULO_POR_ROTA[caminho]) : config.nome_software);
+    : caminho.startsWith("/proprietarios/")
+      ? "Proprietário"
+      : TITULOS[caminho] ?? (MODULO_POR_ROTA[caminho] ? rotulo(MODULO_POR_ROTA[caminho]) : config.nome_software);
   const larguraTotal = LARGURA_TOTAL.some((p) => (p.endsWith("/") ? caminho.startsWith(p) : caminho === p));
 
   return (

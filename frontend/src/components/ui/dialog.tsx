@@ -7,8 +7,21 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+function Dialog({ onOpenChange, ...props }: DialogPrimitive.Root.Props) {
+  // Um clique em algo que some da tela no meio do clique (opção de lista, botão que vira campo)
+  // chega ao Base UI com o alvo já fora do documento e era lido como "clique fora": o diálogo
+  // fechava sozinho durante o preenchimento. Só aceitamos o "clique fora" se o alvo ainda existe.
+  const aoMudar: DialogPrimitive.Root.Props["onOpenChange"] = (aberto, detalhes) => {
+    if (!aberto && detalhes?.reason === "outside-press") {
+      const alvo = (detalhes.event as Event | undefined)?.target
+      if (alvo instanceof Node && !alvo.isConnected) {
+        detalhes.cancel()
+        return
+      }
+    }
+    onOpenChange?.(aberto, detalhes)
+  }
+  return <DialogPrimitive.Root data-slot="dialog" onOpenChange={aoMudar} {...props} />
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
