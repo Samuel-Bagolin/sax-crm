@@ -153,6 +153,9 @@ def doc_id(doc: dict) -> str:
 # ====================================================================== HTTP / credenciais
 
 
+ESCOPO_DADOS = "https://www.googleapis.com/auth/datastore"
+
+
 class _Conexao:
     def __init__(self, credencial: dict | None, projeto: str, emulador: str | None, database: str = "(default)"):
         self.credencial = credencial
@@ -163,6 +166,7 @@ class _Conexao:
         self.base = f"{host}/v1/{self.raiz}"
         self._http: httpx.AsyncClient | None = None
         self._token: tuple[str, float] | None = None
+        self._tokens: dict[str, tuple[str, float]] = {}
         self._trava_token = asyncio.Lock()
 
     def http(self) -> httpx.AsyncClient:
@@ -173,25 +177,34 @@ class _Conexao:
     async def _cabecalhos(self) -> dict:
         if self.emulador:
             return {"Authorization": "Bearer owner"}
-        if self._token and self._token[1] > time.time() + 60:
-            return {"Authorization": f"Bearer {self._token[0]}"}
+        return {"Authorization": f"Bearer {await self.token(ESCOPO_DADOS)}"}
+
+    async def token(self, escopo: str) -> str:
+        """Token OAuth da conta de serviço para o escopo pedido (cache de ~1 h por escopo)."""
+        atual = self._tokens.get(escopo)
+        if atual and atual[1] > time.time() + 60:
+            return atual[0]
         async with self._trava_token:
-            if not (self._token and self._token[1] > time.time() + 60):
+            atual = self._tokens.get(escopo)
+            if not (atual and atual[1] > time.time() + 60):
                 import jwt
 
                 agora = int(time.time())
                 afirmacao = jwt.encode({
                     "iss": self.credencial["client_email"], "sub": self.credencial["client_email"],
                     "aud": "https://oauth2.googleapis.com/token", "iat": agora, "exp": agora + 3600,
-                    "scope": "https://www.googleapis.com/auth/datastore",
+                    "scope": escopo,
                 }, self.credencial["private_key"], algorithm="RS256")
                 r = await self.http().post("https://oauth2.googleapis.com/token", data={
                     "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": afirmacao})
                 if r.status_code != 200:
                     raise OperationFailure(f"Firebase recusou a credencial: {r.text[:200]}")
                 dados = r.json()
-                self._token = (dados["access_token"], time.time() + int(dados.get("expires_in", 3600)))
-        return {"Authorization": f"Bearer {self._token[0]}"}
+                atual = (dados["access_token"], time.time() + int(dados.get("expires_in", 3600)))
+                self._tokens[escopo] = atual
+                if escopo == ESCOPO_DADOS:
+                    self._token = atual
+        return atual[0]
 
     async def chamar(self, metodo: str, url: str, corpo: dict | None = None, ok404: bool = False, commit: bool = False) -> Any:
         for tentativa in range(4):

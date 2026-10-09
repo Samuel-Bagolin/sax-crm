@@ -17,11 +17,32 @@ router = APIRouter(prefix="/cron", tags=["cron"])
 logger = logging.getLogger(__name__)
 
 
-def _autorizado(authorization: str | None) -> None:
+async def _autorizado(authorization: str | None, agente: str | None) -> None:
     segredo = os.environ.get("CRON_SECRET") or os.environ.get("WEBHOOK_CRON_SECRET") or ""
     token = authorization.removeprefix("Bearer ").strip() if authorization and authorization.startswith("Bearer ") else ""
-    if not segredo or not token or not hmac.compare_digest(token, segredo):
-        raise HTTPException(401, "Não autorizado")
+    if segredo and token and hmac.compare_digest(token, segredo):
+        return
+    # Sem CRON_SECRET cadastrado no Vercel, o Vercel Cron chama sem senha. Aceita a chamada dele no
+    # máximo a cada 20 min (a rotina é idempotente; quem forjar o cabeçalho só adianta a rotina).
+    from lib.autoconfig import ESTADO
+
+    if ESTADO.get("segredos") == "banco" and (agente or "").startswith("vercel-cron"):
+        from datetime import timedelta
+
+        from pymongo.errors import DuplicateKeyError
+
+        from models.common import now_utc
+
+        agora = now_utc()
+        try:
+            r = await controle["_sistema"].update_one({"_id": "cron", "ultima": {"$lt": agora - timedelta(minutes=20)}},
+                                                      {"$set": {"ultima": agora}}, upsert=True)
+            if r.modified_count or r.upserted_id is not None:
+                return
+        except DuplicateKeyError:
+            pass
+        raise HTTPException(429, "Rotina executada há pouco")
+    raise HTTPException(401, "Não autorizado")
 
 
 async def _lembretes(enviar, data_alvo: str) -> int:
@@ -29,8 +50,8 @@ async def _lembretes(enviar, data_alvo: str) -> int:
 
 
 @router.get("/rotina")
-async def rotina(authorization: str | None = Header(None)):
-    _autorizado(authorization)
+async def rotina(authorization: str | None = Header(None), user_agent: str | None = Header(None)):
+    await _autorizado(authorization, user_agent)
     from lib.automacoes import negocios_parados
     from lib.email import drenar_fila
     from routers.agenda import _amanha, enviar_lembretes

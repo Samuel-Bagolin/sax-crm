@@ -40,32 +40,27 @@ O sistema usa o Firestore do projeto Firebase `sax-crm`. O login do CRM é o do 
 
 ## 4. Variáveis de ambiente
 
-| Variável | Valor | Obrigatória |
-|---|---|---|
-| `FIREBASE_SERVICE_ACCOUNT` | o conteúdo inteiro do `.json` da conta de serviço (abra no bloco de notas, copie tudo, de `{` até `}`) | sim |
-| `DB_NAME` | `sax_crm` (padrão; nome do banco de controle, não mude depois) | não |
-| `JWT_SECRET` | texto aleatório com 64+ caracteres (assina as sessões) | sim |
-| `APP_ENV` | `producao` | sim |
-| `APP_URL` | `https://SEU-PROJETO.vercel.app` (troque pelo domínio próprio quando tiver) | sim |
-| `CRON_SECRET` | texto aleatório (o Vercel usa para chamar a rotina diária) | sim |
-| `ADMIN_INICIAL_EMAIL` | seu e-mail (vira o Administrador de Sistema no primeiro acesso) | só no 1º deploy |
-| `ADMIN_INICIAL_SENHA` | senha com 10+ caracteres | só no 1º deploy |
-| `ADMIN_INICIAL_NOME` | seu nome | opcional |
-| `RESEND_API_KEY` | chave do Resend | sim, para e-mails |
-| `EMAIL_FROM` | ex.: `crm@sax.com.br` | sim, para e-mails |
-| `EMAIL_FROM_NAME` | `SAX CRM` | opcional |
-| `EMAIL_REPLY_TO` | e-mail de resposta | opcional |
-| `BACKUP_ENCRYPTION_KEY` | chave Fernet (44 caracteres). Guarde fora do Vercel também: sem ela, backups não abrem | para backups |
-| `APP_TZ` | `America/Sao_Paulo` | opcional (padrão) |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_API_KEY`, `GOOGLE_APP_ID`, `GOOGLE_TOKEN_KEY` | ver `CRM_PIPEDRIVE.md` (Etapa 8.2). Redirect URI: `https://SEU-DOMINIO/api/google/callback` | se usar Google |
+**Só uma é obrigatória:** `FIREBASE_SERVICE_ACCOUNT` = o conteúdo inteiro do `.json` da conta de serviço (abra no bloco de notas, copie tudo, de `{` até `}`).
 
-Depois de entrar pela primeira vez com o administrador inicial, **apague `ADMIN_INICIAL_SENHA`** das variáveis e faça um redeploy.
+O resto o sistema resolve sozinho:
+
+| O quê | Como fica automático | Para trocar (opcional) |
+|---|---|---|
+| Endereço e ambiente | lidos do próprio Vercel (`VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_ENV`) | `APP_URL`, `APP_ENV` |
+| Segredos (sessão, rotina, Google, backup) | gerados no 1º acesso e guardados no banco (coleção `_sistema`, que só o servidor lê) | `JWT_SECRET`, `CRON_SECRET`, `GOOGLE_TOKEN_KEY`, `BACKUP_ENCRYPTION_KEY` |
+| Primeiro administrador | o usuário `adm@sax.com.br` do Firebase Authentication, conferido no 1º login. Senha com menos de 12 caracteres obriga a troca na hora | `ADMIN_INICIAL_EMAIL` (outro e-mail do Firebase Auth) |
+| Regras do Firestore e do Realtime Database | trancadas pelo servidor no 1º acesso (ninguém lê/grava direto pelo navegador) | — |
+| Rotina diária (Vercel Cron) | aceita a chamada do Vercel Cron, no máximo a cada 20 min | `CRON_SECRET` |
+| E-mails (convites, recuperação de senha) | desligados até configurar | `RESEND_API_KEY`, `EMAIL_FROM` |
+| Google Agenda/Drive | desligado até configurar | ver `CRM_PIPEDRIVE.md` (Etapa 8.2) |
 
 ## 5. Primeiro acesso
 
-1. Abra `https://SEU-PROJETO.vercel.app` e entre com `ADMIN_INICIAL_EMAIL` / `ADMIN_INICIAL_SENHA`.
-2. Em **Empresas → Nova empresa**, crie a imobiliária, escolha o plano e informe o gestor. Ele recebe o convite por e-mail (Resend).
-3. Teste: crie um lead, um negócio, uma proposta e uma vitrine; abra o link da vitrine no celular.
+1. Abra `https://SEU-PROJETO.vercel.app/api/status`: deve mostrar `"status":"ok"`, `"banco":"firestore"` e `"regras_firebase":"trancadas"`.
+   `local_do_banco` deve combinar com a região do Vercel (`gru1` ↔ `southamerica-east1`; se o Firestore estiver nos EUA, troque `regions` em `vercel.json` para `iad1`).
+2. Abra `https://SEU-PROJETO.vercel.app` e entre com o usuário do Firebase Authentication (`adm@sax.com.br` e a senha dele). Se a senha for fraca, o sistema pede uma nova (12+ caracteres) antes de liberar.
+3. Em **Empresas → Nova empresa**, crie a imobiliária, escolha o plano e informe o gestor. Ele recebe o convite por e-mail (Resend).
+4. Teste: crie um lead, um negócio, uma proposta e uma vitrine; abra o link da vitrine no celular.
 
 ## 6. Domínio próprio
 

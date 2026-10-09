@@ -165,3 +165,61 @@ def test_credencial_e_token_cacheado(monkeypatch):
     assert asyncio.run(c.conexao._cabecalhos()) == cab and len(chamadas) == 1
     monkeypatch.setenv("FIREBASE_SERVICE_ACCOUNT", json.dumps({**cred, "private_key": chave.replace("\n", "\\n")}))
     assert "BEGIN PRIVATE KEY" in fm.cliente_do_ambiente().conexao.credencial["private_key"].split("\n")[0]
+
+
+def test_trancar_regras_monta_chamadas(monkeypatch):
+    """Sem rede: confere as chamadas às APIs de regras do Firebase e a marca no banco."""
+    import asyncio
+
+    import httpx
+
+    from lib import autoconfig
+
+    chamadas = []
+
+    def responder(req: httpx.Request):
+        chamadas.append((req.method, str(req.url), req.content.decode()))
+        if req.url.path.endswith("/rulesets"):
+            return httpx.Response(200, json={"name": "projects/sax-crm/rulesets/abc"})
+        return httpx.Response(200, json={})
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(autoconfig.httpx, "AsyncClient", lambda **k: original(transport=httpx.MockTransport(responder)))
+
+    class Conexao:
+        emulador = None
+        credencial = {"client_email": "x"}
+        projeto = "sax-crm"
+
+        async def token(self, escopo):
+            assert "firebase.database" in escopo
+            return "tok"
+
+    class Cliente:
+        conexao = Conexao()
+
+    marcas = {}
+
+    class Col:
+        async def find_one(self, f):
+            return marcas.get(f["_id"])
+
+        async def update_one(self, f, u, upsert=False):
+            marcas[f["_id"]] = u["$set"]
+
+    class Controle:
+        def __getitem__(self, nome):
+            return Col()
+
+    import lib.db
+    monkeypatch.setattr(lib.db, "controle", Controle())
+    asyncio.run(autoconfig.trancar_regras(Cliente()))
+    assert autoconfig.ESTADO["regras"] == "trancadas"
+    urls = [c[1] for c in chamadas]
+    assert urls[0].endswith("/v1/projects/sax-crm/rulesets") and "if false" in chamadas[0][2]
+    assert urls[1].endswith("/v1/projects/sax-crm/releases/cloud.firestore") and chamadas[1][0] == "PATCH"
+    assert urls[2] == "https://sax-crm-default-rtdb.firebaseio.com/.settings/rules.json" and '".read": false' in chamadas[2][2]
+    assert marcas["regras"] == {"versao": 1}
+    chamadas.clear()
+    asyncio.run(autoconfig.trancar_regras(Cliente()))  # segunda vez: não chama nada
+    assert chamadas == []

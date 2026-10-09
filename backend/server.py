@@ -39,6 +39,9 @@ async def inicializar() -> None:
         return
     async with _trava_inicio:
         if not _inicializado:
+            from lib.autoconfig import carregar_segredos, trancar_regras
+            await carregar_segredos(controle)
+            await trancar_regras(client)
             await ensure_indexes()
             await garantir_crm_todas()
             await _primeiro_administrador()
@@ -114,7 +117,21 @@ async def health():
         await controle.command("ping")
     except Exception as exc:
         return JSONResponse({"status": "erro", "banco": banco, "erro": type(exc).__name__, "detalhe": str(exc)[:300]}, status_code=503)
-    return {"status": "ok", "banco": banco, "inicializado": _inicializado}
+    from lib.autoconfig import ESTADO, local_do_banco
+    erro_inicio = None
+    if not _inicializado:
+        try:
+            await inicializar()
+        except Exception as exc:
+            erro_inicio = f"{type(exc).__name__}: {str(exc)[:300]}"
+    saida = {"status": "ok" if not erro_inicio else "erro", "banco": banco, "inicializado": _inicializado}
+    if erro_inicio:
+        saida["erro_inicializacao"] = erro_inicio
+    if USA_FIRESTORE:
+        saida.update({"regras_firebase": ESTADO["regras"], "segredos": ESTADO["segredos"],
+                      "local_do_banco": await local_do_banco(client), "regiao_vercel": os.environ.get("VERCEL_REGION")})
+    saida["app_url"] = os.environ.get("APP_URL") or None
+    return saida
 
 # Domínios do sistema de gestão imobiliária
 api_router.include_router(auth.router)
@@ -165,8 +182,10 @@ async def _inicializar_na_primeira_requisicao(request, call_next):
     import time
     from lib.firestore_mongo import cache_requisicao
     cache_requisicao.set({})  # leituras repetidas na mesma requisição não vão de novo ao Firestore
-    if SERVERLESS and not _inicializado and request.url.path != "/api/status" and time.monotonic() - _ultima_falha_inicio > 30:
+    if SERVERLESS and not _inicializado and request.url.path != "/api/status":
         try:
+            if _ultima_falha_inicio and time.monotonic() - _ultima_falha_inicio < 30:
+                raise RuntimeError("inicialização falhou há pouco; nova tentativa em instantes")
             await inicializar()
         except Exception as exc:
             _ultima_falha_inicio = time.monotonic()

@@ -88,6 +88,7 @@ class Principal(BaseModel):
     tem_foto: bool = False
     foto_v: int = 0
     telefone: str | None = None
+    trocar_senha: bool = False  # senha inicial fraca: só pode trocar a senha até resolver
 
     @property
     def is_admin(self) -> bool:
@@ -238,6 +239,7 @@ async def _principal_do_request(request: Request) -> Principal | None:
         tem_foto=bool(doc.get("tem_foto")),
         foto_v=int(doc.get("foto_v", 0)),
         telefone=doc.get("telefone"),
+        trocar_senha=bool(doc.get("trocar_senha")),
     )
 
 
@@ -246,7 +248,12 @@ async def principal_atual(request: Request) -> Principal:
     principal = await _principal_do_request(request)
     if principal is None:
         raise HTTPException(status_code=401, detail="Sessão expirada ou inexistente")
+    if principal.trocar_senha and request.url.path not in _LIBERADO_SEM_TROCA:
+        raise HTTPException(status_code=403, detail="Troque a senha inicial para continuar")
     return principal
+
+
+_LIBERADO_SEM_TROCA = {"/api/auth/me", "/api/auth/senha", "/api/auth/logout"}
 
 
 async def principal_opcional(request: Request) -> Principal | None:

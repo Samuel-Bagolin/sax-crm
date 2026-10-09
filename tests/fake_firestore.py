@@ -61,6 +61,15 @@ def _consultar(parent, sq, tx=None):
     return saida
 
 
+@app.post("/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword")
+async def firebase_auth(request: Request):
+    """Firebase Authentication simulado: um único usuário (adm@sax.com.br / 123456)."""
+    corpo = await request.json()
+    if corpo.get("email") == "adm@sax.com.br" and corpo.get("password") == "123456":
+        return {"email": "adm@sax.com.br", "localId": "IvRzk", "displayName": "", "idToken": "x"}
+    return _erro(400, "INVALID_LOGIN_CREDENTIALS", "INVALID_LOGIN_CREDENTIALS")
+
+
 @app.get("/v1/{nome:path}")
 async def get(nome: str):
     STATS["get"] += 1

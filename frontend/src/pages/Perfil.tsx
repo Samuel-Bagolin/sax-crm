@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import Avatar from "@/components/shared/Avatar";
 import FotoUploader from "@/components/shared/FotoUploader";
 import GoogleConexao from "@/components/shared/GoogleConexao";
+import { FormTrocarSenha } from "@/components/shared/TrocarSenha";
 
 export default function Perfil() {
   const qc = useQueryClient();
@@ -104,6 +105,14 @@ export default function Perfil() {
       </form>
 
       <GoogleConexao />
+
+      <section className="space-y-4 rounded-lg border bg-card p-6">
+        <div>
+          <h3 className="font-semibold">Senha</h3>
+          <p className="text-sm text-muted-foreground">Ao trocar, as outras sessões abertas são encerradas.</p>
+        </div>
+        <FormTrocarSenha />
+      </section>
 
       <FotoUploader open={foto} onClose={() => setFoto(false)} salvando={enviarFoto.isPending} onConfirmar={(d) => enviarFoto.mutate(d)} />
     </div>

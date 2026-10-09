@@ -23,7 +23,7 @@ from lib.auth import (
     limpar_cookie,
     principal_atual,
 )
-from lib.db import client, controle, definir_empresa
+from lib.db import client, controle, db, definir_empresa
 from models.usuarios import LoginInput
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -41,14 +41,19 @@ async def login(input: LoginInput, response: Response):
     if not doc:
         # 2) Usuário de uma empresa: índice e-mail → empresa
         indice = await controle.usuarios_index.find_one({"email": email})
-        if not indice:
-            raise HTTPException(status_code=401, detail=ERRO_CREDENCIAL)
-        empresa = await controle.empresas.find_one({"id": indice["empresa_id"]})
-        if not empresa:
-            raise HTTPException(status_code=401, detail=ERRO_CREDENCIAL)
-        if not empresa.get("ativo", True):
-            raise HTTPException(status_code=403, detail="Empresa desativada — fale com o suporte")
-        doc = await client[empresa["db_name"]].usuarios.find_one({"email": email})
+        if indice:
+            empresa = await controle.empresas.find_one({"id": indice["empresa_id"]})
+            if not empresa:
+                raise HTTPException(status_code=401, detail=ERRO_CREDENCIAL)
+            if not empresa.get("ativo", True):
+                raise HTTPException(status_code=403, detail="Empresa desativada — fale com o suporte")
+            doc = await client[empresa["db_name"]].usuarios.find_one({"email": email})
+        else:
+            # 3) Sistema recém-instalado: o primeiro administrador vem do Firebase Authentication.
+            from lib.autoconfig import administrador_pelo_firebase
+            doc = await administrador_pelo_firebase(controle, email, input.senha)
+            if not doc:
+                raise HTTPException(status_code=401, detail=ERRO_CREDENCIAL)
 
     # Mensagem genérica: não revela se o e-mail existe.
     if not doc or doc.get("activation_required") or not conferir_senha(input.senha, doc["senha_hash"]):
@@ -72,7 +77,33 @@ async def login(input: LoginInput, response: Response):
         suporte=False,
         tem_foto=bool(doc.get("tem_foto")),
         foto_v=int(doc.get("foto_v", 0)),
+        trocar_senha=bool(doc.get("trocar_senha")),
     )
+
+
+class TrocaSenhaInput(BaseModel):
+    senha_atual: str = Field(min_length=1, max_length=72)
+    nova_senha: str = Field(min_length=12, max_length=72)
+
+
+@router.post("/senha", status_code=204)
+async def trocar_senha(input: TrocaSenhaInput, response: Response, principal: Principal = Depends(principal_atual)):
+    """O próprio usuário troca a senha (obrigatório quando a senha inicial é fraca)."""
+    if len(input.nova_senha.encode("utf-8")) > 72:
+        raise HTTPException(422, "Senha excede 72 bytes")
+    if input.nova_senha == input.senha_atual:
+        raise HTTPException(422, "A nova senha precisa ser diferente da atual")
+    banco = controle if principal.papel == "sysadmin" else db
+    doc = await banco.usuarios.find_one({"id": principal.usuario_id})
+    if not doc or not conferir_senha(input.senha_atual, doc["senha_hash"]):
+        raise HTTPException(400, "Senha atual incorreta")
+    versao = doc.get("session_version", 0) + 1
+    await banco.usuarios.update_one({"id": principal.usuario_id}, {
+        "$set": {"senha_hash": hash_senha(input.nova_senha), "trocar_senha": False, "session_version": versao}})
+    # As outras sessões caem; esta continua com um token novo.
+    gravar_cookie(response, criar_token(principal.usuario_id, empresa_id=principal.empresa_id,
+                                        session_version=versao))
+    return None
 
 
 @router.post("/logout", status_code=204)

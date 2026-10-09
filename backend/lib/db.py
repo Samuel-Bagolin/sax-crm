@@ -24,6 +24,10 @@ from pymongo import ASCENDING, DESCENDING, IndexModel
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+from lib.autoconfig import aplicar_padroes_ambiente  # noqa: E402
+
+aplicar_padroes_ambiente()
+
 # Banco: Firestore (Firebase) quando há FIREBASE_SERVICE_ACCOUNT ou emulador; senão MongoDB.
 USA_FIRESTORE = bool(os.environ.get("FIREBASE_SERVICE_ACCOUNT") or os.environ.get("FIRESTORE_EMULATOR_HOST")
                      or (os.environ.get("MONGO_URL") or "").startswith("firestore"))
@@ -35,8 +39,27 @@ else:
     # MONGO_URL (manual) ou MONGODB_URI (criada pela integração MongoDB Atlas do Vercel).
     mongo_url = os.environ.get("MONGO_URL") or os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL")
     if not mongo_url:
-        raise RuntimeError("Configure FIREBASE_SERVICE_ACCOUNT (Firebase) ou MONGO_URL (MongoDB)")
-    if mongo_url.startswith("mongomock://"):  # somente testes locais sem servidor Mongo
+        class _SemBanco:
+            """Nenhum banco configurado: a API sobe e /api/status explica o que falta."""
+            MENSAGEM = ("Falta a variável FIREBASE_SERVICE_ACCOUNT no Vercel (conteúdo do arquivo .json da conta "
+                        "de serviço do Firebase). Cadastre em Settings → Environment Variables e faça Redeploy.")
+
+            def __getitem__(self, _nome):
+                return self
+
+            def __getattr__(self, nome):
+                if nome.startswith("__"):
+                    raise AttributeError(nome)
+                return self
+
+            def __call__(self, *a, **k):
+                raise RuntimeError(self.MENSAGEM)
+
+            def close(self):
+                pass
+
+        client = _SemBanco()
+    elif mongo_url.startswith("mongomock://"):  # somente testes locais sem servidor Mongo
         from mongomock_motor import AsyncMongoMockClient
 
         client = AsyncMongoMockClient()

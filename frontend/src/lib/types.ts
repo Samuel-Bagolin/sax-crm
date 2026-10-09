@@ -235,6 +235,7 @@ export interface Principal {
   tem_foto: boolean;
   foto_v: number;
   telefone: string | null;
+  trocar_senha?: boolean;
 }
 
 export interface UsuarioPublico {
