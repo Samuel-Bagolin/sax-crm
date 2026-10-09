@@ -18,7 +18,7 @@ O financeiro registra comissões da imobiliária. Não equivale a uma apuração
 
 ## Execução
 
-Local: `pip install -r backend/requirements-dev.txt` e `cd frontend && npm ci`. API: `cd backend && uvicorn server:app --host 0.0.0.0 --port 8001`. Frontend: `cd frontend && npm run dev`. A UI usa `/api`, encaminhado ao backend pelo Vite/ingress.
+Local: `pip install -r backend/requirements-dev.txt` e `cd frontend && yarn install`. API: `cd backend && uvicorn server:app --host 0.0.0.0 --port 8001`. Frontend: `cd frontend && yarn dev`. A UI usa `/api`, encaminhado ao backend pelo Vite/ingress.
 
 Configurações de ambiente (não versionar valores secretos):
 

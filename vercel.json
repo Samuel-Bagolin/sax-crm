@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "cd frontend && npm ci",
-  "buildCommand": "cd frontend && npm run build",
+  "installCommand": "cd frontend && yarn install --frozen-lockfile --non-interactive",
+  "buildCommand": "cd frontend && yarn build",
   "outputDirectory": "frontend/dist",
   "functions": {
     "api/index.py": {

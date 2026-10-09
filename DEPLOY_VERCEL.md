@@ -83,5 +83,5 @@ Vercel → Project → **Settings → Domains** → adicione `crm.sax.com.br` e 
 ```bash
 pip install -r backend/requirements-dev.txt
 cd backend && MONGO_URL=mongodb://localhost:27017 DB_NAME=sax_crm JWT_SECRET=dev-secret-com-32-caracteres-ou-mais uvicorn server:app --port 8001
-cd frontend && npm ci && npm run dev   # http://localhost:3000, /api vai para a 8001
+cd frontend && yarn install && yarn dev   # http://localhost:3000, /api vai para a 8001
 ```
