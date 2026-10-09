@@ -3,7 +3,7 @@ import { apiGet } from "@/lib/api";
 import type { ConfiguracaoPublica } from "@/lib/types";
 
 export const PADRAO: ConfiguracaoPublica = {
-  nome_software: "CedroNexxo Gestão",
+  nome_software: "SAX",
   slogan: "Gestão Imobiliária Ágil",
   modulos_ativos: ["dashboard", "imoveis", "crm", "agenda", "contratos", "financeiro", "usuarios"],
   titulos_modulos: {

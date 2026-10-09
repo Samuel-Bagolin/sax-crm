@@ -219,15 +219,15 @@ async def enviar_lembretes(data_alvo: str) -> LembreteResultado:
             + f"<h2 style='margin:0 0 12px'>Suas visitas de amanhã ({data_alvo[8:10]}/{data_alvo[5:7]})</h2>"
             f"<p>Olá {escape(usuario['nome'])}, você tem {len(visitas)} visita(s) agendada(s) para amanhã:</p>"
             f"<ul style='padding-left:18px'>{linhas}</ul>"
-            f"<p><a href='{app_url}/agenda' style='color:#4a03a2'>Abrir a agenda no CedroNexxo</a></p>"
-            "<p style='font-size:12px;color:#888'>Enviado pelo CedroNexxo. "
+            f"<p><a href='{app_url}/agenda' style='color:#4a03a2'>Abrir a agenda no SAX</a></p>"
+            "<p style='font-size:12px;color:#888'>Enviado pelo SAX. "
             "Nunca pedimos senhas ou dados de cartão por e-mail.</p>"
             "</td></tr></table>"
         )
         try:
             await send_email(
                 to=usuario["email"],
-                subject=f"Lembrete: {len(visitas)} visita(s) amanhã — CedroNexxo",
+                subject=f"Lembrete: {len(visitas)} visita(s) amanhã — SAX",
                 html=html,
             )
         except Exception as e:  # um e-mail inválido não pode derrubar o lote inteiro
@@ -278,15 +278,15 @@ async def _lembretes_clientes(data_alvo: str, app_url: str) -> tuple[int, list[s
             f"<p>Olá {escape(pessoa['nome'])}, lembrete da visita agendada para amanhã:</p>"
             f"<p style='font-size:15px'><strong>{detalhe}</strong></p>"
             + (f"<p>Corretor responsável: {escape(corretor_nome)}</p>" if corretor_nome else "")
-            + f"<p><a href='{app_url}' style='color:#4a03a2'>CedroNexxo</a></p>"
-            "<p style='font-size:12px;color:#888'>Enviado pelo CedroNexxo. "
+            + f"<p><a href='{app_url}' style='color:#4a03a2'>SAX</a></p>"
+            "<p style='font-size:12px;color:#888'>Enviado pelo SAX. "
             "Nunca pedimos senhas ou dados de cartão por e-mail.</p>"
             "</td></tr></table>"
         )
         try:
             await send_email(
                 to=pessoa["email"],
-                subject=f"Sua visita amanhã às {v.get('hora', '')} — CedroNexxo",
+                subject=f"Sua visita amanhã às {v.get('hora', '')} — SAX",
                 html=html,
             )
         except Exception as e:

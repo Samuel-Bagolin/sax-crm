@@ -406,7 +406,7 @@ export default function Empresas() {
       </Card>
 
       <Dialog open={modal} onOpenChange={(o) => !o && setModal(false)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Nova empresa</DialogTitle>
             <DialogDescription>
@@ -423,12 +423,15 @@ export default function Empresas() {
                     key={p.chave}
                     type="button"
                     onClick={() => set("plano", p.chave)}
-                    className={cn("rounded-md border p-2 text-left", form.plano === p.chave ? "border-primary ring-2 ring-primary/20" : "hover:bg-muted")}
+                    className={cn("flex min-w-0 flex-col gap-0.5 rounded-md border p-2.5 text-left", form.plano === p.chave ? "border-primary ring-2 ring-primary/20" : "hover:bg-muted")}
                     data-testid={`empresa-plano-opcao-${p.chave}`}
                   >
-                    <p className="text-sm font-semibold">{p.nome}</p>
-                    <p className="num text-xs">{p.preco ? `${brl(p.preco)}/mês` : "sob consulta"}</p>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="truncate text-sm font-semibold">{p.nome}</p>
+                    <p className="num text-sm font-medium leading-tight">
+                      {p.preco ? brl(p.preco) : "Sob consulta"}
+                      {p.preco ? <span className="text-xs font-normal text-muted-foreground">/mês</span> : null}
+                    </p>
+                    <p className="text-[11px] leading-snug text-muted-foreground [overflow-wrap:anywhere]">
                       {p.usuarios ? `${p.usuarios} usuário${p.usuarios > 1 ? "s" : ""}` : "Usuários ilimitados"}, {p.imoveis ? `${p.imoveis} imóveis` : "imóveis ilimitados"}
                     </p>
                   </button>
@@ -468,7 +471,7 @@ export default function Empresas() {
             </div>
             <div className="border-t pt-3">
               <p className="mb-3 text-sm font-semibold">Primeiro gestor da empresa</p>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="empresa-admin-nome">Nome *</Label>
                   <Input
@@ -488,12 +491,12 @@ export default function Empresas() {
                     data-testid="empresa-admin-email-input"
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 sm:col-span-2">
                   <Label htmlFor="empresa-admin-senha">Senha (opcional)</Label>
                   <Input
                     id="empresa-admin-senha"
                     type="password"
-                    placeholder="deixe vazio: enviamos link de ativação"
+                    placeholder="Deixe vazio para enviar link de ativação"
                     value={form.admin_senha}
                     onChange={(e) => set("admin_senha", e.target.value)}
                     data-testid="empresa-admin-senha-input"

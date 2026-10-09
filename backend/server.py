@@ -45,7 +45,19 @@ async def inicializar() -> None:
             await ensure_indexes()
             await garantir_crm_todas()
             await _primeiro_administrador()
+            await _migrar_marca()
             _inicializado = True
+
+
+async def _migrar_marca() -> None:
+    """Configurações gravadas com o nome antigo (CedroNexxo Gestão) passam a ser SAX. Roda uma vez."""
+    if await controle["_sistema"].find_one({"_id": "marca_sax"}):
+        return
+    antigo = {"nome_software": {"$in": ["CedroNexxo Gestão", "CedroNexxo"]}}
+    await controle.configuracoes.update_many(antigo, {"$set": {"nome_software": "SAX"}})
+    async for empresa in controle.empresas.find({}, {"db_name": 1}):
+        await client[empresa["db_name"]].configuracoes.update_many(antigo, {"$set": {"nome_software": "SAX"}})
+    await controle["_sistema"].update_one({"_id": "marca_sax"}, {"$set": {"ok": True}}, upsert=True)
 
 
 async def _primeiro_administrador() -> None:

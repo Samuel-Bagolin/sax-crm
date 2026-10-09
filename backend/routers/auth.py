@@ -133,7 +133,7 @@ async def recover(input: RecoveryInput):
     email = input.email.lower().strip()
     user = await controle.usuarios.find_one({"email": email, "ativo": True})
     bank = controle
-    name = "CedroNexxo"
+    name = "SAX"
     if not user:
         index = await controle.usuarios_index.find_one({"email": email})
         company = await controle.empresas.find_one({"id": index["empresa_id"], "ativo": True}) if index else None
