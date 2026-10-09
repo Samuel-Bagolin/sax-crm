@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Loader2, LogIn } from "lucide-react";
 import MarcaSax from "@/components/shared/MarcaSax";
+import { CartaoImovelDemo, Skyline } from "@/components/shared/LoginIlustracao";
 import { apiPost, detalheErro } from "@/lib/api";
 import { beginSession } from "@/lib/session";
 import { useConfig } from "@/lib/useConfig";
@@ -49,7 +50,7 @@ export default function Login() {
     <div className="flex min-h-svh flex-col lg:flex-row">
       {/* Painel de marca — lado esquerdo, assimétrico */}
       <div
-        className="relative flex flex-col justify-between bg-sidebar bg-cover bg-center p-8 text-sidebar-foreground lg:w-[44%] lg:p-12"
+        className="relative flex flex-col justify-between overflow-hidden bg-sidebar bg-cover bg-center p-8 text-sidebar-foreground lg:w-[44%] lg:p-12"
         style={
           config.imagem_fundo_login
             ? { backgroundImage: `linear-gradient(rgba(74,3,162,.8),rgba(74,3,162,.92)), url(${config.imagem_fundo_login})` }
@@ -63,15 +64,21 @@ export default function Login() {
           ) : (
             <MarcaSax className="w-32" />
           )}
-          <div className="border-l border-sidebar-foreground/20 pl-4">
-            <p className="font-heading text-base font-semibold tracking-tight" data-testid="login-nome-software">
-              {config.nome_software}
-            </p>
-            <p className="text-xs text-sidebar-foreground/60">{config.slogan}</p>
-          </div>
+          {logoUrl && (
+            <div className="border-l border-sidebar-foreground/20 pl-4">
+              <p className="font-heading text-base font-semibold tracking-tight" data-testid="login-nome-software">
+                {config.nome_software}
+              </p>
+              {config.slogan && <p className="text-xs text-sidebar-foreground/60">{config.slogan}</p>}
+            </div>
+          )}
         </div>
 
-        <div className="my-10 lg:my-0">
+        {!config.imagem_fundo_login && (
+          <Skyline className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-56 lg:block w-full text-sidebar-foreground/[0.07]" />
+        )}
+
+        <div className="relative my-10 lg:my-0">
           <h1 className="font-heading text-3xl font-bold leading-tight tracking-tight lg:text-4xl">
             Do primeiro contato
             <br />
@@ -81,9 +88,12 @@ export default function Login() {
             Leads, funil de negócios, agenda da equipe e assinatura de contratos no mesmo lugar. Cada
             corretor com a sua carteira, o gestor com a visão completa.
           </p>
+          <div className="mt-14 hidden pl-8 lg:block">
+            <CartaoImovelDemo />
+          </div>
         </div>
 
-        <p className="text-[11px] text-sidebar-foreground/40">
+        <p className="relative text-[11px] text-sidebar-foreground/40">
           CRM imobiliário com tecnologia SAX
         </p>
       </div>
@@ -92,7 +102,7 @@ export default function Login() {
       <div className="flex flex-1 items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-sm">
           <h2 className="font-heading text-2xl font-bold tracking-tight">Entrar</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Acesse com a sua conta de consultor.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Acesse o CRM da sua imobiliária.</p>
 
           <form onSubmit={submeter} className="mt-6 flex flex-col gap-4" data-testid="login-form">
             <div className="grid gap-2">
@@ -101,7 +111,7 @@ export default function Login() {
                 id="email"
                 type="email"
                 autoComplete="username"
-                placeholder="voce@imobierp.com"
+                placeholder="voce@suaimobiliaria.com.br"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 data-testid="login-email-input"

@@ -4,7 +4,7 @@ import type { ConfiguracaoPublica } from "@/lib/types";
 
 export const PADRAO: ConfiguracaoPublica = {
   nome_software: "SAX",
-  slogan: "Gestão Imobiliária Ágil",
+  slogan: "",
   modulos_ativos: ["dashboard", "imoveis", "crm", "agenda", "contratos", "financeiro", "usuarios"],
   titulos_modulos: {
     dashboard: "Visão Geral",

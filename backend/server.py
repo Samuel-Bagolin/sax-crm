@@ -51,13 +51,16 @@ async def inicializar() -> None:
 
 async def _migrar_marca() -> None:
     """Configurações gravadas com o nome antigo (CedroNexxo Gestão) passam a ser SAX. Roda uma vez."""
-    if await controle["_sistema"].find_one({"_id": "marca_sax"}):
+    marca = await controle["_sistema"].find_one({"_id": "marca_sax"})
+    if marca and marca.get("versao") == 2:
         return
-    antigo = {"nome_software": {"$in": ["CedroNexxo Gestão", "CedroNexxo"]}}
-    await controle.configuracoes.update_many(antigo, {"$set": {"nome_software": "SAX"}})
-    async for empresa in controle.empresas.find({}, {"db_name": 1}):
-        await client[empresa["db_name"]].configuracoes.update_many(antigo, {"$set": {"nome_software": "SAX"}})
-    await controle["_sistema"].update_one({"_id": "marca_sax"}, {"$set": {"ok": True}}, upsert=True)
+    nome_antigo = {"nome_software": {"$in": ["CedroNexxo Gestão", "CedroNexxo"]}}
+    slogan_antigo = {"slogan": "Gestão Imobiliária Ágil"}
+    bancos = [controle] + [client[e["db_name"]] async for e in controle.empresas.find({}, {"db_name": 1})]
+    for banco in bancos:
+        await banco.configuracoes.update_many(nome_antigo, {"$set": {"nome_software": "SAX"}})
+        await banco.configuracoes.update_many(slogan_antigo, {"$set": {"slogan": ""}})
+    await controle["_sistema"].update_one({"_id": "marca_sax"}, {"$set": {"versao": 2}}, upsert=True)
 
 
 async def _primeiro_administrador() -> None:

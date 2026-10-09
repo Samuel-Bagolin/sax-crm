@@ -65,7 +65,7 @@ async def provisionar_empresa(*, nome: str, db_name: str, admin: dict) -> str:
             {
                 "id": "singleton",
                 "nome_software": nome,
-                "slogan": "Gestão Imobiliária Ágil",
+                "slogan": "",
                 "modulos_ativos": ["dashboard", "imoveis", "crm", "agenda", "contratos", "financeiro", "usuarios"],
                 "titulos_modulos": {
                     "dashboard": "Visão Geral",

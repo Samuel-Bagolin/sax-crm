@@ -31,7 +31,7 @@ TITULOS_PADRAO: dict[str, str] = {
 class Configuracao(BaseModel):
     id: str = CONFIG_ID
     nome_software: str = "SAX"
-    slogan: str = "Gestão Imobiliária Ágil"
+    slogan: str = ""
     modulos_ativos: List[str] = Field(default_factory=lambda: list(MODULOS))
     titulos_modulos: dict[str, str] = Field(default_factory=lambda: dict(TITULOS_PADRAO))
     # Identidade visual (valores CSS: hex ou oklch)
