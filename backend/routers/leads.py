@@ -56,6 +56,12 @@ async def resumir(docs: list[dict]) -> list[NegocioResumo]:
     imoveis_ids = {d.get("imovel_id") for d in docs} - {None}
     pessoas = {p["id"]: p async for p in db.pessoas.find({"id": {"$in": list(pessoas_ids)}})}
     imoveis = {i["id"]: i async for i in db.imoveis.find({"id": {"$in": list(imoveis_ids)}}, {"id": 1, "titulo": 1, "codigo": 1})}
+    veiculos_ids = {d.get("veiculo_id") for d in docs} - {None}
+    if veiculos_ids:  # loja de veículos: o card mostra o veículo no lugar do imóvel
+        from routers.veiculos import titulo as titulo_veiculo
+
+        async for v in db.veiculos.find({"id": {"$in": list(veiculos_ids)}}):
+            imoveis[v["id"]] = {"id": v["id"], "titulo": titulo_veiculo(v), "codigo": v.get("codigo")}
     usuarios = {u["pessoa_id"]: u async for u in db.usuarios.find(
         {"pessoa_id": {"$in": list(pessoas_ids)}}, {"id": 1, "pessoa_id": 1, "tem_foto": 1, "cor": 1})}
     proximas: dict[str, dict] = {}
@@ -73,7 +79,7 @@ async def resumir(docs: list[dict]) -> list[NegocioResumo]:
         cliente = pessoas.get(lead.cliente_id or "")
         corretor = pessoas.get(lead.corretor_id or "")
         usuario = usuarios.get(lead.corretor_id or "")
-        imovel = imoveis.get(lead.imovel_id or "")
+        imovel = imoveis.get(lead.imovel_id or d.get("veiculo_id") or "")
         prox = proximas.get(lead.id)
         situacao = "nenhuma"
         if prox:
@@ -221,6 +227,7 @@ async def create_lead(input: LeadCreate, principal: Principal = Depends(require(
     if not principal.is_admin:
         data["corretor_id"] = principal.pessoa_id
     await reference("imoveis", data.get("imovel_id"))
+    await reference("veiculos", data.get("veiculo_id"))
     await reference("pessoas", data.get("cliente_id"), principal)
     await reference("pessoas", data.get("corretor_id"), principal)
 
@@ -311,6 +318,7 @@ async def update_lead(lead_id: str, input: LeadUpdate, principal: Principal = De
     if not principal.is_admin:
         data.pop("corretor_id", None)
     await reference("imoveis", data.get("imovel_id"))
+    await reference("veiculos", data.get("veiculo_id"))
     await reference("pessoas", data.get("cliente_id"), principal)
     await reference("pessoas", data.get("corretor_id"), principal)
     atual = await _aplicar(doc, data, principal)

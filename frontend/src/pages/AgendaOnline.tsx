@@ -18,15 +18,15 @@ import { cn } from "@/lib/utils";
 
 type Jornada = Record<string, [string, string][]>;
 
-export default function AgendaOnline() {
+export default function AgendaOnline({ abaInicial = "servicos" }: { abaInicial?: string } = {}) {
   const seg = useSegmento();
-  const [aba, setAba] = useState("servicos");
+  const [aba, setAba] = useState(abaInicial);
   return (
     <Tabs value={aba} onValueChange={(v) => setAba(String(v))}>
       <TabsList className="w-full justify-start overflow-x-auto">
         <TabsTrigger value="servicos">{seg.termos.itens}</TabsTrigger>
         <TabsTrigger value="equipe">{seg.termos.profissionais} e horários</TabsTrigger>
-        <TabsTrigger value="link">Link de agendamento</TabsTrigger>
+        <TabsTrigger value="link">Regras do link</TabsTrigger>
       </TabsList>
       <TabsContent value="servicos" className="mt-4"><Servicos /></TabsContent>
       <TabsContent value="equipe" className="mt-4"><Equipe /></TabsContent>
@@ -149,7 +149,7 @@ function Equipe() {
   const [edit, setEdit] = useState<Profissional | null>(null);
   return (
     <div className="grid gap-3">
-      <p className="text-sm text-muted-foreground">Marque quem atende e o horário de cada um. Para incluir alguém, cadastre em {seg.termos.profissionais}.</p>
+      <p className="text-sm text-muted-foreground">Marque quem atende e o horário de cada um. Para incluir alguém, cadastre em Equipe.</p>
       <ul className="divide-y overflow-hidden rounded-xl border bg-card">
         {(profs.data ?? []).map((p) => (
           <li key={p.id} className="flex items-center gap-3 px-4 py-3">
@@ -206,7 +206,7 @@ function EditorJornada({ valor, onChange }: { valor: Jornada; onChange: (j: Jorn
   );
 }
 
-function ProfissionalDialog({ prof, onClose }: { prof: Profissional | null; onClose: () => void }) {
+export function ProfissionalDialog({ prof, onClose }: { prof: Profissional | null; onClose: () => void }) {
   const qc = useQueryClient();
   const { isAdmin } = useAuth();
   const [f, setF] = useState({ atende: true, jornada: JORNADA_BASE, comissao_pct: "0", online: true, especialidade: "", registro: "" });
@@ -247,7 +247,7 @@ function ProfissionalDialog({ prof, onClose }: { prof: Profissional | null; onCl
 
 // ------------------------------------------------------------------ link
 
-function LinkAgenda() {
+export function LinkAgenda() {
   const qc = useQueryClient();
   const { isAdmin } = useAuth();
   const { tem } = usePlano();

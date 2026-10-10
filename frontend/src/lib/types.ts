@@ -136,6 +136,7 @@ export interface Lead {
   nome: string;
   cliente_id: string | null;
   imovel_id: string | null;
+  veiculo_id?: string | null;
   corretor_id: string | null;
   origem: string;
   estagio: LeadEstagio;
@@ -574,6 +575,7 @@ export interface CrmConfig {
   exige_motivo_perda: boolean;
   sla_primeiro_contato_min: number | null;
   automacoes: Automacao[];
+  repescagem_horas?: number | null;
 }
 
 export type GatilhoAutomacao = "lead_novo" | "entrou_etapa" | "negocio_parado" | "negocio_ganho" | "negocio_perdido";
@@ -659,6 +661,11 @@ export interface Entrada {
   portal_lead_id: string | null;
   created_at: string;
   updated_at: string;
+  veiculo_id?: string | null;
+  na_fila?: boolean;
+  fila_desde?: string | null;
+  devolvido_de?: string | null;
+  atribuido_em?: string | null;
 }
 
 export type TipoAtividade = "ligacao" | "whatsapp" | "email" | "reuniao" | "visita" | "tarefa" | "prazo" | "almoco";

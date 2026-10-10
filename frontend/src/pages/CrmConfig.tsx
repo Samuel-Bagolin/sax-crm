@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useSegmento } from "@/lib/segmento";
 
 type Aba = "funis" | "listas" | "distribuicao" | "automacoes" | "portais" | "modelos" | "plano";
 type EtapaForm = Omit<Etapa, "id" | "cor"> & { id: string | null; cor: string | null };
@@ -307,8 +308,9 @@ export default function CrmConfig() {
   const { data: config } = useCrmConfig();
   const [editando, setEditando] = useState<Funil | "novo" | null>(null);
 
+  const seg = useSegmento();
   const salvarConfig = useMutation({
-    mutationFn: (parcial: Partial<CrmConfig>) => apiPut<CrmConfig>("/crm/config", parcial),
+    mutationFn: (parcial: Partial<CrmConfig> & { sem_repescagem?: boolean }) => apiPut<CrmConfig>("/crm/config", parcial),
     onSuccess: (c) => {
       qc.setQueryData(["crm-config"], c);
       toast.success("Configuração salva");
@@ -407,7 +409,7 @@ export default function CrmConfig() {
           {(
             [
               ["manual", "Triagem do gestor", "Leads novos sem responsável ficam na caixa de entrada para o gestor distribuir."],
-              ["rodizio", "Rodízio automático", "Cada lead novo (site, formulário ou cadastro) vai para o corretor ativo com menos leads."],
+              ["rodizio", "Rodízio automático", `Cada lead novo (site, formulário ou cadastro) vai para o ${seg.termos.profissional.toLowerCase()} ativo que recebeu menos leads nos últimos 30 dias.`],
             ] as const
           ).map(([v, t, d]) => (
             <button
@@ -419,6 +421,25 @@ export default function CrmConfig() {
               <p className="mt-1 text-sm text-muted-foreground">{d}</p>
             </button>
           ))}
+          <div className="rounded-lg border bg-card p-4 sm:col-span-2">
+            <label className="flex items-start gap-3">
+              <input type="checkbox" className="mt-1 h-4 w-4 accent-[var(--primary)]" checked={!!config.repescagem_horas} data-testid="repescagem-ativa"
+                onChange={(e) => salvarConfig.mutate(e.target.checked ? { repescagem_horas: 24 } : { sem_repescagem: true })} />
+              <span>
+                <span className="font-semibold">Fila livre para lead sem atendimento</span>
+                <span className="mt-1 block text-sm text-muted-foreground">Se o {seg.termos.profissional.toLowerCase()} não fizer o primeiro contato no prazo, o lead sai dele e vai para a aba Fila livre. Qualquer {seg.termos.profissional.toLowerCase()} pode pegar, e quem pegar primeiro fica com ele.</span>
+              </span>
+            </label>
+            {!!config.repescagem_horas && (
+              <div className="mt-3 flex items-center gap-2 pl-7 text-sm">
+                <span>Prazo:</span>
+                {[2, 4, 12, 24, 48].map((h) => (
+                  <button key={h} type="button" onClick={() => salvarConfig.mutate({ repescagem_horas: h })}
+                    className={cn("rounded-full border px-3 py-1", config.repescagem_horas === h ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")}>{h}h</button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

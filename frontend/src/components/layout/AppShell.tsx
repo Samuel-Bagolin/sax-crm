@@ -15,14 +15,12 @@ import {
   Car,
   Contact,
   CreditCard,
-  Link2,
   Store,
   LayoutDashboard,
   LogOut,
   MessageCircle,
   Menu,
   Moon,
-  Plus,
   Search,
   Settings,
   SlidersHorizontal,
@@ -76,23 +74,16 @@ function comTermos(texto: string, t: TermosSegmento): string {
   return texto.replace(/\{(\w+)\}/g, (_, k: keyof TermosSegmento) => t[k] ?? k);
 }
 
+const COM_ORCAMENTO: SegmentoChave[] = ["odontologia", "estetica"];
+
+/** Ordem do menu: Leads, Negócios ou Pacientes, Agenda, Orçamentos, Contratos; depois operação e gestão. */
 const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
   {
     titulo: null,
     itens: [{ to: "/", modulo: "dashboard", icon: LayoutDashboard, curto: "Início", nivel: "todos" }],
   },
   {
-    titulo: "Atendimento",
-    itens: [
-      { to: "/atendimentos", modulo: "atendimentos", icon: CalendarDays, rotulo: "Agenda", nivel: "todos", segmentos: SERVICOS },
-      { to: "/pacientes", modulo: "pacientes", icon: Contact, rotulo: "{clientes}", nivel: "todos", segmentos: SERVICOS },
-      { to: "/agenda-online", modulo: "atendimentos", icon: Link2, rotulo: "Serviços e link", curto: "Link", nivel: "todos", segmentos: SERVICOS },
-      { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: ["odontologia", "estetica"] },
-      { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Orçamentos", nivel: "todos", segmentos: ["odontologia", "estetica"] },
-    ],
-  },
-  {
-    titulo: "Vendas",
+    titulo: "Comercial",
     itens: [
       { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: VENDAS },
       { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Negócios", nivel: "todos", segmentos: VENDAS },
@@ -100,20 +91,26 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
       { to: "/imoveis", modulo: "imoveis", icon: Building2, nivel: "todos", segmentos: ["imobiliaria"] },
       { to: "/veiculos", modulo: "veiculos", icon: Car, rotulo: "Estoque", nivel: "todos", segmentos: ["veiculos"] },
       { to: "/proprietarios", modulo: "imoveis", icon: KeyRound, rotulo: "Proprietários", curto: "Donos", nivel: "todos", segmentos: ["imobiliaria"] },
+      { to: "/contratos", modulo: "contratos", icon: FileSignature, nivel: "todos", segmentos: VENDAS },
       { to: "/meu-site", modulo: "imoveis", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: ["imobiliaria"] },
       { to: "/meu-site", modulo: "veiculos", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: ["veiculos"] },
     ],
   },
   {
-    titulo: "Equipe",
-    itens: [{ to: "/chat", modulo: "chat", icon: MessageCircle, rotulo: "Chat da equipe", curto: "Chat", nivel: "todos", contador: "chat" }],
+    titulo: "Atendimento",
+    itens: [
+      { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: COM_ORCAMENTO },
+      { to: "/pacientes", modulo: "pacientes", icon: Contact, rotulo: "{clientes}", nivel: "todos", segmentos: SERVICOS },
+      { to: "/atendimentos", modulo: "atendimentos", icon: CalendarDays, rotulo: "Agenda", nivel: "todos", segmentos: SERVICOS },
+      { to: "/orcamentos", modulo: "pacientes", icon: Handshake, rotulo: "Orçamentos", curto: "Orçam.", nivel: "todos", segmentos: COM_ORCAMENTO },
+    ],
   },
   {
     titulo: "Operação",
     itens: [
-      { to: "/contratos", modulo: "contratos", icon: FileSignature, nivel: "todos" },
       { to: "/financeiro", modulo: "financeiro", icon: CircleDollarSign, nivel: "todos" },
       { to: "/relatorios", modulo: "crm", icon: ChartNoAxesColumn, rotulo: "Relatórios", nivel: "todos" },
+      { to: "/chat", modulo: "chat", icon: MessageCircle, rotulo: "Chat da equipe", curto: "Chat", nivel: "todos", contador: "chat" },
     ],
   },
   {
@@ -141,7 +138,8 @@ const TITULOS: Record<string, string> = {
   "/proprietarios": "Proprietários",
   "/meu-site": "Meu site",
   "/atendimentos": "Agenda",
-  "/agenda-online": "Serviços e link de agendamento",
+  "/agenda-online": "Serviços",
+  "/orcamentos": "Orçamentos",
   "/veiculos": "Estoque de veículos",
   "/assinatura": "Assinatura",
 };
@@ -270,6 +268,7 @@ export default function AppShell() {
   const { principal, isAdmin, isSysadmin, noControle } = useAuth();
   const { config, titulo: rotulo, logoUrl, moduloAtivo } = useConfig();
   const crmAtivo = !noControle && moduloAtivo("crm");
+  const seg = useSegmento();
 
   // Contadores do menu: só números, para gastar poucas leituras do banco (o Firestore cobra por documento lido).
   const { data: novos } = useQuery({
@@ -382,39 +381,6 @@ export default function AppShell() {
                   <Search className="h-4 w-4" />
                 </Button>
               )}
-              {!noControle && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger render={<Button size="sm" className="gap-1.5" data-testid="btn-novo" />}>
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Novo</span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    {moduloAtivo("crm") && (
-                      <>
-                        <DropdownMenuItem onClick={() => navigate("/leads?novo=1")}>
-                          <Inbox className="h-4 w-4" /> Lead
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => navigate("/crm?novo=1")} data-testid="btn-quick-new-lead">
-                          <Handshake className="h-4 w-4" /> Negócio
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => navigate("/agenda?nova=atividade")}>
-                          <CalendarDays className="h-4 w-4" /> Atividade
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                    {moduloAtivo("imoveis") && (
-                      <DropdownMenuItem onClick={() => navigate("/imoveis?novo=1")} data-testid="btn-quick-new-property">
-                        <Building2 className="h-4 w-4" /> Imóvel
-                      </DropdownMenuItem>
-                    )}
-                    {isAdmin && moduloAtivo("financeiro") && (
-                      <DropdownMenuItem onClick={() => navigate("/financeiro?novo=1")} data-testid="btn-quick-new-transaction">
-                        <CircleDollarSign className="h-4 w-4" /> Lançamento
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
               <AlternadorTema />
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -438,7 +404,7 @@ export default function AppShell() {
                       <p className="truncate text-sm font-semibold">{principal?.nome}</p>
                       <p className="truncate text-xs text-muted-foreground">{principal?.email}</p>
                       <p className="text-xs text-primary" data-testid="user-menu-papel">
-                        {isSysadmin ? "Administrador de sistema" : isAdmin ? "Gestor" : "Corretor"}
+                        {isSysadmin ? "Administrador de sistema" : isAdmin ? "Gestor" : seg.termos.profissional}
                         {principal?.empresa_nome ? ` em ${principal.empresa_nome}` : ""}
                       </p>
                     </div>
@@ -451,7 +417,7 @@ export default function AppShell() {
                   )}
                   {isAdmin && !noControle && (
                     <DropdownMenuItem onClick={() => navigate("/usuarios")}>
-                      <Users className="h-4 w-4" /> Consultores
+                      <Users className="h-4 w-4" /> {seg.termos.profissionais}
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />

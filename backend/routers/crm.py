@@ -23,6 +23,9 @@ from models.crm import (
 from models.leads import Lead
 from models.pessoas import Pessoa
 
+import logging
+
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["crm"])
 
 TIPO_LABEL = {
@@ -122,6 +125,8 @@ async def put_crm_config(input: CrmConfigUpdate, principal: Principal = Depends(
     entrada = input.model_dump(exclude_unset=True)
     if entrada.pop("sem_sla", None):
         atual["sla_primeiro_contato_min"] = None
+    if entrada.pop("sem_repescagem", None):
+        atual["repescagem_horas"] = None
     if entrada.get("automacoes") is not None:
         funis = {f["id"]: {e["id"] for e in f.get("etapas", [])} async for f in db.funis.find({}, {"id": 1, "etapas.id": 1})}
         for a in entrada["automacoes"]:
@@ -156,35 +161,80 @@ def to_entrada(doc: dict) -> Entrada:
     data["created_at"] = utc_aware(data.get("created_at"))
     data["updated_at"] = utc_aware(data.get("updated_at"))
     data["primeiro_contato_em"] = utc_aware(data.get("primeiro_contato_em"))
+    data["atribuido_em"] = utc_aware(data.get("atribuido_em"))
+    data["fila_desde"] = utc_aware(data.get("fila_desde"))
+    data["na_fila"] = bool(data.get("na_fila"))
     return Entrada(**{k: v for k, v in data.items() if k in Entrada.model_fields})
 
 
 def _filtro_entradas(principal: Principal) -> dict:
+    """Gestor vê tudo. Vendedor vê os leads dele e os da fila livre (que qualquer um pode pegar)."""
     if principal.is_admin:
         return {}
-    return {"corretor_id": principal.pessoa_id or "__sem_vinculo__"}
+    return {"$or": [{"corretor_id": principal.pessoa_id or "__sem_vinculo__"}, {"na_fila": True}]}
 
 
 async def _proximo_rodizio() -> str | None:
-    """Distribuição em rodízio: o corretor ativo com menos leads atribuídos recebe o próximo."""
+    """Distribuição em rodízio: o vendedor ativo que recebeu menos leads nos últimos 30 dias recebe o próximo."""
+    from datetime import timedelta
+
     corretores = [u["pessoa_id"] async for u in db.usuarios.find({"papel": "corretor", "ativo": True, "pessoa_id": {"$ne": None}}, {"pessoa_id": 1})]
     if not corretores:
         return None
-    contagem = {c: await db.entradas.count_documents({"corretor_id": c}) for c in corretores}
-    return min(corretores, key=lambda c: contagem[c])
+    desde = now_utc() - timedelta(days=30)
+    contagem = {c: await db.entradas.count_documents({"corretor_id": c, "created_at": {"$gte": desde}}) for c in corretores}
+    return min(corretores, key=lambda c: (contagem[c], c))
+
+
+_ULTIMA_REPESCAGEM = {"t": 0.0}
+
+
+async def repescar_leads(forcar: bool = False) -> int:
+    """Leads novos que o vendedor não atendeu no prazo vão para a fila livre. Roda no máximo a cada
+    5 minutos por instância (e no cron diário), para não gastar leituras do banco a toda hora."""
+    import time
+    from datetime import timedelta
+
+    if not forcar and time.monotonic() - _ULTIMA_REPESCAGEM["t"] < 300:
+        return 0
+    _ULTIMA_REPESCAGEM["t"] = time.monotonic()
+    horas = (await carregar_crm_config()).repescagem_horas
+    if not horas:
+        return 0
+    limite = now_utc() - timedelta(hours=horas)
+    movidos = 0
+    async for e in db.entradas.find({"status": "novo", "corretor_id": {"$ne": None}}):
+        if e.get("na_fila") or e.get("primeiro_contato_em"):
+            continue
+        desde = utc_aware(e.get("atribuido_em") or e.get("created_at"))
+        if not desde or desde > limite:
+            continue
+        r = await db.entradas.update_one({"id": e["id"], "corretor_id": e["corretor_id"], "status": "novo"}, {"$set": {
+            "corretor_id": None, "na_fila": True, "fila_desde": now_utc(), "devolvido_de": e["corretor_id"], "updated_at": now_utc()}})
+        movidos += r.modified_count
+    if movidos:
+        logger.info("repescagem: %s lead(s) foram para a fila livre", movidos)
+    return movidos
 
 
 @router.get("/entradas/contagem")
 async def contar_entradas(principal: Principal = Depends(require("entrada:read"))):
     """Só o número de leads novos, para o contador do menu. Contagem no banco custa uma leitura,
     em vez de uma por lead como a lista inteira."""
-    return {"novos": await db.entradas.count_documents({**_filtro_entradas(principal), "status": "novo"})}
+    if principal.is_admin:
+        novos = await db.entradas.count_documents({"status": "novo"})
+    else:
+        novos = await db.entradas.count_documents({"corretor_id": principal.pessoa_id or "__sem_vinculo__", "status": "novo"})
+    return {"novos": novos, "fila": await db.entradas.count_documents({"na_fila": True, "status": "novo"})}
 
 
 @router.get("/entradas", response_model=List[Entrada])
 async def list_entradas(status: str | None = Query(None), principal: Principal = Depends(require("entrada:read"))):
+    await repescar_leads()
     filtro = _filtro_entradas(principal)
-    if status == "ativos" or status is None:
+    if status == "fila":
+        filtro = {"na_fila": True, "status": "novo"}
+    elif status == "ativos" or status is None:
         filtro["status"] = {"$in": ["novo", "em_contato"]}
     elif status != "todos":
         filtro["status"] = status
@@ -200,7 +250,10 @@ async def criar_entrada(input: EntradaCreate, principal: Principal = Depends(req
     elif not data.get("corretor_id") and (await carregar_crm_config()).distribuicao == "rodizio":
         data["corretor_id"] = await _proximo_rodizio()
     await reference("imoveis", data.get("imovel_id"))
+    await reference("veiculos", data.get("veiculo_id"))
     await reference("pessoas", data.get("corretor_id"), principal)
+    if data.get("corretor_id"):
+        data["atribuido_em"] = now_utc()
     entrada = Entrada(**data)
     await db.entradas.insert_one(entrada.model_dump())
     await automacoes.lead_novo(entrada.model_dump())
@@ -226,11 +279,27 @@ async def editar_entrada(entrada_id: str, input: EntradaUpdate, principal: Princ
     if not principal.is_admin:
         data.pop("corretor_id", None)
     await reference("imoveis", data.get("imovel_id"))
+    await reference("veiculos", data.get("veiculo_id"))
     await reference("pessoas", data.get("corretor_id"), principal)
+    if "corretor_id" in data and data["corretor_id"] != doc.get("corretor_id"):
+        data.update(atribuido_em=now_utc() if data["corretor_id"] else None, na_fila=False)
     data["updated_at"] = now_utc()
     if data.get("status") in ("em_contato", "descartado") and not doc.get("primeiro_contato_em"):
         data["primeiro_contato_em"] = now_utc()
     await db.entradas.update_one({"id": entrada_id}, {"$set": data})
+    return to_entrada(await db.entradas.find_one({"id": entrada_id}))
+
+
+@router.post("/entradas/{entrada_id}/pegar", response_model=Entrada)
+async def pegar_entrada(entrada_id: str, principal: Principal = Depends(require("entrada:write"))):
+    """Vendedor pega um lead da fila livre. Só o primeiro que clicar fica com ele."""
+    if not principal.pessoa_id:
+        raise HTTPException(409, "Seu usuário não está vinculado a um cadastro de vendedor. Fale com o gestor.")
+    r = await db.entradas.update_one({"id": entrada_id, "na_fila": True, "status": "novo"}, {"$set": {
+        "corretor_id": principal.pessoa_id, "na_fila": False, "atribuido_em": now_utc(), "updated_at": now_utc()}})
+    if r.modified_count != 1:
+        raise HTTPException(409, "Outro vendedor já pegou este lead.")
+    await audit(principal, "entrada.pegar", entrada_id)
     return to_entrada(await db.entradas.find_one({"id": entrada_id}))
 
 
@@ -470,7 +539,8 @@ async def busca(q: str = Query(min_length=2, max_length=80), principal: Principa
         saida.append(ResultadoBusca(tipo="pessoa", id=p["id"], titulo=p["nome"], subtitulo=", ".join(p.get("papeis", [])) or None))
     async for i in db.imoveis.find({"$or": [{"titulo": rx}, {"codigo": rx}, {"bairro": rx}, {"cidade": rx}]}).limit(8):
         saida.append(ResultadoBusca(tipo="imovel", id=i["id"], titulo=i["titulo"], subtitulo=" · ".join(x for x in (i.get("codigo"), i.get("bairro"), i.get("cidade")) if x)))
-    async for e in db.entradas.find({**_filtro_entradas(principal), "status": {"$in": ["novo", "em_contato"]}, "$or": [{"nome": rx}, {"email": rx}, {"telefone": rx}]}).limit(5):
+    async for e in db.entradas.find({"$and": [_filtro_entradas(principal), {"status": {"$in": ["novo", "em_contato"]}},
+                                             {"$or": [{"nome": rx}, {"email": rx}, {"telefone": rx}]}]}).limit(5):
         saida.append(ResultadoBusca(tipo="entrada", id=e["id"], titulo=e["nome"], subtitulo=f"Lead · {e.get('origem', '')}"))
     async for c in db.contratos.find({**filtro_do_principal(principal, "contratos"), "numero": rx}).limit(5):
         saida.append(ResultadoBusca(tipo="contrato", id=c["id"], titulo=c["numero"], subtitulo=c.get("tipo")))

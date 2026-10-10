@@ -27,6 +27,7 @@ class Unidade(BaseModel):
     cidade: str | None = None
     telefone: str | None = None
     whatsapp: str | None = None
+    cadeiras: int | None = None  # postos de atendimento (cadeiras da barbearia, salas ou consultórios)
 
 
 class UnidadeIn(BaseModel):
@@ -35,6 +36,7 @@ class UnidadeIn(BaseModel):
     cidade: str | None = Field(default=None, max_length=80)
     telefone: str | None = Field(default=None, max_length=30)
     whatsapp: str | None = Field(default=None, max_length=30)
+    cadeiras: int | None = Field(default=None, ge=0, le=200)
     ativa: bool = True
 
 

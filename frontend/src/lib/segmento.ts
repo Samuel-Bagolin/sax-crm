@@ -36,5 +36,8 @@ export function useSegmento() {
     agendaOnline: !!info?.agenda_online,
     veiculos: chave === "veiculos",
     imobiliaria: chave === "imobiliaria",
+    vendas: chave === "imobiliaria" || chave === "veiculos",
+    barbearia: chave === "barbearia",
+    odonto: chave === "odontologia",
   };
 }

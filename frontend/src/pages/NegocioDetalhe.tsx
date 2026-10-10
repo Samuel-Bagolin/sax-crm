@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Building2,
+  Car,
   CalendarPlus,
   Check,
   FileSignature,
@@ -35,6 +36,7 @@ import Avatar from "@/components/shared/Avatar";
 import NegocioModal from "@/components/crm/NegocioModal";
 import AtividadeModal, { type PadraoAtividade } from "@/components/crm/AtividadeModal";
 import PerderDialog from "@/components/crm/PerderDialog";
+import { useSegmento } from "@/lib/segmento";
 import VisitaModal from "@/components/agenda/VisitaModal";
 import DocumentosPainel from "@/components/shared/DocumentosPainel";
 import PropostasPainel from "@/components/crm/PropostasPainel";
@@ -123,6 +125,13 @@ export default function NegocioDetalhe() {
   });
   const { data: pessoas = [] } = useQuery({ queryKey: ["pessoas"], queryFn: () => apiGet<Pessoa[]>("/pessoas"), enabled: visitaAberta });
   const { data: imoveis = [] } = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<ImovelDetalhe[]>("/imoveis"), enabled: visitaAberta });
+  const seg = useSegmento();
+  const veiculoId = data?.negocio.veiculo_id;
+  const { data: veiculo } = useQuery({
+    queryKey: ["veiculo", veiculoId],
+    queryFn: () => apiGet<{ id: string; titulo: string; codigo: string; km: number; cor: string | null; preco_venda: number | null; foto_url: string | null; status: string }>(`/veiculos/${veiculoId}`),
+    enabled: !!veiculoId && seg.veiculos,
+  });
 
   const invalidar = () => {
     qc.invalidateQueries({ queryKey: ["negocio", id] });
@@ -347,7 +356,26 @@ export default function NegocioDetalhe() {
             )}
           </Bloco>
 
-          <Bloco titulo="Imóvel">
+          {seg.veiculos && (
+            <Bloco titulo="Veículo">
+              {veiculo ? (
+                <Link to={`/veiculos?id=${veiculo.id}`} className="block space-y-2">
+                  {veiculo.foto_url ? (
+                    <img src={veiculo.foto_url} alt="" className="aspect-[16/9] w-full rounded-md bg-muted object-cover" onError={(e) => ((e.target as HTMLImageElement).style.visibility = "hidden")} />
+                  ) : (
+                    <div className="flex aspect-[16/9] items-center justify-center rounded-md bg-muted"><Car className="h-8 w-8 text-muted-foreground/60" /></div>
+                  )}
+                  <p className="font-semibold leading-snug hover:text-primary">{veiculo.titulo}</p>
+                  <p className="text-xs text-muted-foreground">{[veiculo.codigo, veiculo.km ? `${veiculo.km.toLocaleString("pt-BR")} km` : null, veiculo.cor, veiculo.status === "vendido" ? "vendido" : null].filter(Boolean).join(", ")}</p>
+                  {veiculo.preco_venda ? <p className="num text-sm">{brl(veiculo.preco_venda)}</p> : null}
+                </Link>
+              ) : (
+                <p className="text-sm text-muted-foreground">Sem veículo vinculado. Edite o negócio para escolher.</p>
+              )}
+            </Bloco>
+          )}
+
+          {seg.imobiliaria && <Bloco titulo="Imóvel">
             {imovel ? (
               <Link to={`/imoveis?id=${imovel.id}`} className="block space-y-2">
                 {imovel.foto_url ? (
@@ -374,7 +402,7 @@ export default function NegocioDetalhe() {
             ) : (
               <p className="text-sm text-muted-foreground">Sem imóvel vinculado.</p>
             )}
-          </Bloco>
+          </Bloco>}
 
           <Bloco titulo="Resumo">
             <Linha rotulo="Etapa">{etapa?.nome ?? "—"}</Linha>
@@ -383,7 +411,7 @@ export default function NegocioDetalhe() {
             <Linha rotulo="Previsão">{n.previsao_fechamento ? dataBR(n.previsao_fechamento) : "—"}</Linha>
             <Linha rotulo="Origem">{n.origem}</Linha>
             <Linha rotulo="Criado em">{dataHoraBR(n.created_at)}</Linha>
-            {responsavel?.telefone && <Linha rotulo="Telefone do corretor">{responsavel.telefone}</Linha>}
+            {responsavel?.telefone && <Linha rotulo={`Telefone do ${seg.termos.profissional.toLowerCase()}`}>{responsavel.telefone}</Linha>}
             {n.observacoes && <p className="mt-2 whitespace-pre-wrap rounded-md bg-muted/60 p-2 text-sm">{n.observacoes}</p>}
           </Bloco>
         </div>
@@ -411,12 +439,22 @@ export default function NegocioDetalhe() {
                   <Icone className="h-4 w-4" /> {rotulo}
                 </button>
               ))}
-              <button
-                onClick={() => setVisitaAberta(true)}
-                className="flex items-center gap-1.5 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-              >
-                <Home className="h-4 w-4" /> Visita
-              </button>
+              {seg.imobiliaria && (
+                <button
+                  onClick={() => setVisitaAberta(true)}
+                  className="flex items-center gap-1.5 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  <Home className="h-4 w-4" /> Visita
+                </button>
+              )}
+              {seg.veiculos && (
+                <button
+                  onClick={() => setAtividade({ a: null, padrao: { tipo: "visita", negocio_id: id, corretor_id: n.corretor_id, data: hoje, assunto: `Test drive ${veiculo?.titulo ?? ""}`.trim() } })}
+                  className="flex items-center gap-1.5 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  <Car className="h-4 w-4" /> Test drive
+                </button>
+              )}
             </div>
             <div className="p-3">
               <Textarea
@@ -498,11 +536,11 @@ export default function NegocioDetalhe() {
             <PropostasPainel
               negocioId={n.id}
               aberto={n.status === "aberto"}
-              valorAnunciado={imovel ? (imovel.finalidade === "locacao" ? imovel.valor_aluguel : imovel.valor_venda) : null}
+              valorAnunciado={seg.veiculos ? veiculo?.preco_venda ?? null : imovel ? (imovel.finalidade === "locacao" ? imovel.valor_aluguel : imovel.valor_venda) : null}
             />
           )}
 
-          {tem("match") && <CompativeisPainel negocioId={n.id} clienteNome={cliente?.nome} clienteTelefone={cliente?.telefone} corretorNome={resumo.corretor_nome} />}
+          {tem("match") && seg.imobiliaria && <CompativeisPainel negocioId={n.id} clienteNome={cliente?.nome} clienteTelefone={cliente?.telefone} corretorNome={resumo.corretor_nome} />}
 
           <DocumentosPainel negocioId={n.id} clienteEmail={cliente?.email} clienteTelefone={cliente?.telefone} clienteNome={cliente?.nome} />
 

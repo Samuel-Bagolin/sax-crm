@@ -8,6 +8,8 @@ import { brl } from "@/lib/format";
 import { diasDesde, linkWhatsapp, useCrmConfig, useEquipe, useFunis } from "@/lib/crm";
 import { parseNumber } from "@/lib/numbers";
 import { useAuth } from "@/lib/useAuth";
+import { useItemSegmento } from "@/lib/itemSegmento";
+import { useSegmento } from "@/lib/segmento";
 import type { Entrada, Imovel, InteresseEntrada, Lead, StatusEntrada } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,8 +21,20 @@ import Combo from "@/components/shared/Combo";
 import { cn } from "@/lib/utils";
 
 const INTERESSE: Record<InteresseEntrada, string> = { compra: "Comprar", locacao: "Alugar", venda: "Vender", outro: "Outro" };
-const ABAS: { v: StatusEntrada | "ativos"; rotulo: string }[] = [
+
+/** O que o lead quer, conforme o segmento. Nos segmentos de atendimento não há essa escolha. */
+function interessesDo(seg: string): InteresseEntrada[] {
+  if (seg === "imobiliaria") return ["compra", "locacao", "venda"];
+  if (seg === "veiculos") return ["compra", "venda", "outro"];
+  return [];
+}
+function rotuloInteresse(seg: string, k: InteresseEntrada) {
+  if (seg === "veiculos") return k === "venda" ? "Vender o carro" : k === "outro" ? "Troca" : "Comprar";
+  return INTERESSE[k];
+}
+const ABAS: { v: StatusEntrada | "ativos" | "fila"; rotulo: string }[] = [
   { v: "ativos", rotulo: "Para atender" },
+  { v: "fila", rotulo: "Fila livre" },
   { v: "convertido", rotulo: "Convertidos" },
   { v: "descartado", rotulo: "Descartados" },
 ];
@@ -39,7 +53,9 @@ function NovoLeadDialog({ open, onClose }: { open: boolean; onClose: () => void 
   const { isAdmin } = useAuth();
   const { data: config } = useCrmConfig();
   const { data: equipe = [] } = useEquipe();
-  const { data: imoveis = [] } = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<Imovel[]>("/imoveis"), enabled: open });
+  const item = useItemSegmento(open);
+  const seg = useSegmento();
+  const interesses = interessesDo(seg.chave);
   const [f, setF] = useState({ nome: "", telefone: "", email: "", origem: "", interesse: "compra" as InteresseEntrada, mensagem: "", imovel_id: null as string | null, valor: "", corretor_id: "" });
   const origemPadrao = config?.origens[0] ?? "Manual";
   // Limpa o formulário só quando o diálogo abre. Antes, cada atualização da configuração do CRM
@@ -58,7 +74,7 @@ function NovoLeadDialog({ open, onClose }: { open: boolean; onClose: () => void 
         origem: f.origem,
         interesse: f.interesse,
         mensagem: f.mensagem.trim() || null,
-        imovel_id: f.imovel_id,
+        ...(item.campo ? { [item.campo]: f.imovel_id } : {}),
         valor_estimado: parseNumber(f.valor),
         corretor_id: isAdmin ? f.corretor_id || null : undefined,
       }),
@@ -104,30 +120,37 @@ function NovoLeadDialog({ open, onClose }: { open: boolean; onClose: () => void 
               ))}
             </select>
           </div>
-          <div className="space-y-1.5">
+          {interesses.length > 0 && <div className="space-y-1.5">
             <Label>Quer</Label>
             <div className="flex gap-1">
-              {(Object.keys(INTERESSE) as InteresseEntrada[]).map((k) => (
+              {interesses.map((k) => (
                 <button
                   key={k}
                   type="button"
                   onClick={() => setF({ ...f, interesse: k })}
                   className={cn("h-8 flex-1 rounded-md border text-xs", f.interesse === k ? "border-primary bg-accent font-medium" : "hover:bg-muted")}
                 >
-                  {INTERESSE[k]}
+                  {rotuloInteresse(seg.chave, k)}
                 </button>
               ))}
             </div>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Imóvel de interesse</Label>
-            <Combo
-              opcoes={imoveis.map((i) => ({ valor: i.id, rotulo: i.titulo, detalhe: [i.codigo, i.bairro].filter(Boolean).join(", ") }))}
-              valor={f.imovel_id}
-              onChange={(v) => setF({ ...f, imovel_id: v })}
-              placeholder="Opcional"
-            />
-          </div>
+          </div>}
+          {item.campo ? (
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>{item.rotulo}</Label>
+              <Combo
+                opcoes={item.opcoes.map((i) => ({ valor: i.id, rotulo: i.titulo, detalhe: i.detalhe }))}
+                valor={f.imovel_id}
+                onChange={(v) => setF({ ...f, imovel_id: v, valor: f.valor || String(item.opcoes.find((i) => i.id === v)?.valor ?? "") })}
+                placeholder="Opcional"
+              />
+            </div>
+          ) : (
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="ld-msg">O que procura</Label>
+              <Input id="ld-msg" value={f.mensagem} onChange={(e) => setF({ ...f, mensagem: e.target.value })} placeholder={seg.odonto ? "Ex.: implante, clareamento, dor de dente" : "Ex.: toxina, preenchimento labial"} />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="ld-valor">Orçamento (R$)</Label>
             <Input id="ld-valor" inputMode="decimal" value={f.valor} onChange={(e) => setF({ ...f, valor: e.target.value })} />
@@ -308,7 +331,7 @@ export default function Leads() {
   const { isAdmin } = useAuth();
   const { data: equipe = [] } = useEquipe();
   const { data: config } = useCrmConfig();
-  const [aba, setAba] = useState<StatusEntrada | "ativos">("ativos");
+  const [aba, setAba] = useState<StatusEntrada | "ativos" | "fila">("ativos");
   const [busca, setBusca] = useState("");
   const [selecionado, setSelecionado] = useState<string | null>(params.get("id"));
   const [novo, setNovo] = useState(params.get("novo") === "1");
@@ -325,7 +348,23 @@ export default function Leads() {
     queryKey: ["entradas", aba],
     queryFn: () => apiGet<Entrada[]>(`/entradas?status=${aba}`),
   });
-  const { data: imoveis = [] } = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<Imovel[]>("/imoveis") });
+  const item = useItemSegmento();
+  const seg = useSegmento();
+  const { data: contagem } = useQuery({ queryKey: ["entradas", "contagem"], queryFn: () => apiGet<{ novos: number; fila: number }>("/entradas/contagem") });
+  const pegar = useMutation({
+    mutationFn: (id: string) => apiPost<Entrada>(`/entradas/${id}/pegar`),
+    onSuccess: (e) => {
+      toast.success(`O lead ${e.nome.split(" ")[0]} agora é seu. Faça o primeiro contato.`);
+      qc.invalidateQueries({ queryKey: ["entradas"] });
+      setAba("ativos");
+      setSelecionado(e.id);
+    },
+    onError: (err) => {
+      toast.error(detalheErro(err) ?? "Não foi possível pegar o lead");
+      qc.invalidateQueries({ queryKey: ["entradas"] });
+    },
+  });
+  const itemDe = (e: Entrada) => item.opcoes.find((i) => i.id === (item.campo === "veiculo_id" ? e.veiculo_id : e.imovel_id));
 
   const filtradas = useMemo(() => {
     const t = busca.trim().toLowerCase();
@@ -377,6 +416,7 @@ export default function Leads() {
               className={cn("h-7 rounded px-3 text-xs font-medium", aba === a.v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
             >
               {a.rotulo}
+              {a.v === "fila" && (contagem?.fila ?? 0) > 0 && <span className="ml-1.5 rounded-full bg-[#ff7a00] px-1.5 text-[10px] font-bold text-white">{contagem!.fila}</span>}
             </button>
           ))}
         </div>
@@ -405,7 +445,7 @@ export default function Leads() {
             <ul className="divide-y">
               {filtradas.map((e) => {
                 const resp = pessoaDe(e.corretor_id);
-                const imovel = imoveis.find((i) => i.id === e.imovel_id);
+                const imovel = itemDe(e);
                 return (
                   <li
                     key={e.id}
@@ -418,7 +458,7 @@ export default function Leads() {
                       <div className="flex items-center gap-2">
                         <p className={cn("truncate text-sm", e.status === "novo" ? "font-semibold" : "font-medium")}>{e.nome}</p>
                         <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{e.origem}</span>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">{INTERESSE[e.interesse]}</span>
+                        {seg.vendas && <span className="shrink-0 text-[11px] text-muted-foreground">{rotuloInteresse(seg.chave, e.interesse)}</span>}
                         <SlaChip e={e} sla={config?.sla_primeiro_contato_min} agora={agora} />
                       </div>
                       <p className="truncate text-xs text-muted-foreground">
@@ -429,10 +469,15 @@ export default function Leads() {
                     {resp ? (
                       <Avatar nome={resp.nome} usuarioId={resp.usuario_id} temFoto={resp.tem_foto} versao={resp.foto_v} tamanho="xs" />
                     ) : (
-                      isAdmin && <span className="rounded-full border border-dashed px-2 text-[10px] text-muted-foreground">Triagem</span>
+                      e.na_fila ? <span className="rounded-full bg-[#ff7a00]/15 px-2 text-[10px] font-semibold text-[#c25800]">Fila livre</span>
+                        : isAdmin && <span className="rounded-full border border-dashed px-2 text-[10px] text-muted-foreground">Triagem</span>
                     )}
                     <span className="w-8 shrink-0 text-right text-xs text-muted-foreground">{idade(e.created_at)}</span>
-                    {e.status !== "convertido" && e.status !== "descartado" && (
+                    {e.na_fila ? (
+                      <Button size="sm" onClick={(ev) => { ev.stopPropagation(); pegar.mutate(e.id); }} disabled={pegar.isPending} data-testid={`pegar-${e.id}`}>
+                        Pegar lead
+                      </Button>
+                    ) : e.status !== "convertido" && e.status !== "descartado" && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -486,14 +531,18 @@ export default function Leads() {
                   <dt className="text-muted-foreground">E-mail</dt>
                   <dd className="truncate">{atual.email ?? "—"}</dd>
                 </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Interesse</dt>
-                  <dd>{INTERESSE[atual.interesse]}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Imóvel</dt>
-                  <dd className="truncate">{imoveis.find((i) => i.id === atual.imovel_id)?.titulo ?? "—"}</dd>
-                </div>
+                {seg.vendas && (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted-foreground">Interesse</dt>
+                    <dd>{rotuloInteresse(seg.chave, atual.interesse)}</dd>
+                  </div>
+                )}
+                {item.campo && (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted-foreground">{item.tipo === "veiculo" ? "Veículo" : "Imóvel"}</dt>
+                    <dd className="truncate">{itemDe(atual)?.titulo ?? "Não informado"}</dd>
+                  </div>
+                )}
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">Orçamento</dt>
                   <dd className="num">{brl(atual.valor_estimado)}</dd>
@@ -518,7 +567,13 @@ export default function Leads() {
                   </select>
                 </div>
               )}
-              {atual.status === "convertido" ? (
+              {atual.na_fila && (
+                <div className="space-y-2 rounded-lg border border-[#ff7a00]/40 bg-[#ff7a00]/5 p-3 text-sm">
+                  <p>Este lead ficou {config?.repescagem_horas ?? 24}h sem atendimento{atual.devolvido_de ? ` com ${pessoaDe(atual.devolvido_de)?.nome.split(" ")[0] ?? "o vendedor anterior"}` : ""} e está na fila livre. Quem pegar primeiro fica com ele.</p>
+                  <Button className="w-full" onClick={() => pegar.mutate(atual.id)} disabled={pegar.isPending}>Pegar lead</Button>
+                </div>
+              )}
+              {atual.na_fila ? null : atual.status === "convertido" ? (
                 <Button className="w-full" onClick={() => navigate(`/negocios/${atual.negocio_id}`)}>
                   Abrir negócio
                 </Button>

@@ -317,6 +317,9 @@ async def _tarefa_lembretes(data_alvo: str, run_id: str) -> None:
             try:
                 resultado = await enviar_lembretes(data_alvo)
                 logger.info("cron %s: %s queued=%s", run_id, empresa["nome"], resultado.emails_enviados)
+                from routers.crm import repescar_leads
+
+                await repescar_leads(forcar=True)  # leads sem atendimento no prazo vão para a fila livre
             except Exception:
                 logger.exception("Falha de lembretes para empresa; demais empresas serão processadas")
         definir_empresa(None)

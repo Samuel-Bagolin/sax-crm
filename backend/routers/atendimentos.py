@@ -567,6 +567,52 @@ async def resumo(principal: Principal = Depends(require("agendamento:read"))):
     }
 
 
+@router.get("/ocupacao")
+async def ocupacao(data: str | None = None, principal: Principal = Depends(require("agendamento:read"))):
+    """Cadeiras (postos) de cada unidade: quantas estão ocupadas agora, a ocupação de cada hora do dia
+    e a taxa do dia (minutos agendados sobre minutos disponíveis das cadeiras no horário de funcionamento)."""
+    from routers.unidades import garantir_principal
+
+    await garantir_principal()
+    agora = agora_local()
+    dia = validar_data(data) if data else agora.date()
+    unidades = [u for u in await db.unidades.find({}).to_list(200) if u.get("ativa", True)]
+    unidades.sort(key=lambda u: (not u.get("principal"), u.get("nome", "")))
+    principal_id = next((u["id"] for u in unidades if u.get("principal")), None)
+    docs = [a for a in await db.agendamentos.find({"data": dia.isoformat()}).to_list(3000) if a["status"] not in ("cancelado", "faltou")]
+    profs = {p["id"]: p for p in await profissionais_ativos(so_atende=True)}
+    cfg = await config()
+    faixas = (cfg.get("jornada_padrao") or {}).get(str((dia.weekday() + 1) % 7)) or []
+    abre = min((minutos(a) for a, _ in faixas), default=9 * 60)
+    fecha = max((minutos(b) for _, b in faixas), default=19 * 60)
+    minutos_abertos = sum(minutos(b) - minutos(a) for a, b in faixas) or (fecha - abre)
+    agora_min = agora.hour * 60 + agora.minute if dia == agora.date() else None
+    saida = []
+    for u in unidades:
+        da_unidade = [a for a in docs if (a.get("unidade_id") or principal_id) == u["id"]]
+        profs_u = [p for p in profs.values() if u["id"] in (p.get("unidade_ids") or []) or (not p.get("unidade_ids") and u.get("principal"))]
+        cadeiras = int(u.get("cadeiras") or max(1, len(profs_u)))
+        def ocupando(m: int) -> list[dict]:
+            return [a for a in da_unidade if minutos(a["inicio"]) <= m < minutos(a["fim"])]
+        horas = []
+        for h in range(abre // 60, (fecha + 59) // 60):
+            m = h * 60 + 30
+            horas.append({"hora": f"{h:02d}:00", "ocupadas": min(cadeiras, len(ocupando(m)))})
+        agendado = sum(minutos(a["fim"]) - minutos(a["inicio"]) for a in da_unidade)
+        em_uso = ocupando(agora_min) if agora_min is not None else []
+        postos = []
+        for i in range(cadeiras):
+            a = em_uso[i] if i < len(em_uso) else None
+            postos.append({"numero": i + 1, "ocupada": bool(a), "profissional": a.get("profissional_nome") if a else None,
+                           "cliente": a.get("cliente_nome") if a else None, "ate": a.get("fim") if a else None})
+        saida.append({"id": u["id"], "nome": u["nome"], "cadeiras": cadeiras, "cadeiras_definidas": bool(u.get("cadeiras")),
+                      "profissionais": len(profs_u), "ocupadas_agora": min(cadeiras, len(em_uso)) if agora_min is not None else None,
+                      "taxa_dia": round(min(100.0, agendado / max(1, cadeiras * minutos_abertos) * 100), 1),
+                      "atendimentos": len(da_unidade), "horas": horas, "postos": postos})
+    return {"data": dia.isoformat(), "agora": f"{agora.hour:02d}:{agora.minute:02d}" if agora_min is not None else None,
+            "abre": hhmm(abre), "fecha": hhmm(fecha), "unidades": saida}
+
+
 @router.get("/retorno")
 async def clientes_para_retorno(dias: int | None = Query(None, ge=7, le=730), principal: Principal = Depends(require("agendamento:read"))):
     """Clientes sem atendimento há X dias e sem horário marcado: lista para chamar de volta."""

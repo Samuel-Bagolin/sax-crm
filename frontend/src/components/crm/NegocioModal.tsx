@@ -5,7 +5,9 @@ import { apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
 import { parseNumber } from "@/lib/numbers";
 import { useCrmConfig, useEquipe, useFunis } from "@/lib/crm";
 import { useAuth } from "@/lib/useAuth";
-import type { Imovel, Lead, Pessoa } from "@/lib/types";
+import type { Lead, Pessoa } from "@/lib/types";
+import { useItemSegmento } from "@/lib/itemSegmento";
+import { useSegmento } from "@/lib/segmento";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -50,7 +52,8 @@ export default function NegocioModal({
   const { data: config } = useCrmConfig();
   const { data: equipe = [] } = useEquipe();
   const { data: pessoas = [] } = useQuery({ queryKey: ["pessoas"], queryFn: () => apiGet<Pessoa[]>("/pessoas"), enabled: open });
-  const { data: imoveis = [] } = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<Imovel[]>("/imoveis"), enabled: open });
+  const item = useItemSegmento(open);
+  const seg = useSegmento();
 
   const vazio = (): Form => {
     const funil = funis.find((f) => f.id === funilInicial) ?? funis.find((f) => f.padrao) ?? funis[0];
@@ -79,7 +82,7 @@ export default function NegocioModal({
         nome: negocio.nome,
         cliente_id: negocio.cliente_id,
         novoCliente: null,
-        imovel_id: negocio.imovel_id,
+        imovel_id: (item.campo === "veiculo_id" ? negocio.veiculo_id : negocio.imovel_id) ?? null,
         valor: negocio.valor_estimado?.toString() ?? "",
         funil_id: negocio.funil_id ?? "",
         etapa_id: negocio.etapa_id ?? "",
@@ -96,7 +99,7 @@ export default function NegocioModal({
   }, [open, negocio, funis.length, config?.origens.length]);
 
   const funil = funis.find((f) => f.id === form.funil_id);
-  const imovel = imoveis.find((i) => i.id === form.imovel_id);
+  const imovel = item.opcoes.find((i) => i.id === form.imovel_id);
   const corretores = equipe.filter((m) => m.pessoa_id);
 
   const opcoesClientes = useMemo(
@@ -104,13 +107,8 @@ export default function NegocioModal({
     [pessoas],
   );
   const opcoesImoveis = useMemo(
-    () =>
-      imoveis.map((i) => ({
-        valor: i.id,
-        rotulo: i.titulo,
-        detalhe: [i.codigo, i.bairro, i.cidade].filter(Boolean).join(", "),
-      })),
-    [imoveis],
+    () => item.opcoes.map((i) => ({ valor: i.id, rotulo: i.titulo, detalhe: i.detalhe })),
+    [item.opcoes],
   );
 
   const salvar = useMutation({
@@ -128,9 +126,9 @@ export default function NegocioModal({
       }
       const nomeCliente = form.novoCliente?.nome ?? pessoas.find((p) => p.id === clienteId)?.nome;
       const corpo = {
-        nome: form.nome.trim() || `${nomeCliente ?? "Novo negócio"}${imovel ? ` — ${imovel.titulo}` : ""}`,
+        nome: form.nome.trim() || `${nomeCliente ?? "Novo negócio"}${imovel ? `, ${imovel.titulo}` : ""}`,
         cliente_id: clienteId,
-        imovel_id: form.imovel_id,
+        ...(item.campo === "veiculo_id" ? { veiculo_id: form.imovel_id } : item.campo === "imovel_id" ? { imovel_id: form.imovel_id } : {}),
         valor_estimado: parseNumber(form.valor),
         funil_id: form.funil_id || null,
         etapa_id: form.etapa_id || null,
@@ -162,7 +160,7 @@ export default function NegocioModal({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{negocio ? "Editar negócio" : "Novo negócio"}</DialogTitle>
-          <DialogDescription>Quem é o cliente, qual imóvel e em que etapa a conversa está.</DialogDescription>
+          <DialogDescription>{item.campo ? `Quem é o ${seg.termos.cliente.toLowerCase()}, qual ${item.nome} e em que etapa a conversa está.` : `Quem é o ${seg.termos.cliente.toLowerCase()} e em que etapa a conversa está.`}</DialogDescription>
         </DialogHeader>
 
         <form
@@ -173,7 +171,7 @@ export default function NegocioModal({
           }}
         >
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>Cliente</Label>
+            <Label>{seg.termos.cliente}</Label>
             {form.novoCliente ? (
               <div className="grid gap-2 rounded-lg border bg-muted/40 p-3 sm:grid-cols-3">
                 <Input
@@ -203,31 +201,31 @@ export default function NegocioModal({
                 opcoes={opcoesClientes}
                 valor={form.cliente_id}
                 onChange={(v) => set("cliente_id", v)}
-                placeholder="Buscar cliente por nome ou telefone"
+                placeholder={`Buscar ${seg.termos.cliente.toLowerCase()} por nome ou telefone`}
                 onCriar={(texto) => setForm((f) => ({ ...f, cliente_id: null, novoCliente: { nome: texto, telefone: "", email: "" } }))}
-                rotuloCriar="Novo cliente"
+                rotuloCriar={`Novo ${seg.termos.cliente.toLowerCase()}`}
                 testid="negocio-cliente"
               />
             )}
           </div>
 
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Imóvel de interesse</Label>
+          {item.campo && <div className="space-y-1.5 sm:col-span-2">
+            <Label>{item.rotulo}</Label>
             <Combo
               opcoes={opcoesImoveis}
               valor={form.imovel_id}
               onChange={(v) => {
-                const im = imoveis.find((i) => i.id === v);
+                const im = item.opcoes.find((i) => i.id === v);
                 setForm((f) => ({
                   ...f,
                   imovel_id: v,
-                  valor: f.valor || String(im?.valor_venda ?? im?.valor_aluguel ?? ""),
+                  valor: f.valor || String(im?.valor ?? ""),
                 }));
               }}
-              placeholder="Buscar por título, código ou bairro"
+              placeholder={item.busca}
               testid="negocio-imovel"
             />
-          </div>
+          </div>}
 
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="neg-nome">Título do negócio</Label>
@@ -235,7 +233,7 @@ export default function NegocioModal({
               id="neg-nome"
               value={form.nome}
               onChange={(e) => set("nome", e.target.value)}
-              placeholder="Deixe em branco para usar cliente + imóvel"
+              placeholder={item.campo ? `Deixe em branco para usar ${seg.termos.cliente.toLowerCase()} + ${item.nome}` : `Deixe em branco para usar o nome do ${seg.termos.cliente.toLowerCase()}`}
               data-testid="negocio-nome"
             />
           </div>

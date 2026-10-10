@@ -8,10 +8,14 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Clock,
+  Copy,
+  ExternalLink,
   Globe,
   Loader2,
   MessageCircle,
   Plus,
+  Settings2,
   UserRound,
   UserX,
   X,
@@ -26,12 +30,15 @@ import {
   minutos,
   useProfissionais,
   useServicos,
+  type AgendaConfig,
   type Agendamento,
+  type Profissional,
 } from "@/lib/atendimentos";
+import AgendaOnline, { ProfissionalDialog } from "@/pages/AgendaOnline";
 import { useSegmento } from "@/lib/segmento";
 import { useAuth } from "@/lib/useAuth";
 import { useConfig } from "@/lib/useConfig";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,14 +66,23 @@ interface Resumo {
   mes: { agendados: number; concluidos: number; faltas: number; taxa_falta: number; faturado: number; ticket_medio: number | null; online: number };
 }
 
+interface UnidadeLite { id: string; nome: string; ativa: boolean; principal: boolean }
+
 export default function Atendimentos() {
   const hoje = isoLocal(new Date());
   const [dia, setDia] = useState(hoje);
   const [novo, setNovo] = useState<{ profissional_id?: string; inicio?: string } | null>(null);
   const [aberto, setAberto] = useState<Agendamento | null>(null);
+  const [profSel, setProfSel] = useState<string | null>(null);
+  const [unidadeSel, setUnidadeSel] = useState<string | null>(null);
+  const [configurar, setConfigurar] = useState<string | null>(null);
+  const [editarProf, setEditarProf] = useState<Profissional | null>(null);
   const seg = useSegmento();
   const { isAdmin, principal } = useAuth();
   const profs = useProfissionais();
+  const equipe = useProfissionais(true);
+  const unidades = useQuery({ queryKey: ["unidades"], queryFn: () => apiGet<UnidadeLite[]>("/unidades") });
+  const cfgLink = useQuery({ queryKey: ["agenda-config"], queryFn: () => apiGet<AgendaConfig>("/atendimentos/config") });
   const lista = useQuery({
     queryKey: ["agendamentos", dia],
     queryFn: () => apiGet<Agendamento[]>(`/atendimentos?inicio=${dia}&fim=${dia}`),
@@ -74,11 +90,18 @@ export default function Atendimentos() {
   });
   const resumo = useQuery({ queryKey: ["atendimentos-resumo"], queryFn: () => apiGet<Resumo>("/atendimentos/resumo") });
 
-  const colunas = profs.data ?? [];
-  const doDia = (lista.data ?? []).filter((a) => a.status !== "cancelado");
+  const ativasU = (unidades.data ?? []).filter((u) => u.ativa);
+  const principalU = ativasU.find((u) => u.principal)?.id;
+  const daUnidade = (p: Profissional) => !unidadeSel || p.unidade_ids.includes(unidadeSel) || (!p.unidade_ids.length && unidadeSel === principalU);
+  const todos = (profs.data ?? []).filter(daUnidade);
+  const colunas = profSel ? todos.filter((p) => p.id === profSel) : todos;
+  const doDia = (lista.data ?? []).filter((a) => a.status !== "cancelado" && (!unidadeSel || (a.unidade_id ?? principalU) === unidadeSel));
   const agoraMin = new Date().getHours() * 60 + new Date().getMinutes();
-
-  const semProfissionais = !profs.isLoading && !colunas.length;
+  const semProfissionais = !profs.isLoading && !(profs.data ?? []).length;
+  const selecionado = (profs.data ?? []).find((p) => p.id === profSel) ?? null;
+  const linkNoAr = !!(cfgLink.data?.ativo && cfgLink.data.slug);
+  const urlBase = cfgLink.data?.slug ? `${window.location.origin}/agendar/${cfgLink.data.slug}` : "";
+  const podeEditar = (p: Profissional) => isAdmin || p.id === principal?.usuario_id;
 
   return (
     <div className="flex flex-col gap-4">
@@ -89,30 +112,87 @@ export default function Atendimentos() {
         <Indicador rotulo="Pelo link online" valor={String(resumo.data?.mes.online ?? "-")} detalhe="no mês" />
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" onClick={() => setDia(somarDias(dia, -1))} aria-label="Dia anterior"><ChevronLeft className="h-4 w-4" /></Button>
-          <Button variant="outline" onClick={() => setDia(hoje)} disabled={dia === hoje}>Hoje</Button>
-          <Button variant="outline" size="icon" onClick={() => setDia(somarDias(dia, 1))} aria-label="Próximo dia"><ChevronRight className="h-4 w-4" /></Button>
-          <Input type="date" value={dia} onChange={(e) => e.target.value && setDia(e.target.value)} className="ml-1 w-40" aria-label="Escolher data" />
-        </div>
-        <p className="font-semibold capitalize sm:ml-2">{rotuloDia(dia)}</p>
-        <Button className="sm:ml-auto" onClick={() => setNovo({})} disabled={semProfissionais} data-testid="novo-agendamento">
-          <Plus className="h-4 w-4" /> Agendar
-        </Button>
-      </div>
-
       {semProfissionais ? (
-        <div className="rounded-xl border border-dashed p-10 text-center">
-          <CalendarClock className="mx-auto h-8 w-8 text-muted-foreground" />
-          <p className="mt-2 font-medium">Nenhum {seg.termos.profissional.toLowerCase()} com agenda ainda.</p>
-          <p className="mt-1 text-sm text-muted-foreground">Defina quem atende e o horário de trabalho em Serviços e link.</p>
-          <Link to="/agenda-online" className="mt-4 inline-flex h-9 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">Configurar agenda</Link>
-        </div>
+        <PrimeiraAgenda equipe={equipe.data ?? []} carregando={equipe.isLoading} onAbrir={setEditarProf} podeEditar={podeEditar} />
       ) : (
+        <>
+          {/* Quem atende: escolha um profissional para ver só a agenda dele, ajustar o horário e copiar o link. */}
+          <div className="flex flex-col gap-2 rounded-xl border bg-card p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {ativasU.length > 1 && (
+                <select aria-label={seg.termos.unidade} value={unidadeSel ?? ""} onChange={(e) => { setUnidadeSel(e.target.value || null); setProfSel(null); }}
+                  className="h-8 rounded-full border bg-background px-3 text-sm" data-testid="filtro-unidade">
+                  <option value="">Todas as {seg.termos.unidades.toLowerCase()}</option>
+                  {ativasU.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                </select>
+              )}
+              <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5" role="tablist" aria-label={seg.termos.profissionais}>
+                <Chip ativo={!profSel} onClick={() => setProfSel(null)}>Todos</Chip>
+                {todos.map((p) => (
+                  <Chip key={p.id} ativo={profSel === p.id} onClick={() => setProfSel(profSel === p.id ? null : p.id)} testid={`chip-prof-${p.id}`}>
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">{p.nome.charAt(0)}</span>
+                    {p.nome.split(" ")[0]}
+                  </Chip>
+                ))}
+              </div>
+              {isAdmin && (
+                <Button variant="outline" size="sm" onClick={() => setConfigurar("servicos")} data-testid="configurar-agenda">
+                  <Settings2 className="h-4 w-4" /> {seg.termos.itens} e regras
+                </Button>
+              )}
+            </div>
+            {selecionado && (
+              <div className="flex flex-col gap-2 rounded-lg bg-muted/50 p-3 sm:flex-row sm:items-center" data-testid="faixa-link">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">Link de agendamento de {selecionado.nome.split(" ")[0]}</p>
+                  {linkNoAr && selecionado.slug && selecionado.online ? (
+                    <p className="truncate text-sm text-muted-foreground" title={`${urlBase}/${selecionado.slug}`}>{`${urlBase}/${selecionado.slug}`}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {!linkNoAr ? "O link de agendamento da empresa ainda não está no ar." : `${selecionado.nome.split(" ")[0]} não recebe agendamento online. Ative em Horários.`}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {linkNoAr && selecionado.slug && selecionado.online ? (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(`${urlBase}/${selecionado.slug}`).then(() => toast.success("Link copiado"))} data-testid="copiar-link-prof"><Copy className="h-3.5 w-3.5" /> Copiar</Button>
+                      <a className={buttonVariants({ size: "sm", variant: "outline" })} target="_blank" rel="noopener noreferrer"
+                        href={`https://wa.me/?text=${encodeURIComponent(`Agende seu horário com ${selecionado.nome.split(" ")[0]}: ${urlBase}/${selecionado.slug}`)}`}><MessageCircle className="h-3.5 w-3.5" /> Enviar</a>
+                      <a className={buttonVariants({ size: "sm", variant: "outline" })} href={`${urlBase}/${selecionado.slug}`} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5" /> Abrir</a>
+                    </>
+                  ) : !linkNoAr && isAdmin ? (
+                    <Button size="sm" onClick={() => setConfigurar("link")} data-testid="ativar-link">Colocar link no ar</Button>
+                  ) : null}
+                  {podeEditar(selecionado) && <Button size="sm" variant="outline" onClick={() => setEditarProf(selecionado)} data-testid="horarios-prof"><Clock className="h-3.5 w-3.5" /> Horários</Button>}
+                </div>
+              </div>
+            )}
+            {!selecionado && linkNoAr && (
+              <p className="flex flex-wrap items-center gap-1.5 px-1 text-xs text-muted-foreground">
+                Link da agenda completa: <button type="button" className="font-medium text-foreground underline-offset-2 hover:underline" onClick={() => navigator.clipboard.writeText(urlBase).then(() => toast.success("Link copiado"))}>{urlBase}</button>. Escolha um {seg.termos.profissional.toLowerCase()} para o link individual.
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" onClick={() => setDia(somarDias(dia, -1))} aria-label="Dia anterior"><ChevronLeft className="h-4 w-4" /></Button>
+              <Button variant="outline" onClick={() => setDia(hoje)} disabled={dia === hoje}>Hoje</Button>
+              <Button variant="outline" size="icon" onClick={() => setDia(somarDias(dia, 1))} aria-label="Próximo dia"><ChevronRight className="h-4 w-4" /></Button>
+              <Input type="date" value={dia} onChange={(e) => e.target.value && setDia(e.target.value)} className="ml-1 w-40" aria-label="Escolher data" />
+            </div>
+            <p className="font-semibold capitalize sm:ml-2">{rotuloDia(dia)}</p>
+            <Button className="sm:ml-auto" onClick={() => setNovo(profSel ? { profissional_id: profSel } : {})} data-testid="novo-agendamento">
+              <Plus className="h-4 w-4" /> Agendar
+            </Button>
+          </div>
+
+          {!colunas.length ? (
+            <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Ninguém atende nesta {seg.termos.unidade.toLowerCase()}. Vincule {seg.termos.profissionais.toLowerCase()} em Horários.</p>
+          ) : (
         <div className="overflow-x-auto rounded-xl border bg-card" data-testid="grade-agenda">
-          <div className="grid min-w-max" style={{ gridTemplateColumns: `56px repeat(${colunas.length}, minmax(180px, 1fr))` }}>
-            <div className="sticky left-0 z-20 border-b bg-card" />
+          <div className="grid min-w-max" style={{ gridTemplateColumns: `56px repeat(${colunas.length}, minmax(180px, 1fr))` }}>            <div className="sticky left-0 z-20 border-b bg-card" />
             {colunas.map((p) => (
               <div key={p.id} className="border-b border-l px-3 py-2">
                 <p className="truncate text-sm font-semibold">{p.nome}</p>
@@ -175,7 +255,17 @@ export default function Atendimentos() {
             ))}
           </div>
         </div>
+          )}
+        </>
       )}
+
+      <Dialog open={!!configurar} onOpenChange={(o) => !o && setConfigurar(null)}>
+        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader><DialogTitle>Configurar agenda</DialogTitle><DialogDescription>{seg.termos.itens}, horários de cada {seg.termos.profissional.toLowerCase()} e regras do link de agendamento.</DialogDescription></DialogHeader>
+          {configurar && <AgendaOnline abaInicial={configurar} />}
+        </DialogContent>
+      </Dialog>
+      <ProfissionalDialog prof={editarProf} onClose={() => setEditarProf(null)} />
 
       <NovoAgendamento
         aberto={!!novo}
@@ -187,6 +277,39 @@ export default function Atendimentos() {
         proprio={principal?.usuario_id}
       />
       <DetalheAgendamento agendamento={aberto} onClose={() => setAberto(null)} />
+    </div>
+  );
+}
+
+function Chip({ ativo, onClick, children, testid }: { ativo: boolean; onClick: () => void; children: React.ReactNode; testid?: string }) {
+  return (
+    <button type="button" role="tab" aria-selected={ativo} onClick={onClick} data-testid={testid}
+      className={cn("flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm", ativo ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")}>
+      {children}
+    </button>
+  );
+}
+
+/** Primeira vez: ninguém atende ainda. Mostra a equipe e abre a agenda de quem for escolhido. */
+function PrimeiraAgenda({ equipe, carregando, onAbrir, podeEditar }: { equipe: Profissional[]; carregando: boolean; onAbrir: (p: Profissional) => void; podeEditar: (p: Profissional) => boolean }) {
+  const seg = useSegmento();
+  return (
+    <div className="rounded-xl border border-dashed p-6 sm:p-8">
+      <CalendarClock className="h-8 w-8 text-muted-foreground" />
+      <p className="mt-2 text-lg font-semibold">Abra a agenda de quem atende</p>
+      <p className="mt-1 max-w-xl text-sm text-muted-foreground">Escolha o {seg.termos.profissional.toLowerCase()}, marque os dias e horários de trabalho e pronto: a agenda dele aparece aqui e o link de agendamento dele fica disponível para enviar aos {seg.termos.clientes.toLowerCase()}.</p>
+      {carregando ? <div className="mt-4 h-24 animate-pulse rounded-lg bg-muted" /> : (
+        <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {equipe.map((p) => (
+            <li key={p.id} className="flex items-center gap-3 rounded-lg border bg-card p-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 font-bold text-primary">{p.nome.charAt(0)}</span>
+              <span className="min-w-0 flex-1 truncate font-medium">{p.nome}</span>
+              {podeEditar(p) && <Button size="sm" onClick={() => onAbrir(p)} data-testid={`abrir-agenda-${p.id}`}>Abrir agenda</Button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-3 text-xs text-muted-foreground">Para incluir alguém na lista, cadastre em Equipe.</p>
     </div>
   );
 }

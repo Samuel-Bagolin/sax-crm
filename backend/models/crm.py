@@ -77,6 +77,8 @@ class CrmConfig(BaseModel):
     distribuicao: Literal["manual", "rodizio"] = "manual"
     exige_motivo_perda: bool = True
     sla_primeiro_contato_min: int | None = Field(default=30, ge=1, le=10080)  # None = sem SLA
+    # Lead novo sem atendimento depois de X horas sai do vendedor e vai para a fila livre (None = desligado).
+    repescagem_horas: int | None = Field(default=24, ge=1, le=720)
     automacoes: List[Automacao] = Field(default_factory=list)
     automacoes_iniciadas: bool = False
 
@@ -89,6 +91,8 @@ class CrmConfigUpdate(BaseModel):
     exige_motivo_perda: bool | None = None
     sla_primeiro_contato_min: int | None = Field(default=None, ge=1, le=10080)
     sem_sla: bool | None = None  # true = desliga o SLA (None no campo acima significa "não alterar")
+    repescagem_horas: int | None = Field(default=None, ge=1, le=720)
+    sem_repescagem: bool | None = None
     automacoes: List[Automacao] | None = Field(default=None, max_length=50)
 
 
@@ -115,6 +119,10 @@ class Entrada(BaseModel):
     negocio_id: str | None = None
     motivo_descarte: str | None = None
     primeiro_contato_em: datetime | None = None  # base do SLA de primeiro atendimento
+    atribuido_em: datetime | None = None  # quando o vendedor atual recebeu o lead
+    na_fila: bool = False  # sem dono: qualquer vendedor pode pegar
+    fila_desde: datetime | None = None
+    devolvido_de: str | None = None  # vendedor que perdeu o lead por não atender no prazo
     portal_lead_id: str | None = None  # id do lead no portal (evita duplicar em reenvios)
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
@@ -128,6 +136,7 @@ class EntradaCreate(BaseModel):
     interesse: Literal["compra", "locacao", "venda", "outro"] = "compra"
     mensagem: str | None = None
     imovel_id: str | None = None
+    veiculo_id: str | None = None
     corretor_id: str | None = None
     valor_estimado: Nonnegative | None = None
     etiquetas: List[str] = Field(default_factory=list)
@@ -141,6 +150,7 @@ class EntradaUpdate(BaseModel):
     interesse: Literal["compra", "locacao", "venda", "outro"] | None = None
     mensagem: str | None = None
     imovel_id: str | None = None
+    veiculo_id: str | None = None
     corretor_id: str | None = None
     valor_estimado: Nonnegative | None = None
     etiquetas: List[str] | None = None

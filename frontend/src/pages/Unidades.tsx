@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { MapPin, Pencil, Plus, Store } from "lucide-react";
 import { apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
 import { useSegmento } from "@/lib/segmento";
+import { usePlano } from "@/lib/diferenciais";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -18,14 +19,29 @@ interface Unidade {
   cidade: string | null;
   telefone: string | null;
   whatsapp: string | null;
+  cadeiras: number | null;
+}
+
+/** Nome do posto de atendimento no segmento: cadeira na barbearia, consultório nas clínicas. */
+export function nomePosto(seg: string, plural = false) {
+  if (seg === "barbearia") return plural ? "Cadeiras" : "Cadeira";
+  if (seg === "estetica") return plural ? "Salas" : "Sala";
+  return plural ? "Consultórios" : "Consultório";
 }
 
 export default function Unidades() {
   const seg = useSegmento();
   const q = useQuery({ queryKey: ["unidades"], queryFn: () => apiGet<Unidade[]>("/unidades") });
   const [edit, setEdit] = useState<Unidade | "nova" | null>(null);
+  const plano = usePlano();
+  const ativas = (q.data ?? []).filter((u) => u.ativa).length;
+  const limite = plano.data?.unidades ?? null;
   return (
     <div className="grid gap-4">
+      <div className="rounded-xl border bg-card p-4 text-sm">
+        <p className="font-semibold">{ativas} {ativas === 1 ? seg.termos.unidade.toLowerCase() : seg.termos.unidades.toLowerCase()} ativa(s){limite != null ? ` de ${limite} no plano ${plano.data?.nome}` : ` no plano ${plano.data?.nome ?? ""}`}</p>
+        <p className="text-muted-foreground">Cada {seg.termos.unidade.toLowerCase()} vinculada à empresa entra na assinatura. Para abrir mais do que o plano permite, contrate {seg.termos.unidades.toLowerCase()} extras em Assinatura ou fale com o suporte.</p>
+      </div>
       <div className="flex items-center gap-3">
         <p className="text-sm text-muted-foreground">Cada {seg.termos.unidade.toLowerCase()} tem endereço próprio. {seg.termos.profissionais} e agenda podem ser separados por {seg.termos.unidade.toLowerCase()}.</p>
         <Button className="ml-auto shrink-0" onClick={() => setEdit("nova")} data-testid="nova-unidade"><Plus className="h-4 w-4" /> Nova {seg.termos.unidade.toLowerCase()}</Button>
@@ -37,6 +53,7 @@ export default function Unidades() {
             <div className="min-w-0 flex-1">
               <p className="font-semibold">{u.nome} {u.principal && <span className="ml-1 rounded bg-muted px-1.5 text-[11px] font-normal">principal</span>} {!u.ativa && <span className="ml-1 rounded bg-muted px-1.5 text-[11px] font-normal">desativada</span>}</p>
               <p className="flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-3.5 w-3.5" /> {[u.endereco, u.cidade].filter(Boolean).join(", ") || "Sem endereço"}</p>
+              {!seg.vendas && <p className="text-sm text-muted-foreground">{u.cadeiras ? `${u.cadeiras} ${nomePosto(seg.chave, u.cadeiras !== 1).toLowerCase()}` : `${nomePosto(seg.chave, true)} não informados`}</p>}
             </div>
             <Button variant="ghost" size="icon-sm" onClick={() => setEdit(u)} aria-label={`Editar ${u.nome}`}><Pencil className="h-4 w-4" /></Button>
           </li>
@@ -50,14 +67,14 @@ export default function Unidades() {
 function UnidadeDialog({ unidade, onClose }: { unidade: Unidade | "nova" | null; onClose: () => void }) {
   const qc = useQueryClient();
   const seg = useSegmento();
-  const [f, setF] = useState({ nome: "", endereco: "", cidade: "", telefone: "", whatsapp: "", ativa: true });
+  const [f, setF] = useState({ nome: "", endereco: "", cidade: "", telefone: "", whatsapp: "", cadeiras: "", ativa: true });
   useEffect(() => {
-    if (unidade === "nova") setF({ nome: "", endereco: "", cidade: "", telefone: "", whatsapp: "", ativa: true });
-    else if (unidade) setF({ nome: unidade.nome, endereco: unidade.endereco ?? "", cidade: unidade.cidade ?? "", telefone: unidade.telefone ?? "", whatsapp: unidade.whatsapp ?? "", ativa: unidade.ativa });
+    if (unidade === "nova") setF({ nome: "", endereco: "", cidade: "", telefone: "", whatsapp: "", cadeiras: "", ativa: true });
+    else if (unidade) setF({ nome: unidade.nome, endereco: unidade.endereco ?? "", cidade: unidade.cidade ?? "", telefone: unidade.telefone ?? "", whatsapp: unidade.whatsapp ?? "", cadeiras: unidade.cadeiras ? String(unidade.cadeiras) : "", ativa: unidade.ativa });
   }, [unidade]);
   const salvar = useMutation({
     mutationFn: () => {
-      const corpo = { ...f, endereco: f.endereco || null, cidade: f.cidade || null, telefone: f.telefone || null, whatsapp: f.whatsapp || null };
+      const corpo = { ...f, endereco: f.endereco || null, cidade: f.cidade || null, telefone: f.telefone || null, whatsapp: f.whatsapp || null, cadeiras: f.cadeiras ? Number(f.cadeiras) : null };
       return unidade === "nova" ? apiPost("/unidades", corpo) : apiPut(`/unidades/${(unidade as Unidade).id}`, corpo);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["unidades"] }); toast.success("Salvo"); onClose(); },
@@ -74,6 +91,12 @@ function UnidadeDialog({ unidade, onClose }: { unidade: Unidade | "nova" | null;
             <div className="grid gap-1.5"><Label htmlFor="u-cid">Cidade</Label><Input id="u-cid" value={f.cidade} onChange={(e) => setF({ ...f, cidade: e.target.value })} /></div>
             <div className="grid gap-1.5"><Label htmlFor="u-wpp">WhatsApp</Label><Input id="u-wpp" inputMode="tel" value={f.whatsapp} onChange={(e) => setF({ ...f, whatsapp: e.target.value })} /></div>
           </div>
+          {!seg.vendas && (
+            <div className="grid gap-1.5"><Label htmlFor="u-cad">{nomePosto(seg.chave, true)} de atendimento</Label>
+              <Input id="u-cad" inputMode="numeric" value={f.cadeiras} onChange={(e) => setF({ ...f, cadeiras: e.target.value.replace(/\D/g, "").slice(0, 3) })} placeholder="Ex.: 4" data-testid="u-cadeiras" />
+              <p className="text-xs text-muted-foreground">Usado no painel de ocupação: quantas estão em uso e quantas ficam paradas.</p>
+            </div>
+          )}
           {unidade !== "nova" && !(unidade as Unidade | null)?.principal && (
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.ativa} onChange={(e) => setF({ ...f, ativa: e.target.checked })} className="accent-[var(--primary)]" /> Ativa</label>
           )}

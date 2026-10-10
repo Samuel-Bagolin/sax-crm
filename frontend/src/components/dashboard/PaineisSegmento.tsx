@@ -7,6 +7,7 @@ import { STATUS_AG, type Agendamento } from "@/lib/atendimentos";
 import { useSegmento } from "@/lib/segmento";
 import { useAuth } from "@/lib/useAuth";
 import { cn } from "@/lib/utils";
+import PainelOcupacao from "@/components/barbearia/PainelOcupacao";
 
 function Kpi({ rotulo, valor, detalhe, icone: Icone, alerta }: { rotulo: string; valor: string; detalhe?: string; icone: typeof Users; alerta?: boolean }) {
   return (
@@ -50,6 +51,7 @@ export function PainelAtendimento() {
         <Kpi icone={AlertTriangle} rotulo="Faltas" valor={d ? `${d.mes.taxa_falta}%` : "-"} detalhe={d ? `${d.mes.faltas} no mês` : undefined} alerta={!!d && d.mes.taxa_falta > 10} />
         <Kpi icone={Globe} rotulo="Agendados pelo link" valor={String(d?.mes.online ?? "-")} detalhe="no mês" />
       </div>
+      <PainelOcupacao />
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <section className="rounded-xl border bg-card">
           <p className="border-b px-4 py-3 font-semibold">Agenda de hoje</p>

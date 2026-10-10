@@ -17,6 +17,7 @@ import PlanoUso from "@/components/shared/PlanoUso";
 import Avatar from "@/components/shared/Avatar";
 import FotoUploader from "@/components/shared/FotoUploader";
 import { cn } from "@/lib/utils";
+import { useSegmento } from "@/lib/segmento";
 
 const PAPEL_LABEL: Record<Papel2, string> = { sysadmin: "Administrador de sistema", admin: "Gestor", corretor: "Corretor" };
 
@@ -32,8 +33,18 @@ interface Form {
   gerencia_site: boolean;
 }
 
+/** Registro profissional por segmento: CRECI, CRO, CRP/CRFa. Barbearia e loja não têm. */
+function rotuloRegistro(seg: string): string | null {
+  return seg === "imobiliaria" ? "CRECI" : seg === "odontologia" ? "CRO" : seg === "terapia" ? "CRP ou CRFa" : seg === "estetica" ? "Registro profissional" : null;
+}
+function cargoPadrao(seg: string, profissional: string): string {
+  return seg === "imobiliaria" ? "Corretor de imóveis" : profissional;
+}
+
 function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: UsuarioPublico | null; aberto: boolean; onClose: () => void; onFoto: (u: UsuarioPublico) => void }) {
   const qc = useQueryClient();
+  const seg = useSegmento();
+  const registro = rotuloRegistro(seg.chave);
   const { isSysadmin, principal } = useAuth();
   const [f, setF] = useState<Form>({ nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: "", creci: "", cor: "", gerencia_site: false });
   useEffect(() => {
@@ -41,8 +52,9 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
     setF(
       usuario
         ? { nome: usuario.nome, email: usuario.email, senha: "", papel: usuario.papel, telefone: usuario.telefone ?? "", cargo: usuario.cargo ?? "", creci: usuario.creci ?? "", cor: usuario.cor ?? "", gerencia_site: !!usuario.gerencia_site }
-        : { nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: "Corretor de imóveis", creci: "", cor: "", gerencia_site: false },
+        : { nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: cargoPadrao(seg.chave, seg.termos.profissional), creci: "", cor: "", gerencia_site: false },
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto, usuario]);
 
   const salvar = useMutation({
@@ -62,7 +74,7 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
       qc.invalidateQueries({ queryKey: ["usuarios"] });
       qc.invalidateQueries({ queryKey: ["equipe"] });
       qc.invalidateQueries({ queryKey: ["pessoas"] });
-      toast.success(usuario ? "Consultor atualizado" : `Conta de ${u.nome} criada`, {
+      toast.success(usuario ? "Cadastro atualizado" : `Conta de ${u.nome} criada`, {
         action: usuario ? undefined : { label: "Adicionar foto", onClick: () => onFoto(u) },
       });
       onClose();
@@ -77,7 +89,7 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{usuario ? `Editar ${usuario.nome.split(" ")[0]}` : "Novo consultor"}</DialogTitle>
-          <DialogDescription>{usuario ? "Dados de contato, perfil de acesso e cor na agenda." : "A pessoa entra com este e-mail e senha. Corretor vê apenas a própria carteira."}</DialogDescription>
+          <DialogDescription>{usuario ? "Dados de contato, perfil de acesso e cor na agenda." : `A pessoa entra com este e-mail e senha. ${seg.termos.profissional} vê apenas os próprios ${seg.vendas ? "negócios" : seg.termos.clientes.toLowerCase()}.`}</DialogDescription>
         </DialogHeader>
         <form
           className="grid gap-3 sm:grid-cols-2"
@@ -102,10 +114,12 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
             <Label htmlFor="us-tel">WhatsApp</Label>
             <Input id="us-tel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: e.target.value })} />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="us-creci">CRECI</Label>
-            <Input id="us-creci" value={f.creci} onChange={(e) => setF({ ...f, creci: e.target.value })} />
-          </div>
+          {registro && (
+            <div className="space-y-1.5">
+              <Label htmlFor="us-creci">{registro}</Label>
+              <Input id="us-creci" value={f.creci} onChange={(e) => setF({ ...f, creci: e.target.value })} />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="us-cargo">Cargo</Label>
             <Input id="us-cargo" value={f.cargo} onChange={(e) => setF({ ...f, cargo: e.target.value })} />
@@ -119,7 +133,7 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
               onChange={(e) => setF({ ...f, papel: e.target.value as Papel2 })}
               className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30"
             >
-              <option value="corretor">Corretor</option>
+              <option value="corretor">{seg.termos.profissional}</option>
               <option value="admin">Gestor</option>
               {isSysadmin && !principal?.empresa_id && <option value="sysadmin">Administrador de sistema</option>}
             </select>
@@ -142,7 +156,7 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
               </button>
             </div>
           </div>
-          {f.papel === "corretor" && (
+          {f.papel === "corretor" && seg.vendas && (
             <label className="flex items-start gap-2.5 rounded-lg border p-3 text-sm sm:col-span-2">
               <input
                 type="checkbox"
@@ -152,8 +166,8 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
                 data-testid="usuario-gerencia-site"
               />
               <span>
-                <span className="font-medium">Pode editar o site da imobiliária</span>
-                <span className="block text-xs text-muted-foreground">Muda marca e textos do site e decide quais imóveis aparecem, reservados ou fora do site.</span>
+                <span className="font-medium">Pode editar o site da {seg.veiculos ? "loja" : "imobiliária"}</span>
+                <span className="block text-xs text-muted-foreground">Muda marca e textos do site e decide quais {seg.termos.itens.toLowerCase()} aparecem, reservados ou fora do site.</span>
               </span>
             </label>
           )}
@@ -172,6 +186,7 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
 }
 
 export default function Usuarios() {
+  const seg = useSegmento();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { principal } = useAuth();
@@ -237,8 +252,8 @@ export default function Usuarios() {
             <h3 className="truncate font-semibold">{u.nome}</h3>
             <p className="truncate text-xs text-muted-foreground">{u.cargo || PAPEL_LABEL[u.papel]}</p>
             <p className="mt-1 flex flex-wrap gap-1">
-              <span className={cn("rounded-sm px-1.5 text-[11px] font-medium", u.papel === "corretor" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>{PAPEL_LABEL[u.papel]}</span>
-              {u.creci && <span className="rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">CRECI {u.creci}</span>}
+              <span className={cn("rounded-sm px-1.5 text-[11px] font-medium", u.papel === "corretor" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>{u.papel === "corretor" ? seg.termos.profissional : PAPEL_LABEL[u.papel]}</span>
+              {u.creci && <span className="rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{rotuloRegistro(seg.chave) ?? "Registro"} {u.creci}</span>}
               {u.papel === "corretor" && u.gerencia_site && <span className="rounded-sm bg-primary/10 px-1.5 text-[11px] text-primary">Edita o site</span>}
               {!u.ativo && <span className="rounded-sm bg-atrasada/10 px-1.5 text-[11px] text-atrasada">Inativo</span>}
             </p>
@@ -316,7 +331,7 @@ export default function Usuarios() {
           {ativos.length} {ativos.length === 1 ? "pessoa ativa" : "pessoas ativas"}. Clique na foto para trocar.
         </p>
         <Button className="ml-auto" onClick={() => setEditar({ u: null })} data-testid="btn-new-usuario">
-          <Plus className="h-4 w-4" /> Consultor
+          <Plus className="h-4 w-4" /> {seg.termos.profissional}
         </Button>
       </div>
       {isLoading ? (
