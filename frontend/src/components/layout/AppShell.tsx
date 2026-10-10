@@ -51,7 +51,7 @@ import MarcaSax from "@/components/shared/MarcaSax";
 import { useAuth } from "@/lib/useAuth";
 import { useConfig } from "@/lib/useConfig";
 import { isoLocal } from "@/lib/crm";
-import type { Atividade, Entrada, SegmentoChave, TermosSegmento } from "@/lib/types";
+import type { Atividade, SegmentoChave, TermosSegmento } from "@/lib/types";
 import { SERVICOS, useSegmento } from "@/lib/segmento";
 import { cn } from "@/lib/utils";
 import { ehPadrao, variaveisMenu } from "@/lib/coresMenu";
@@ -271,11 +271,12 @@ export default function AppShell() {
   const { config, titulo: rotulo, logoUrl, moduloAtivo } = useConfig();
   const crmAtivo = !noControle && moduloAtivo("crm");
 
-  const { data: entradas = [] } = useQuery({
-    queryKey: ["entradas", "ativos"],
-    queryFn: () => apiGet<Entrada[]>("/entradas"),
+  // Contadores do menu: só números, para gastar poucas leituras do banco (o Firestore cobra por documento lido).
+  const { data: novos } = useQuery({
+    queryKey: ["entradas", "contagem"],
+    queryFn: () => apiGet<{ novos: number }>("/entradas/contagem"),
     enabled: crmAtivo,
-    refetchInterval: 120_000,
+    refetchInterval: 180_000,
   });
   const hoje = isoLocal(new Date());
   const { data: pendentes = [] } = useQuery({
@@ -283,17 +284,17 @@ export default function AppShell() {
     queryFn: () =>
       apiGet<Atividade[]>(`/atividades?pendentes=true&fim=${hoje}${principal?.pessoa_id ? `&corretor_id=${principal.pessoa_id}` : ""}`),
     enabled: crmAtivo,
-    refetchInterval: 120_000,
+    refetchInterval: 300_000,
   });
   const { data: chat } = useQuery({
     queryKey: ["chat", "nao-lidas"],
     queryFn: () => apiGet<{ total: number }>("/chat/nao-lidas"),
     enabled: !noControle && !!principal,
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
   const contadores = {
     chat: location.pathname === "/chat" ? 0 : chat?.total ?? 0,
-    leads: entradas.filter((e) => e.status === "novo").length,
+    leads: novos?.novos ?? 0,
     atividades: pendentes.filter((a) => !principal?.pessoa_id || a.corretor_id === principal.pessoa_id).length,
   };
 

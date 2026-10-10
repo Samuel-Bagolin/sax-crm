@@ -82,7 +82,7 @@ LEGADO = {
 PLANOS: dict[str, dict] = {}
 ADICIONAIS: dict[str, dict] = {}
 _carregado_em = 0.0
-TTL_SEGUNDOS = 60
+TTL_SEGUNDOS = 600  # o catálogo muda pouco; quem edita recarrega na hora (forcar=True)
 
 
 def _completar(p: dict) -> dict:

@@ -174,6 +174,13 @@ async def _proximo_rodizio() -> str | None:
     return min(corretores, key=lambda c: contagem[c])
 
 
+@router.get("/entradas/contagem")
+async def contar_entradas(principal: Principal = Depends(require("entrada:read"))):
+    """Só o número de leads novos, para o contador do menu. Contagem no banco custa uma leitura,
+    em vez de uma por lead como a lista inteira."""
+    return {"novos": await db.entradas.count_documents({**_filtro_entradas(principal), "status": "novo"})}
+
+
 @router.get("/entradas", response_model=List[Entrada])
 async def list_entradas(status: str | None = Query(None), principal: Principal = Depends(require("entrada:read"))):
     filtro = _filtro_entradas(principal)
