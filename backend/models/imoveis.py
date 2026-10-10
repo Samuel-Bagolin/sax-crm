@@ -40,6 +40,9 @@ class Imovel(BaseModel):
     banheiros: int = Field(default=0, ge=0, le=10000)
     publicar_portais: bool = False
     destaque_portal: Literal["STANDARD", "PREMIUM", "SUPER_PREMIUM"] = "STANDARD"
+    # Site da imobiliária: inativo (não aparece), ativo ou reservado (aparece com selo).
+    site_status: Literal["inativo", "ativo", "reservado"] = "inativo"
+    site_destaque: bool = False
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -69,6 +72,8 @@ class ImovelCreate(BaseModel):
     banheiros: int = Field(default=0, ge=0, le=10000)
     publicar_portais: bool = False
     destaque_portal: Literal["STANDARD", "PREMIUM", "SUPER_PREMIUM"] = "STANDARD"
+    site_status: Literal["inativo", "ativo", "reservado"] = "inativo"
+    site_destaque: bool = False
 
 
 class ImovelUpdate(BaseModel):
@@ -96,6 +101,8 @@ class ImovelUpdate(BaseModel):
     banheiros: int | None = Field(default=None, ge=0, le=10000)
     publicar_portais: bool | None = None
     destaque_portal: Literal["STANDARD", "PREMIUM", "SUPER_PREMIUM"] | None = None
+    site_status: Literal["inativo", "ativo", "reservado"] | None = None
+    site_destaque: bool | None = None
 
 
 class ImovelDetalhe(Imovel):

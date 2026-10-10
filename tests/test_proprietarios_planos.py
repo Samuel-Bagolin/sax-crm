@@ -134,3 +134,31 @@ def test_catalogo_planos_adicionais_e_condicoes():
     assert r.json()["limite_usuarios"] == 2 + 6
     assert s.delete(f"/planos/{chave}").status_code == 409  # em uso: desativar, não excluir
     assert _login(ADMIN).post("/planos", json={"nome": "Hacker", "preco_mensal": 0}).status_code == 403
+
+
+def test_site_da_imobiliaria(admin, corretor):
+    slug = f"teste-{uuid.uuid4().hex[:6]}"
+    r = admin.put("/site-imobiliaria", json={"ativo": True, "slug": slug, "nome": "Imobiliária Teste", "whatsapp": "(41) 99999-0000"})
+    if r.status_code == 402:
+        pytest.skip("plano da empresa de teste sem site")
+    assert r.status_code == 200, r.text
+    assert admin.put("/site-imobiliaria", json={"slug": "Com Espaço", "nome": "X"}).status_code == 422
+    im = admin.post("/imoveis", json={"titulo": "Casa do site", "tipo": "casa", "finalidade": "venda", "endereco": "Rua S, 10",
+                                      "cidade": "Curitiba", "valor_venda": 500000}).json()
+    # só gestor ou quem ele liberou mexe no site
+    assert corretor.put("/site-imobiliaria/imoveis", json={"ids": [im["id"]], "site_status": "ativo"}).status_code == 403
+    assert corretor.put(f"/imoveis/{im['id']}", json={"site_status": "ativo"}).status_code == 403
+    assert admin.put("/site-imobiliaria/imoveis", json={"ids": [im["id"]], "site_status": "reservado"}).status_code == 204
+    pub = httpx.get(f"{API}/publico/site/{slug}").json()
+    item = next(i for i in pub["imoveis"] if i["id"] == im["id"])
+    assert item["reservado"] is True and "endereco" not in item
+    det = httpx.get(f"{API}/publico/site/{slug}/imovel/{im['codigo']}")
+    assert det.status_code == 200
+    ct = httpx.post(f"{API}/publico/site/{slug}/contato", json={"nome": "Visitante", "telefone": "41988887777", "imovel_id": im["id"]})
+    assert ct.status_code == 201
+    assert any(e["origem"] == "Site" and e["imovel_id"] == im["id"] for e in admin.get("/entradas").json())
+    # inativo some do site; site fora do ar responde 404
+    admin.put("/site-imobiliaria/imoveis", json={"ids": [im["id"]], "site_status": "inativo"})
+    assert httpx.get(f"{API}/publico/site/{slug}/imovel/{im['codigo']}").status_code == 404
+    admin.put("/site-imobiliaria", json={"ativo": False, "slug": slug, "nome": "Imobiliária Teste"})
+    assert httpx.get(f"{API}/publico/site/{slug}").status_code == 404

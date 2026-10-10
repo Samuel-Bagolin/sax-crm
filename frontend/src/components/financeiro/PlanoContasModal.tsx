@@ -93,7 +93,7 @@ export default function PlanoContasModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{conta ? "Editar conta" : "Nova conta do plano"}</DialogTitle>
           <DialogDescription>

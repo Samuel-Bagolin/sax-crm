@@ -89,6 +89,7 @@ class Principal(BaseModel):
     foto_v: int = 0
     telefone: str | None = None
     trocar_senha: bool = False  # senha inicial fraca: só pode trocar a senha até resolver
+    gerencia_site: bool = False  # gestor liberou este usuário para editar o site da imobiliária
 
     @property
     def is_admin(self) -> bool:
@@ -98,6 +99,11 @@ class Principal(BaseModel):
     @property
     def is_sysadmin(self) -> bool:
         return self.papel == "sysadmin"
+
+    @property
+    def pode_site(self) -> bool:
+        """Cria e edita o site da imobiliária e decide o que aparece nele: gestor ou quem ele liberou."""
+        return self.is_admin or self.gerencia_site
 
 
 # L1 — permissões por papel. Deny-by-default: ação fora do conjunto é negada.
@@ -240,6 +246,7 @@ async def _principal_do_request(request: Request) -> Principal | None:
         foto_v=int(doc.get("foto_v", 0)),
         telefone=doc.get("telefone"),
         trocar_senha=bool(doc.get("trocar_senha")),
+        gerencia_site=bool(doc.get("gerencia_site")),
     )
 
 

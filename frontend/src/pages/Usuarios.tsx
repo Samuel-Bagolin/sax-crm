@@ -29,24 +29,25 @@ interface Form {
   cargo: string;
   creci: string;
   cor: string;
+  gerencia_site: boolean;
 }
 
 function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: UsuarioPublico | null; aberto: boolean; onClose: () => void; onFoto: (u: UsuarioPublico) => void }) {
   const qc = useQueryClient();
   const { isSysadmin, principal } = useAuth();
-  const [f, setF] = useState<Form>({ nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: "", creci: "", cor: "" });
+  const [f, setF] = useState<Form>({ nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: "", creci: "", cor: "", gerencia_site: false });
   useEffect(() => {
     if (!aberto) return;
     setF(
       usuario
-        ? { nome: usuario.nome, email: usuario.email, senha: "", papel: usuario.papel, telefone: usuario.telefone ?? "", cargo: usuario.cargo ?? "", creci: usuario.creci ?? "", cor: usuario.cor ?? "" }
-        : { nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: "Corretor de imóveis", creci: "", cor: "" },
+        ? { nome: usuario.nome, email: usuario.email, senha: "", papel: usuario.papel, telefone: usuario.telefone ?? "", cargo: usuario.cargo ?? "", creci: usuario.creci ?? "", cor: usuario.cor ?? "", gerencia_site: !!usuario.gerencia_site }
+        : { nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: "Corretor de imóveis", creci: "", cor: "", gerencia_site: false },
     );
   }, [aberto, usuario]);
 
   const salvar = useMutation({
     mutationFn: () => {
-      const extra = { telefone: f.telefone.trim() || null, cargo: f.cargo.trim() || null, creci: f.creci.trim() || null, cor: f.cor || null };
+      const extra = { telefone: f.telefone.trim() || null, cargo: f.cargo.trim() || null, creci: f.creci.trim() || null, cor: f.cor || null, gerencia_site: f.papel === "corretor" ? f.gerencia_site : false };
       if (usuario) {
         return apiPatch<UsuarioPublico>(`/usuarios/${usuario.id}`, {
           nome: f.nome.trim(),
@@ -141,6 +142,21 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
               </button>
             </div>
           </div>
+          {f.papel === "corretor" && (
+            <label className="flex items-start gap-2.5 rounded-lg border p-3 text-sm sm:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[var(--primary)]"
+                checked={f.gerencia_site}
+                onChange={(e) => setF({ ...f, gerencia_site: e.target.checked })}
+                data-testid="usuario-gerencia-site"
+              />
+              <span>
+                <span className="font-medium">Pode editar o site da imobiliária</span>
+                <span className="block text-xs text-muted-foreground">Muda marca e textos do site e decide quais imóveis aparecem, reservados ou fora do site.</span>
+              </span>
+            </label>
+          )}
           <DialogFooter className="sm:col-span-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
@@ -223,6 +239,7 @@ export default function Usuarios() {
             <p className="mt-1 flex flex-wrap gap-1">
               <span className={cn("rounded-sm px-1.5 text-[11px] font-medium", u.papel === "corretor" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>{PAPEL_LABEL[u.papel]}</span>
               {u.creci && <span className="rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">CRECI {u.creci}</span>}
+              {u.papel === "corretor" && u.gerencia_site && <span className="rounded-sm bg-primary/10 px-1.5 text-[11px] text-primary">Edita o site</span>}
               {!u.ativo && <span className="rounded-sm bg-atrasada/10 px-1.5 text-[11px] text-atrasada">Inativo</span>}
             </p>
           </div>

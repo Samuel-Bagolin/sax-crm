@@ -23,6 +23,8 @@ import Configuracoes from "@/pages/Configuracoes";
 import Usuarios from "@/pages/Usuarios";
 import AtivarAcesso from "@/pages/AtivarAcesso";
 import Login from "@/pages/Login";
+import MeuSite from "@/pages/MeuSite";
+import SitePublico from "@/pages/SitePublico";
 import { Toaster } from "@/components/ui/sonner";
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
@@ -36,6 +38,8 @@ export default function App() {
         <Route path="/assinar/:token" element={<Assinar />} />
         <Route path="/vitrine/:token" element={<Vitrine />} />
         <Route path="/proprietario/:token" element={<RelatorioProprietario />} />
+        <Route path="/s/:slug" element={<SitePublico />} />
+        <Route path="/s/:slug/imovel/:codigo" element={<SitePublico />} />
 
         <Route element={<RotaProtegida />}>
           <Route element={<AppShell />}>
@@ -43,6 +47,7 @@ export default function App() {
             <Route path="/imoveis" element={<Imoveis />} />
             <Route path="/proprietarios" element={<Proprietarios />} />
             <Route path="/proprietarios/:id" element={<ProprietarioDetalhe />} />
+            <Route path="/meu-site" element={<MeuSite />} />
             <Route path="/crm" element={<Negocios />} />
             <Route path="/negocios/:id" element={<NegocioDetalhe />} />
             <Route path="/leads" element={<Leads />} />

@@ -253,7 +253,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {funilMes?.criados ? (
-              <FunilTrapezios etapas={funilMes.funil} />
+              <FunilTrapezios etapas={funilMes.funil} descartados={funilMes.descartados_coorte} leadsDescartados={funilMes.leads_descartados} />
             ) : (
               <p className="py-8 text-center text-sm text-muted-foreground">Nenhum negócio criado este mês.</p>
             )}

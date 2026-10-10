@@ -316,7 +316,7 @@ export default function Relatorios() {
             <section className="rounded-lg border bg-card p-4 sm:p-5">
               <h2 className="mb-1 font-semibold">Funil {r.funil_nome}</h2>
               <p className="mb-4 text-xs text-muted-foreground">Quantos negócios criados no período chegaram a cada etapa.</p>
-              {r.criados ? <FunilTrapezios etapas={r.funil} /> : <p className="py-10 text-center text-sm text-muted-foreground">Nenhum negócio criado no período.</p>}
+              {r.criados ? <FunilTrapezios etapas={r.funil} descartados={r.descartados_coorte} leadsDescartados={r.leads_descartados} /> : <p className="py-10 text-center text-sm text-muted-foreground">Nenhum negócio criado no período.</p>}
             </section>
             <div className="space-y-4">
               <section className="rounded-lg border bg-card p-4 sm:p-5">

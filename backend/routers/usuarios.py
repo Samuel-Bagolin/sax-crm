@@ -34,6 +34,7 @@ def publico(doc: dict) -> UsuarioPublico:
         cargo=doc.get("cargo"),
         creci=doc.get("creci"),
         cor=doc.get("cor"),
+        gerencia_site=bool(doc.get("gerencia_site")),
         tem_foto=bool(doc.get("tem_foto")),
         foto_v=int(doc.get("foto_v", 0)),
         created_at=utc_aware(doc.get("created_at")),
@@ -95,6 +96,7 @@ async def create_usuario(input: UsuarioCreate, principal: Principal = Depends(re
         cargo=input.cargo,
         creci=input.creci,
         cor=input.cor,
+        gerencia_site=input.gerencia_site,
     )
     try:
         await db.usuarios.insert_one(usuario.model_dump())
@@ -140,6 +142,8 @@ async def update_usuario(
     for campo in ("telefone", "cargo", "creci", "cor"):
         if campo in input.model_fields_set:
             data[campo] = getattr(input, campo)
+    if input.gerencia_site is not None:
+        data["gerencia_site"] = input.gerencia_site
     if "telefone" in data and doc.get("pessoa_id"):
         await db.pessoas.update_one({"id": doc["pessoa_id"]}, {"$set": {"telefone": data["telefone"]}})
 

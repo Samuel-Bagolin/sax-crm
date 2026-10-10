@@ -29,7 +29,10 @@ RECURSOS = {
     "google": "Google Agenda e Google Drive",
     "assinatura": "Assinatura eletrônica de contratos",
     "chat": "Chat da equipe",
+    "site": "Site da imobiliária com os imóveis e WhatsApp",
 }
+# Recursos criados depois do catálogo semeado: entram uma única vez nos planos indicados.
+_MIGRACOES_RECURSO = {"site": ("profissional", "business", "enterprise")}
 
 TIPOS_ADICIONAL = {
     "recurso": "Libera uma funcionalidade",
@@ -48,7 +51,7 @@ PLANOS_PADRAO: dict[str, dict] = {
     },
     "profissional": {
         "nome": "Profissional", "preco_mensal": 249, "preco_anual": None, "usuarios": 5, "imoveis": 1000, "implantacao": 499,
-        "modulos": _BASE, "recursos": ["chat", "match", "automacoes", "propostas", "proprietario"], "ordem": 2, "ativo": True,
+        "modulos": _BASE, "recursos": ["chat", "match", "automacoes", "propostas", "proprietario", "site"], "ordem": 2, "ativo": True,
         "resumo": "Distribuição, propostas, vitrine para o cliente, relatórios e automações",
     },
     "business": {
@@ -97,6 +100,16 @@ async def carregar_catalogo(forcar: bool = False) -> None:
             except Exception:
                 pass  # outra instância semeou ao mesmo tempo
         docs = await controle.planos_catalogo.find({}).to_list(None)
+    for d in docs:
+        feitas = d.get("migracoes") or []
+        for recurso, chaves in _MIGRACOES_RECURSO.items():
+            if recurso in feitas:
+                continue
+            if d.get("chave") in chaves and recurso not in (d.get("recursos") or []):
+                d["recursos"] = [*(d.get("recursos") or []), recurso]
+            d["migracoes"] = [*feitas, recurso]
+            feitas = d["migracoes"]
+            await controle.planos_catalogo.update_one({"_id": d["_id"]}, {"$set": {"recursos": d["recursos"], "migracoes": d["migracoes"]}})
     novos = {d["chave"]: _completar({k: v for k, v in d.items() if k != "_id"}) for d in docs}
     adicionais = {d["chave"]: {k: v for k, v in d.items() if k != "_id"} for d in await controle.adicionais.find({}).to_list(None)}
     PLANOS.clear()

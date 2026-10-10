@@ -21,7 +21,7 @@ from lib.security import SecurityMiddleware
 from lib.email import mail_worker
 
 # Módulos do monolito modular — um router por domínio, todos registrados sob /api
-from routers import proprietarios, rotina, fotos_imovel, match, planos, portais, propostas, proprietario
+from routers import site_imobiliaria, proprietarios, rotina, fotos_imovel, match, planos, portais, propostas, proprietario
 from routers import agenda, assinaturas, relatorios, google, documentos, chat, auth, config, contratos, crm, empresas, financeiro, imoveis, leads, pessoas, usuarios, operacao
 from lib.crm import garantir_crm_todas
 
@@ -184,6 +184,8 @@ api_router.include_router(proprietario.router)
 api_router.include_router(proprietario.publico_router)
 api_router.include_router(planos.router)
 api_router.include_router(rotina.router)
+api_router.include_router(site_imobiliaria.router)
+api_router.include_router(site_imobiliaria.publico_router)
 
 # Include the router in the main app
 app.include_router(api_router)

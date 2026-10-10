@@ -36,6 +36,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import PropertyModal from "@/components/imoveis/PropertyModal";
 import PropertyDetailSheet from "@/components/imoveis/PropertyDetailSheet";
 import { StatusImovelBadge } from "@/components/shared/badges";
+import { SiteBadge } from "@/components/site/SiteStatusPicker";
 import { cn } from "@/lib/utils";
 
 const TODOS = "__todos__";
@@ -234,7 +235,10 @@ export default function Imoveis() {
                     <p className="text-xs text-muted-foreground">{IMOVEL_FINALIDADE[i.finalidade]}</p>
                   </TableCell>
                   <TableCell>
-                    <StatusImovelBadge status={i.status} />
+                    <div className="flex flex-wrap items-center gap-1">
+                      <StatusImovelBadge status={i.status} />
+                      <SiteBadge status={i.site_status} />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <p className="text-sm">
@@ -305,8 +309,9 @@ export default function Imoveis() {
                     <Building2 className="h-8 w-8" />
                   </div>
                 )}
-                <div className="absolute left-3 top-3">
+                <div className="absolute left-3 top-3 flex gap-1">
                   <StatusImovelBadge status={i.status} />
+                  <SiteBadge status={i.site_status} />
                 </div>
               </div>
               <CardContent className="p-5">

@@ -182,6 +182,8 @@ async def create_imovel(input: ImovelCreate, background: BackgroundTasks, princi
     if input.status not in ("vendido", "alugado"):
         await exigir_limite("imoveis")
     await _checar_proprietario(input.proprietario_id, principal)
+    if (input.site_status != "inativo" or input.site_destaque) and not principal.pode_site:
+        raise HTTPException(403, "Só o gestor ou quem ele liberou pode colocar imóveis no site")
     imovel = Imovel(**input.model_dump(), codigo=await _proximo_codigo(input.tipo))
     await db.imoveis.insert_one(imovel.model_dump())
     await _depois_de_salvar(background, imovel.id)
@@ -196,14 +198,19 @@ async def update_imovel(
     if not doc:
         raise HTTPException(status_code=404, detail="Imóvel não encontrado")
     data = patch_data(input, ("titulo", "tipo", "finalidade", "status", "endereco", "cidade", "quartos", "suites", "vagas",
-                              "banheiros", "publicar_portais", "destaque_portal"))
+                              "banheiros", "publicar_portais", "destaque_portal", "site_status", "site_destaque"))
     if doc.get("status") in ("vendido", "alugado") and data.get("status") in ("captado", "publicado"):
         from lib.planos import exigir_limite
         await exigir_limite("imoveis")
     await _checar_proprietario(data.get("proprietario_id"), principal)
+    if any(k in data and data[k] != doc.get(k, "inativo" if k == "site_status" else False) for k in ("site_status", "site_destaque")) \
+            and not principal.pode_site:
+        raise HTTPException(403, "Só o gestor ou quem ele liberou pode mudar o imóvel no site")
     data["updated_at"] = now_utc()
     await db.imoveis.update_one({"id": imovel_id}, {"$set": data})
     atualizado = await db.imoveis.find_one({"id": imovel_id})
+    from routers.site_imobiliaria import limpar_cache
+    limpar_cache()
     campos_match = {"tipo", "finalidade", "status", "bairro", "cidade", "quartos", "vagas", "area_util", "valor_venda", "valor_aluguel"}
     if any(k in data and data[k] != doc.get(k) for k in campos_match):
         await _depois_de_salvar(background, imovel_id)

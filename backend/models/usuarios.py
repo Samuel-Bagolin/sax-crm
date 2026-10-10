@@ -22,6 +22,7 @@ class Usuario(BaseModel):
     cargo: str | None = None
     creci: str | None = None
     cor: str | None = None  # cor do consultor na agenda da equipe
+    gerencia_site: bool = False  # liberado pelo gestor para editar o site da imobiliária
     created_at: datetime = Field(default_factory=now_utc)
 
 
@@ -36,6 +37,7 @@ class UsuarioPublico(BaseModel):
     cargo: str | None = None
     creci: str | None = None
     cor: str | None = None
+    gerencia_site: bool = False
     tem_foto: bool = False
     foto_v: int = 0
     created_at: datetime
@@ -50,6 +52,7 @@ class UsuarioCreate(BaseModel):
     cargo: str | None = Field(default=None, max_length=80)
     creci: str | None = Field(default=None, max_length=40)
     cor: str | None = Field(default=None, max_length=20)
+    gerencia_site: bool = False
 
 
 class UsuarioUpdate(BaseModel):
@@ -61,6 +64,7 @@ class UsuarioUpdate(BaseModel):
     cargo: str | None = Field(default=None, max_length=80)
     creci: str | None = Field(default=None, max_length=40)
     cor: str | None = Field(default=None, max_length=20)
+    gerencia_site: bool | None = None
 
 
 class FotoInput(BaseModel):

@@ -134,7 +134,7 @@ export default function TransactionModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{transacao ? "Editar lançamento" : "Novo lançamento"}</DialogTitle>
           <DialogDescription>
@@ -158,7 +158,7 @@ export default function TransactionModal({
             <div className="grid gap-2">
               <Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={(v) => set("tipo", v)}>
-                <SelectTrigger data-testid="transacao-tipo-select">
+                <SelectTrigger className="w-full min-w-0" data-testid="transacao-tipo-select">
                   <SelectValue>{form.tipo === "receber" ? "A Receber" : "A Pagar"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -192,7 +192,7 @@ export default function TransactionModal({
           <div className="grid gap-2">
             <Label>Categoria (plano de contas) *</Label>
             <Select value={form.plano_conta_id || "__sem__"} onValueChange={(v) => set("plano_conta_id", v === "__sem__" ? "" : v)}>
-              <SelectTrigger data-testid="transacao-plano-select">
+              <SelectTrigger className="w-full min-w-0" data-testid="transacao-plano-select">
                 <SelectValue>
                   {form.plano_conta_id
                     ? (() => {
@@ -218,7 +218,7 @@ export default function TransactionModal({
           <div className="grid gap-2">
             <Label>Imóvel vinculado</Label>
             <Select value={form.imovel_id || SEM_IMOVEL} onValueChange={(v) => set("imovel_id", v)}>
-              <SelectTrigger data-testid="transacao-imovel-select">
+              <SelectTrigger className="w-full min-w-0" data-testid="transacao-imovel-select">
                 <SelectValue>
                   {form.imovel_id && form.imovel_id !== SEM_IMOVEL
                     ? (imoveis.find((i) => i.id === form.imovel_id)?.titulo ?? "Imóvel")
@@ -240,7 +240,7 @@ export default function TransactionModal({
             <div className="grid gap-2">
               <Label>Status</Label>
               <Select value={form.status} onValueChange={(v) => set("status", v)}>
-                <SelectTrigger data-testid="transacao-status-select">
+                <SelectTrigger className="w-full min-w-0" data-testid="transacao-status-select">
                   <SelectValue>{form.status === "pago" ? "Pago / Recebido" : "Pendente"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>

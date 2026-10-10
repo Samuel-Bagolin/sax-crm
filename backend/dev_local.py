@@ -63,6 +63,16 @@ async def bootstrap():
     async for im in client[db_name].imoveis.find({}):
         p = pref.get(im["tipo"], "IM"); cont[p] = cont.get(p, 0) + 1
         await client[db_name].imoveis.update_one({"id": im["id"]}, {"$set": {"codigo": f"{p}-{cont[p]:04d}", "estado": im.get("estado") or ("RJ" if im.get("cidade") == "Rio de Janeiro" else "SP")}})
+    # Site da imobiliária de demonstração: /s/demo
+    ativos = [im["id"] async for im in client[db_name].imoveis.find({"status": {"$nin": ["vendido", "alugado"]}}, {"id": 1})]
+    for k, iid in enumerate(ativos):
+        await client[db_name].imoveis.update_one({"id": iid}, {"$set": {"site_status": "reservado" if k == len(ativos) - 1 else "ativo", "site_destaque": k < 2}})
+    await client[db_name].site_imobiliaria.update_one({"id": "singleton"}, {"$set": {
+        "id": "singleton", "ativo": True, "slug": "demo", "nome": emp.nome, "whatsapp": "41999990000",
+        "telefone": "(41) 3333-0000", "email": "contato@exemplo.com", "creci": "J-00000", "horario": "Seg. a sex., 9h às 18h",
+        "sobre": "Imobiliária de demonstração do SAX CRM.", "cor_primaria": "#12355b", "cor_destaque": "#d4a017"}}, upsert=True)
+    await controle.sites_index.delete_many({"_id": "demo"})
+    await controle.sites_index.insert_one({"_id": "demo", "db_name": db_name})
     definir_empresa(None)
     print("DEV BOOTSTRAP OK")
 

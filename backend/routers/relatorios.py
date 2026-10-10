@@ -22,6 +22,7 @@ class EtapaFunil(BaseModel):
     alcancaram: int
     taxa_do_anterior: float | None = None
     taxa_do_total: float | None = None
+    descartados: int = 0  # perdidos da coorte que pararam nesta etapa
 
 
 class Fatia(BaseModel):
@@ -56,6 +57,8 @@ class Relatorio(BaseModel):
     valor_ganho: float = 0
     ticket_medio: float | None = None
     perdidos: int = 0
+    descartados_coorte: int = 0
+    leads_descartados: int = 0
     ciclo_medio_dias: float | None = None
     abertos: int = 0
     valor_aberto: float = 0
@@ -150,10 +153,13 @@ async def relatorio_funil(
     # Funil por alcance da coorte, + a linha final "Ganho".
     total = len(coorte)
     anterior = None
+    perdidos_coorte = [d for d in coorte if status(d) == "perdido"]
+    r.descartados_coorte = len(perdidos_coorte)
     for i, e in enumerate(etapas):
         n = sum(1 for d in coorte if alcance(d) >= i)
         r.funil.append(EtapaFunil(id=e["id"], nome=e["nome"], alcancaram=n,
-                                  taxa_do_anterior=_pct(n, anterior) if anterior is not None else None, taxa_do_total=_pct(n, total)))
+                                  taxa_do_anterior=_pct(n, anterior) if anterior is not None else None, taxa_do_total=_pct(n, total),
+                                  descartados=sum(1 for d in perdidos_coorte if alcance(d) == i)))
         anterior = n
     r.funil.append(EtapaFunil(id="__ganho", nome="Ganho", alcancaram=ganhos_coorte,
                               taxa_do_anterior=_pct(ganhos_coorte, anterior or 0), taxa_do_total=_pct(ganhos_coorte, total)))
@@ -181,6 +187,7 @@ async def relatorio_funil(
     entradas = [e for e in await db.entradas.find(filtro_ent).to_list(None) if _dentro(e.get("created_at"), ini, fi)]
     r.leads_recebidos = len(entradas)
     r.leads_convertidos = sum(1 for e in entradas if e.get("status") == "convertido")
+    r.leads_descartados = sum(1 for e in entradas if e.get("status") == "descartado")
     neg_por_entrada = {d.get("entrada_id"): d for d in docs if d.get("entrada_id")}
     horas = [(utc_aware(neg_por_entrada[e["id"]]["created_at"]) - utc_aware(e["created_at"])).total_seconds() / 3600
              for e in entradas if e["id"] in neg_por_entrada]

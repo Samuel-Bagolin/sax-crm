@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { StatusImovelBadge } from "@/components/shared/badges";
+import { SiteBadge } from "@/components/site/SiteStatusPicker";
 import { FotosGaleria, InteressadosImovel, PropostasImovel, RelatorioProprietarioCard } from "@/components/imoveis/ImovelExtras";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePlano } from "@/lib/diferenciais";
@@ -65,6 +66,7 @@ export default function PropertyDetailSheet({
               )}
               <div className="absolute left-3 top-3 flex gap-1.5">
                 <StatusImovelBadge status={imovel.status} />
+                <SiteBadge status={imovel.site_status} />
                 {imovel.publicar_portais && <span className="rounded-md bg-black/60 px-2 py-0.5 text-xs font-semibold text-white">Nos portais</span>}
               </div>
             </div>

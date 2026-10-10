@@ -5,7 +5,9 @@ import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
 import { usePlano } from "@/lib/diferenciais";
-import type { Imovel, ImovelFinalidade, ImovelStatus, ImovelTipo, Pessoa, ProprietarioResumo } from "@/lib/types";
+import { useAuth } from "@/lib/useAuth";
+import SiteStatusPicker from "@/components/site/SiteStatusPicker";
+import type { SiteStatus, Imovel, ImovelFinalidade, ImovelStatus, ImovelTipo, Pessoa, ProprietarioResumo } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Combo from "@/components/shared/Combo";
 import ProprietarioForm from "@/components/proprietarios/ProprietarioForm";
@@ -57,6 +59,8 @@ interface FormState {
   banheiros: string;
   publicar_portais: boolean;
   destaque_portal: "STANDARD" | "PREMIUM" | "SUPER_PREMIUM";
+  site_status: SiteStatus;
+  site_destaque: boolean;
 }
 
 const VAZIO: FormState = {
@@ -84,6 +88,8 @@ const VAZIO: FormState = {
   banheiros: "0",
   publicar_portais: false,
   destaque_portal: "STANDARD",
+  site_status: "inativo",
+  site_destaque: false,
 };
 
 
@@ -106,6 +112,7 @@ export default function PropertyModal({
   const qc = useQueryClient();
   const [form, setForm] = useState<FormState>(VAZIO);
   const { tem } = usePlano();
+  const { podeSite } = useAuth();
   const [aba, setAba] = useState<Aba>("dados");
   const [novoDono, setNovoDono] = useState<string | null>(null);
   const [buscandoCep, setBuscandoCep] = useState(false);
@@ -142,6 +149,8 @@ export default function PropertyModal({
         banheiros: String(imovel.banheiros ?? 0),
         publicar_portais: !!imovel.publicar_portais,
         destaque_portal: imovel.destaque_portal ?? "STANDARD",
+        site_status: imovel.site_status ?? "inativo",
+        site_destaque: !!imovel.site_destaque,
       });
     } else {
       setForm(VAZIO);
@@ -176,6 +185,7 @@ export default function PropertyModal({
         banheiros: inteiro(form.banheiros),
         publicar_portais: form.publicar_portais,
         destaque_portal: form.destaque_portal,
+        ...(podeSite ? { site_status: form.site_status, site_destaque: form.site_destaque } : {}),
       };
       return imovel
         ? apiPut<Imovel>(`/imoveis/${imovel.id}`, body)
@@ -425,6 +435,24 @@ export default function PropertyModal({
                   <p className="text-sm text-muted-foreground">Sem proprietário. Você pode vincular depois, pela tela de Proprietários.</p>
                 )}
               </section>
+
+              {tem("site") && (
+                <section className="grid gap-3 border-t pt-5">
+                  <div>
+                    <h3 className="text-sm font-semibold">Site da imobiliária</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {podeSite ? "Escolha se o imóvel aparece no site e se está reservado." : "Só o gestor ou quem ele liberou muda o imóvel no site."}
+                    </p>
+                  </div>
+                  <SiteStatusPicker value={form.site_status} onChange={(v) => set("site_status", v)} disabled={!podeSite} />
+                  {form.site_status !== "inativo" && (
+                    <label className="flex items-center gap-2.5 text-sm">
+                      <input type="checkbox" disabled={!podeSite} checked={form.site_destaque} onChange={(e) => set("site_destaque", e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" data-testid="imovel-site-destaque" />
+                      Mostrar entre os destaques do site
+                    </label>
+                  )}
+                </section>
+              )}
 
               {tem("portais") && (
                 <section className="grid gap-3 border-t pt-5">

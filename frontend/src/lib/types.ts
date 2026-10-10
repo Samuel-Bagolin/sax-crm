@@ -121,9 +121,13 @@ export interface Imovel {
   banheiros: number;
   publicar_portais: boolean;
   destaque_portal: "STANDARD" | "PREMIUM" | "SUPER_PREMIUM";
+  site_status?: SiteStatus;
+  site_destaque?: boolean;
   created_at: string;
   updated_at: string;
 }
+
+export type SiteStatus = "inativo" | "ativo" | "reservado";
 
 export type StatusNegocio = "aberto" | "ganho" | "perdido";
 
@@ -337,6 +341,7 @@ export interface Principal {
   foto_v: number;
   telefone: string | null;
   trocar_senha?: boolean;
+  gerencia_site?: boolean;
 }
 
 export interface UsuarioPublico {
@@ -350,6 +355,7 @@ export interface UsuarioPublico {
   cargo: string | null;
   creci: string | null;
   cor: string | null;
+  gerencia_site?: boolean;
   tem_foto: boolean;
   foto_v: number;
   created_at: string;
@@ -744,3 +750,91 @@ export interface ModeloContrato {
   created_at: string;
   updated_at: string;
 }
+
+// ------------------------------------------------------------------ site da imobiliária
+export type FonteSite = "moderna" | "elegante" | "classica";
+
+export interface SiteConfig {
+  ativo: boolean;
+  slug: string | null;
+  nome: string;
+  titulo: string;
+  subtitulo: string;
+  sobre: string;
+  cor_primaria: string;
+  cor_destaque: string;
+  fonte: FonteSite;
+  whatsapp: string;
+  mensagem_whatsapp: string;
+  telefone: string;
+  email: string;
+  endereco: string;
+  creci: string;
+  horario: string;
+  instagram: string;
+  facebook: string;
+  tem_logo: boolean;
+  tem_capa: boolean;
+  midia_v: number;
+  atualizado_em: string | null;
+  atualizado_por: string | null;
+}
+
+export interface PainelSite {
+  liberado: boolean;
+  pode_editar: boolean;
+  configurado: boolean;
+  config: SiteConfig;
+  url: string | null;
+  sugestao_slug: string;
+  visualizacoes: number;
+  cliques_whatsapp: number;
+  contatos: number;
+}
+
+export interface ImovelNoSite {
+  id: string;
+  codigo: string;
+  titulo: string;
+  tipo: ImovelTipo;
+  finalidade: ImovelFinalidade;
+  status: ImovelStatus;
+  bairro: string | null;
+  cidade: string;
+  valor_venda: number | null;
+  valor_aluguel: number | null;
+  foto_url: string | null;
+  site_status: SiteStatus;
+  site_destaque: boolean;
+  visualizacoes: number;
+  cliques_whatsapp: number;
+  contatos: number;
+}
+
+export interface ImovelSitePublico {
+  id: string;
+  codigo: string;
+  titulo: string;
+  tipo: ImovelTipo;
+  finalidade: ImovelFinalidade;
+  bairro: string | null;
+  cidade: string;
+  estado: string | null;
+  quartos: number;
+  suites: number;
+  banheiros: number;
+  vagas: number;
+  area_util: number | null;
+  area_total: number | null;
+  valor_venda: number | null;
+  valor_aluguel: number | null;
+  condominio: number | null;
+  iptu: number | null;
+  foto_url: string | null;
+  reservado: boolean;
+  destaque: boolean;
+  descricao?: string | null;
+  fotos?: string[];
+}
+
+export type MarcaSite = Omit<SiteConfig, "ativo" | "atualizado_em" | "atualizado_por"> & { logo_url: string | null; capa_url: string | null };

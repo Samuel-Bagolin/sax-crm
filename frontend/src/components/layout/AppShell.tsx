@@ -11,6 +11,7 @@ import {
   Handshake,
   Inbox,
   KeyRound,
+  Globe,
   LayoutDashboard,
   LogOut,
   MessageCircle,
@@ -73,6 +74,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
       { to: "/agenda", modulo: "agenda", icon: CalendarDays, nivel: "todos", contador: "atividades" },
       { to: "/imoveis", modulo: "imoveis", icon: Building2, nivel: "todos" },
       { to: "/proprietarios", modulo: "imoveis", icon: KeyRound, rotulo: "Proprietários", curto: "Donos", nivel: "todos" },
+      { to: "/meu-site", modulo: "imoveis", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos" },
       { to: "/chat", modulo: "chat", icon: MessageCircle, rotulo: "Chat da equipe", curto: "Chat", nivel: "todos", contador: "chat" },
     ],
   },
@@ -105,6 +107,7 @@ const TITULOS: Record<string, string> = {
   "/relatorios": "Relatórios",
   "/chat": "Chat da equipe",
   "/proprietarios": "Proprietários",
+  "/meu-site": "Meu site",
 };
 const MODULO_POR_ROTA: Record<string, string> = {
   "/": "dashboard",

@@ -175,7 +175,7 @@ export default function VisitaModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{visita ? "Editar visita" : "Agendar visita"}</DialogTitle>
           <DialogDescription>
@@ -191,12 +191,12 @@ export default function VisitaModal({
               id="visita-titulo"
               value={form.titulo}
               onChange={(e) => set("titulo", e.target.value)}
-              placeholder="Ex.: Visita — Fernanda Rocha"
+              placeholder="Ex.: Visita Fernanda Rocha"
               data-testid="visita-titulo-input"
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div className="grid gap-2">
               <Label htmlFor="visita-data">Data *</Label>
               <Input
@@ -232,8 +232,8 @@ export default function VisitaModal({
           <div className="grid gap-2">
             <Label>Lead relacionado</Label>
             <Select value={form.lead_id} onValueChange={(v) => set("lead_id", v)}>
-              <SelectTrigger data-testid="visita-lead-select">
-                <SelectValue>
+              <SelectTrigger className="w-full min-w-0" data-testid="visita-lead-select">
+                <SelectValue className="truncate">
                   {form.lead_id === SEM
                     ? "Sem lead vinculado"
                     : (leads.find((l) => l.id === form.lead_id)?.nome ?? "Lead")}
@@ -253,8 +253,8 @@ export default function VisitaModal({
           <div className="grid gap-2">
             <Label>Cliente (recebe a confirmação por e-mail na véspera)</Label>
             <Select value={form.cliente_id} onValueChange={(v) => set("cliente_id", v)}>
-              <SelectTrigger data-testid="visita-cliente-select">
-                <SelectValue>
+              <SelectTrigger className="w-full min-w-0" data-testid="visita-cliente-select">
+                <SelectValue className="truncate">
                   {form.cliente_id === SEM
                     ? "Sem cliente vinculado"
                     : (pessoas.find((p) => p.id === form.cliente_id)?.nome ?? "Cliente")}
@@ -275,8 +275,8 @@ export default function VisitaModal({
           <div className="grid gap-2">
             <Label>Imóvel</Label>
             <Select value={form.imovel_id} onValueChange={(v) => set("imovel_id", v)}>
-              <SelectTrigger data-testid="visita-imovel-select">
-                <SelectValue>
+              <SelectTrigger className="w-full min-w-0" data-testid="visita-imovel-select">
+                <SelectValue className="truncate">
                   {form.imovel_id === SEM
                     ? "Sem imóvel específico"
                     : (imoveis.find((i) => i.id === form.imovel_id)?.titulo ?? "Imóvel")}
@@ -297,8 +297,8 @@ export default function VisitaModal({
             <div className="grid gap-2">
               <Label>Corretor responsável</Label>
               <Select value={form.corretor_id} onValueChange={(v) => set("corretor_id", v)}>
-                <SelectTrigger data-testid="visita-corretor-select">
-                  <SelectValue>
+                <SelectTrigger className="w-full min-w-0" data-testid="visita-corretor-select">
+                  <SelectValue className="truncate">
                     {form.corretor_id === SEM
                       ? "Sem corretor"
                       : (corretores.find((p) => p.id === form.corretor_id)?.nome ?? "Corretor")}
@@ -330,8 +330,8 @@ export default function VisitaModal({
             <div className="grid gap-2">
               <Label>Situação</Label>
               <Select value={form.status} onValueChange={(v) => set("status", v as VisitaStatus)}>
-                <SelectTrigger data-testid="visita-status-select">
-                  <SelectValue>{STATUS_VISITA_LABEL[form.status]}</SelectValue>
+                <SelectTrigger className="w-full min-w-0" data-testid="visita-status-select">
+                  <SelectValue className="truncate">{STATUS_VISITA_LABEL[form.status]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {(Object.keys(STATUS_VISITA_LABEL) as VisitaStatus[]).map((s) => (

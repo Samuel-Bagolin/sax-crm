@@ -13,11 +13,13 @@ export interface Relatorio {
   valor_ganho: number;
   ticket_medio: number | null;
   perdidos: number;
+  descartados_coorte: number;
+  leads_descartados: number;
   ciclo_medio_dias: number | null;
   abertos: number;
   valor_aberto: number;
   valor_ponderado: number;
-  funil: { id: string; nome: string; alcancaram: number; taxa_do_anterior: number | null; taxa_do_total: number | null }[];
+  funil: { id: string; nome: string; alcancaram: number; taxa_do_anterior: number | null; taxa_do_total: number | null; descartados?: number }[];
   motivos_perda: { rotulo: string; qtd: number; valor: number }[];
   origens: { rotulo: string; qtd: number; valor: number }[];
   responsaveis: {

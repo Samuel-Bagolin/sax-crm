@@ -22,5 +22,7 @@ export function useAuth() {
     noControle: q.data?.papel === "sysadmin" && !q.data?.empresa_id,
     empresaNome: q.data?.empresa_nome ?? null,
     suporte: !!q.data?.suporte,
+    /** Gestor ou usuário liberado pelo gestor: cria o site e decide o que aparece nele. */
+    podeSite: q.data?.papel === "admin" || q.data?.papel === "sysadmin" || !!q.data?.gerencia_site,
   };
 }
