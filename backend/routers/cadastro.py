@@ -29,7 +29,7 @@ from lib.auth import criar_token, gravar_cookie, hash_senha
 from lib.db import controle, definir_empresa, nome_banco_empresa
 from lib.planos import PLANOS, RECURSOS, carregar_catalogo, planos_do_segmento
 from lib.segmentos import CATEGORIAS, SEGMENTOS, catalogo_publico
-from lib.tenant import indexar_usuario, provisionar_empresa
+from lib.tenant import desindexar_usuario, indexar_usuario, provisionar_empresa
 from models.common import now_utc
 from models.empresas import Empresa, slugificar
 from models.pessoas import cnpj_valido, cpf_valido, formatar_documento
@@ -63,6 +63,40 @@ class Cartao(BaseModel):
     nome: str = Field(max_length=80)
     validade: str = Field(max_length=7)  # MM/AA ou MM/AAAA
     cvv: str = Field(max_length=4)
+
+
+def somar_periodo(d: date, anual: bool) -> date:
+    """Próximo vencimento: +1 ano ou +1 mês, sem quebrar em 29/02 nem em dias 29 a 31."""
+    if anual:
+        try:
+            return d.replace(year=d.year + 1)
+        except ValueError:
+            return d.replace(year=d.year + 1, day=28)
+    mes = d.month % 12 + 1
+    ano = d.year + (1 if d.month == 12 else 0)
+    return d.replace(year=ano, month=mes, day=min(d.day, 28))
+
+
+async def _reservar_email(email: str, chave: str) -> None:
+    """Um e-mail, um cadastro em andamento: impede duas cobranças paralelas para o mesmo acesso."""
+    from datetime import datetime, timezone
+
+    try:
+        await controle.cadastros_email.insert_one({"_id": email, "chave": chave, "em": now_utc()})
+        return
+    except Exception:
+        pass
+    atual = await controle.cadastros_email.find_one({"_id": email}) or {}
+    em = atual.get("em")
+    velho = isinstance(em, datetime) and (datetime.now(timezone.utc) - (em if em.tzinfo else em.replace(tzinfo=timezone.utc))).total_seconds() > 600
+    if atual.get("chave") == chave or velho:
+        await controle.cadastros_email.update_one({"_id": email}, {"$set": {"chave": chave, "em": now_utc()}})
+        return
+    raise HTTPException(409, "Já existe um cadastro em andamento com este e-mail. Aguarde alguns minutos.")
+
+
+async def _liberar_email(email: str, chave: str) -> None:
+    await controle.cadastros_email.delete_one({"_id": email, "chave": chave})
 
 
 def _ip(request: Request) -> str:
@@ -152,6 +186,15 @@ async def cadastrar(request: Request, response: Response):
     if await controle.usuarios_index.find_one({"email": email}) or await controle.usuarios.find_one({"email": email}):
         raise HTTPException(409, "Este e-mail já tem acesso ao SAX. Entre pela tela de login ou use outro e-mail.")
 
+    await _reservar_email(email, d.chave)
+    try:
+        return await _processar(d, cartao, email, doc, telefone, cep, plano, request, response)
+    finally:
+        await _liberar_email(email, d.chave)
+
+
+async def _processar(d: "DadosCadastro", cartao: dict, email: str, doc: str, telefone: str, cep: str, plano: dict,
+                     request: Request, response: Response) -> dict:
     # ---------------------------------------------------------- idempotência
     existente = await controle.cadastros.find_one({"_id": d.chave})
     if existente:
@@ -170,9 +213,7 @@ async def cadastrar(request: Request, response: Response):
                   else (float(plano.get("preco_mensal") or 0) * (12 if d.periodicidade == "anual" else 1)))
     seg_nome = SEGMENTOS[d.segmento]["nome"]
     demo = await eh_cartao_demo(cartao["numero"])
-    hoje = date.today()
-    proximo = (hoje.replace(year=hoje.year + 1) if d.periodicidade == "anual"
-               else (hoje.replace(day=1) + timedelta(days=32)).replace(day=min(hoje.day, 28))).isoformat()
+    proximo = somar_periodo(date.today(), d.periodicidade == "anual").isoformat()
     assinatura: dict = {"periodicidade": d.periodicidade, "valor": round(valor, 2), "plano": d.plano,
                         "criada_em": now_utc(), "proximo_vencimento": proximo}
 
@@ -205,6 +246,7 @@ async def cadastrar(request: Request, response: Response):
     cartao = None  # noqa: F841 (o cartão não segue adiante)
 
     # ---------------------------------------------------------- cria a empresa
+    empresa = None
     try:
         slug = await _slug_livre(d.empresa_nome)
         db_name = nome_banco_empresa(slug)
@@ -223,12 +265,14 @@ async def cadastrar(request: Request, response: Response):
         await controle.empresas.insert_one(dados)
     except Exception as e:
         logger.exception("cadastro %s: empresa não criada após a cobrança", d.chave)
-        if assinatura.get("asaas_assinatura_id"):
+        if empresa is not None:
             try:
-                await asaas.cancelar_assinatura(assinatura["asaas_assinatura_id"])
-                situacao = "cancelado_apos_falha"
+                await desindexar_usuario(email, empresa.id)  # o e-mail não pode ficar preso sem conta
             except Exception:
-                situacao = "pago_sem_conta"
+                pass
+        if assinatura.get("asaas_assinatura_id"):
+            estornado = await asaas.estornar_e_cancelar(assinatura["asaas_assinatura_id"])
+            situacao = "cancelado_apos_falha" if estornado else "pago_sem_conta"
         else:
             situacao = "falhou"
         await controle.cadastros.update_one({"_id": d.chave}, {"$set": {"status": situacao, "erro": type(e).__name__, "fim": now_utc()}})
@@ -236,7 +280,8 @@ async def cadastrar(request: Request, response: Response):
         if isinstance(e, HTTPException) and e.status_code == 409:
             raise HTTPException(409, detalhe or "Este e-mail já tem acesso ao SAX.")
         raise HTTPException(500, f"Não foi possível concluir o cadastro. Protocolo {d.chave[:8]}. "
-                                 "Se houve cobrança, ela foi cancelada; o suporte confere e retorna.")
+                                 + ("A cobrança foi estornada." if situacao == "cancelado_apos_falha" else
+                                    "O suporte confere a cobrança e retorna em seguida." if situacao == "pago_sem_conta" else "Nenhuma cobrança foi feita."))
 
     await controle.cadastros.update_one({"_id": d.chave}, {"$set": {"status": "concluido", "empresa_id": empresa.id,
                                                                      "demo": bool(assinatura.get("demo")), "fim": now_utc()}})

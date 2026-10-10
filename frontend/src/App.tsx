@@ -24,6 +24,15 @@ import Usuarios from "@/pages/Usuarios";
 import AtivarAcesso from "@/pages/AtivarAcesso";
 import Login from "@/pages/Login";
 import MeuSite from "@/pages/MeuSite";
+import Cadastro from "@/pages/Cadastro";
+import AgendarPublico from "@/pages/AgendarPublico";
+import Atendimentos from "@/pages/Atendimentos";
+import AgendaOnline from "@/pages/AgendaOnline";
+import Pacientes from "@/pages/Pacientes";
+import PacienteDetalhe from "@/pages/PacienteDetalhe";
+import Veiculos from "@/pages/Veiculos";
+import Assinatura from "@/pages/Assinatura";
+import Unidades from "@/pages/Unidades";
 import SitePublico from "@/pages/SitePublico";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -39,6 +48,10 @@ export default function App() {
         <Route path="/vitrine/:token" element={<Vitrine />} />
         <Route path="/proprietario/:token" element={<RelatorioProprietario />} />
         <Route path="/s/:slug" element={<SitePublico />} />
+        <Route path="/cadastro" element={<Cadastro />} />
+        <Route path="/agendar/:slug" element={<AgendarPublico />} />
+        <Route path="/agendar/:slug/reserva/:token" element={<AgendarPublico />} />
+        <Route path="/agendar/:slug/:prof" element={<AgendarPublico />} />
         <Route path="/s/:slug/imovel/:codigo" element={<SitePublico />} />
 
         <Route element={<RotaProtegida />}>
@@ -48,6 +61,11 @@ export default function App() {
             <Route path="/proprietarios" element={<Proprietarios />} />
             <Route path="/proprietarios/:id" element={<ProprietarioDetalhe />} />
             <Route path="/meu-site" element={<MeuSite />} />
+            <Route path="/atendimentos" element={<Atendimentos />} />
+            <Route path="/agenda-online" element={<AgendaOnline />} />
+            <Route path="/pacientes" element={<Pacientes />} />
+            <Route path="/pacientes/:id" element={<PacienteDetalhe />} />
+            <Route path="/veiculos" element={<Veiculos />} />
             <Route path="/crm" element={<Negocios />} />
             <Route path="/negocios/:id" element={<NegocioDetalhe />} />
             <Route path="/leads" element={<Leads />} />
@@ -60,6 +78,8 @@ export default function App() {
             {/* Somente admin: a rota também é barrada no servidor (403) */}
             <Route element={<RotaProtegida somenteAdmin />}>
               <Route path="/usuarios" element={<Usuarios />} />
+              <Route path="/assinatura" element={<Assinatura />} />
+              <Route path="/unidades" element={<Unidades />} />
               <Route path="/crm/configurar" element={<CrmConfig />} />
             </Route>
             {/* Configurador: exclusivo do Administrador de Sistema (servidor nega com 403) */}

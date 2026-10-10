@@ -81,9 +81,9 @@ def _custo(v: dict) -> float:
 def _saida(v: dict) -> dict:
     hoje = agora_local().date()
     entrada = v.get("data_entrada") or (v.get("created_at").date().isoformat() if hasattr(v.get("created_at"), "date") else hoje.isoformat())
-    fim = date.fromisoformat(v["vendido_em"]) if v.get("vendido_em") else hoje
     try:
-        dias = max(0, (fim - date.fromisoformat(entrada)).days)
+        fim = date.fromisoformat(str(v["vendido_em"])[:10]) if v.get("vendido_em") else hoje
+        dias = max(0, (fim - date.fromisoformat(str(entrada)[:10])).days)
     except ValueError:
         dias = 0
     custo = _custo(v)
@@ -229,24 +229,42 @@ async def editar(veiculo_id: str, input: VeiculoIn, principal: Principal = Depen
 
 @router.post("/{veiculo_id}/vender")
 async def vender(veiculo_id: str, input: Venda, principal: Principal = Depends(require("veiculo:update"))):
+    from lib.agenda_online import validar_data
+    from lib.auth import authorize
+
     v = await _veiculo(veiculo_id)
     if v.get("status") == "vendido":
         raise HTTPException(409, "Veículo já vendido")
-    dia = input.data or agora_local().date().isoformat()
+    dia = validar_data(input.data).isoformat() if input.data else agora_local().date().isoformat()
+    if input.vendedor_usuario_id and input.vendedor_usuario_id != principal.usuario_id and not principal.is_admin:
+        raise HTTPException(403, "Só o gestor registra venda em nome de outro vendedor")
+    negocio = None
+    if input.negocio_id:
+        negocio = await db.leads.find_one({"id": input.negocio_id})
+        if not negocio:
+            raise HTTPException(404, "Negócio não encontrado")
+        authorize(principal, "lead:update", negocio)  # vendedor só fecha negócio dele
     conta = await db.plano_contas.find_one({"codigo": "1.1.1"}) or await db.plano_contas.find_one({"tipo": "receita"})
     vendedor = await db.usuarios.find_one({"id": input.vendedor_usuario_id or principal.usuario_id}, {"pessoa_id": 1, "nome": 1}) or {}
-    if conta:
-        await db.transacoes.insert_one({
-            "id": new_id(), "descricao": f"Venda {v.get('codigo')} {titulo(v)}"[:300], "tipo": "receber", "valor": round(input.valor, 2),
-            "plano_conta_id": conta["id"], "imovel_id": None, "veiculo_id": veiculo_id, "pessoa_id": input.cliente_id,
-            "corretor_id": vendedor.get("pessoa_id"), "evento_id": None, "contrato_id": None, "vencimento": dia, "pagamento": None,
-            "status": "pendente", "forma_pagamento": input.forma_pagamento, "vencido": False, "cancelado_em": None, "created_at": now_utc()})
     dados = {"status": "vendido", "site_status": "inativo", "vendido_em": dia, "valor_vendido": round(input.valor, 2),
              "comprador_id": input.cliente_id, "vendedor_nome": vendedor.get("nome"), "updated_at": now_utc()}
-    await db.veiculos.update_one({"id": veiculo_id}, {"$set": dados})
-    if input.negocio_id:
-        await db.leads.update_one({"id": input.negocio_id}, {"$set": {"status": "ganho", "estagio": "ganho", "valor_estimado": round(input.valor, 2),
-                                                                     "closed_at": now_utc(), "updated_at": now_utc()}})
+    # Marca como vendido com condição no status: duas vendas ao mesmo tempo não lançam a receita duas vezes.
+    r = await db.veiculos.update_one({"id": veiculo_id, "status": {"$ne": "vendido"}}, {"$set": dados})
+    if r.modified_count != 1:
+        raise HTTPException(409, "Veículo já vendido")
+    if conta:
+        try:
+            await db.transacoes.insert_one({
+                "id": new_id(), "descricao": f"Venda {v.get('codigo')} {titulo(v)}"[:300], "tipo": "receber", "valor": round(input.valor, 2),
+                "plano_conta_id": conta["id"], "imovel_id": None, "veiculo_id": veiculo_id, "pessoa_id": input.cliente_id,
+                "corretor_id": vendedor.get("pessoa_id"), "evento_id": None, "contrato_id": None, "vencimento": dia, "pagamento": None,
+                "status": "pendente", "forma_pagamento": input.forma_pagamento, "vencido": False, "cancelado_em": None, "created_at": now_utc()})
+        except Exception:
+            await db.veiculos.update_one({"id": veiculo_id}, {"$set": {k: v.get(k) for k in dados}})
+            raise
+    if negocio:
+        await db.leads.update_one({"id": negocio["id"]}, {"$set": {"status": "ganho", "estagio": "ganho", "valor_estimado": round(input.valor, 2),
+                                                                  "closed_at": now_utc(), "updated_at": now_utc()}})
     from routers.site_imobiliaria import limpar_cache
 
     limpar_cache()

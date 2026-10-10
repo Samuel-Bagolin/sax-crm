@@ -149,7 +149,11 @@ def _data(v) -> str | None:
 
 @webhook_router.post("/asaas")
 async def webhook_asaas(request: Request):
-    """Recebe eventos de cobrança. Autenticado pelo token no cabeçalho asaas-access-token."""
+    """Recebe eventos de cobrança. Autenticado pelo token no cabeçalho asaas-access-token.
+
+    O id do evento só é registrado depois do processamento: se algo falhar no meio, o reenvio do
+    Asaas é processado de novo. As gravações mexem só nos campos da assinatura que mudaram, para
+    não desfazer uma troca de cartão ou cancelamento feitos ao mesmo tempo pela tela."""
     token = await asaas.garantir_webhook_token()
     if not hmac.compare_digest(request.headers.get("asaas-access-token", ""), token):
         raise HTTPException(401, "Token inválido")
@@ -158,37 +162,58 @@ async def webhook_asaas(request: Request):
     except Exception:
         raise HTTPException(400, "JSON inválido")
     eid, tipo = str(evento.get("id") or ""), str(evento.get("event") or "")
+    if eid and await controle.asaas_eventos.find_one({"_id": eid}, {"_id": 1}):
+        return {"ok": True, "duplicado": True}  # o Asaas entrega "pelo menos uma vez"
+    pagamento = evento.get("payment") or {}
+    assinatura_id = pagamento.get("subscription") or (evento.get("subscription") or {}).get("id")
+    empresa = await controle.empresas.find_one({"asaas_assinatura_id": assinatura_id}) if assinatura_id else None
+    resultado = {"ok": True}
+    if not empresa:
+        if assinatura_id:
+            logger.warning("webhook asaas %s: assinatura %s sem empresa", tipo, assinatura_id)
+        resultado["ignorado"] = True
+    else:
+        ass = empresa.get("assinatura") or {}
+        if pagamento.get("id"):
+            await controle.faturas.update_one({"_id": pagamento["id"]}, {"$set": {
+                "_id": pagamento["id"], "empresa_id": empresa["id"], "valor": pagamento.get("value"), "status": pagamento.get("status"),
+                "vencimento": _data(pagamento.get("dueDate")), "pago_em": _data(pagamento.get("confirmedDate") or pagamento.get("paymentDate")),
+                "link": pagamento.get("invoiceUrl"), "atualizado_em": now_utc()}}, upsert=True)
+        mudar: dict = {}
+        venc = _data(pagamento.get("dueDate"))
+        if tipo == "PAYMENT_CREATED" and venc and venc > (ass.get("proximo_vencimento") or ""):
+            mudar["assinatura.proximo_vencimento"] = venc
+        elif tipo in ("PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"):
+            if venc:
+                from datetime import date
+
+                from routers.cadastro import somar_periodo
+
+                prox = somar_periodo(date.fromisoformat(venc), ass.get("periodicidade") == "anual").isoformat()
+                if prox > (ass.get("proximo_vencimento") or ""):
+                    mudar["assinatura.proximo_vencimento"] = prox
+            mudar["assinatura.ultimo_pagamento"] = _data(pagamento.get("confirmedDate") or pagamento.get("paymentDate"))
+            if ass.get("status") != "cancelada":  # cobrança antiga paga não reativa assinatura cancelada
+                mudar.update({"assinatura.status": "ativa", "assinatura.atraso_desde": None})
+        elif tipo == "PAYMENT_OVERDUE" and ass.get("status") != "cancelada":
+            mudar["assinatura.status"] = "atrasada"
+            if ass.get("status") != "atrasada":
+                mudar["assinatura.atraso_desde"] = now_utc()
+        elif tipo in ("PAYMENT_REFUNDED", "PAYMENT_CHARGEBACK_REQUESTED") and ass.get("status") != "cancelada":
+            mudar["assinatura.status"] = "atrasada"
+            if not ass.get("atraso_desde"):
+                mudar["assinatura.atraso_desde"] = now_utc()
+        elif tipo in ("SUBSCRIPTION_DELETED", "SUBSCRIPTION_INACTIVATED"):
+            mudar["assinatura.status"] = "cancelada"
+            if not ass.get("acesso_ate"):
+                mudar["assinatura.acesso_ate"] = ass.get("proximo_vencimento")
+        if mudar:
+            mudar["updated_at"] = now_utc()
+            await controle.empresas.update_one({"id": empresa["id"]}, {"$set": mudar})
+            logger.info("webhook asaas %s: empresa %s atualizada", tipo, empresa.get("slug"))
     if eid:
         try:
             await controle.asaas_eventos.insert_one({"_id": eid, "evento": tipo, "em": now_utc()})
         except Exception:
-            return {"ok": True, "duplicado": True}  # o Asaas entrega "pelo menos uma vez"
-    pagamento = evento.get("payment") or {}
-    assinatura_id = pagamento.get("subscription") or (evento.get("subscription") or {}).get("id")
-    if not assinatura_id:
-        return {"ok": True, "ignorado": True}
-    empresa = await controle.empresas.find_one({"asaas_assinatura_id": assinatura_id})
-    if not empresa:
-        logger.warning("webhook asaas %s: assinatura %s sem empresa", tipo, assinatura_id)
-        return {"ok": True, "ignorado": True}
-    ass = dict(empresa.get("assinatura") or {})
-    if pagamento.get("id"):
-        await controle.faturas.update_one({"_id": pagamento["id"]}, {"$set": {
-            "_id": pagamento["id"], "empresa_id": empresa["id"], "valor": pagamento.get("value"), "status": pagamento.get("status"),
-            "vencimento": _data(pagamento.get("dueDate")), "pago_em": _data(pagamento.get("confirmedDate") or pagamento.get("paymentDate")),
-            "link": pagamento.get("invoiceUrl"), "atualizado_em": now_utc()}}, upsert=True)
-    if tipo in ("PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"):
-        ass.update(status="ativa", atraso_desde=None, ultimo_pagamento=_data(pagamento.get("confirmedDate") or pagamento.get("paymentDate")))
-    elif tipo == "PAYMENT_OVERDUE":
-        if ass.get("status") != "atrasada":
-            ass["atraso_desde"] = now_utc()
-        ass["status"] = "atrasada"
-    elif tipo in ("PAYMENT_REFUNDED", "PAYMENT_CHARGEBACK_REQUESTED"):
-        ass.update(status="atrasada", atraso_desde=ass.get("atraso_desde") or now_utc())
-    elif tipo in ("SUBSCRIPTION_DELETED", "SUBSCRIPTION_INACTIVATED"):
-        ass.update(status="cancelada", acesso_ate=ass.get("acesso_ate") or ass.get("proximo_vencimento"))
-    else:
-        return {"ok": True}
-    await controle.empresas.update_one({"id": empresa["id"]}, {"$set": {"assinatura": ass, "updated_at": now_utc()}})
-    logger.info("webhook asaas %s: empresa %s agora %s", tipo, empresa.get("slug"), ass.get("status"))
-    return {"ok": True}
+            pass
+    return resultado

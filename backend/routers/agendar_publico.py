@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from lib.agenda_online import agora_local, config, horarios_livres, minutos, validar_data
 from lib.db import controle, db, definir_empresa
 from lib.planos import recurso_liberado
-from models.common import now_utc
+from models.common import now_utc, utc_aware
 
 router = APIRouter(prefix="/publico/agenda", tags=["publico"])
 _SLUG = re.compile(r"^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$")
@@ -147,8 +147,8 @@ async def reservar(slug: str, input: Reserva, request: Request):
     if not profs:
         raise HTTPException(404, "Profissional indisponível")
     segmento = (ctx["empresa"].get("segmento") or "imobiliaria")
-    cliente = await _cliente(None, input.nome, input.telefone, "paciente" if segmento in ("terapia", "odontologia") else "cliente")
-    if input.email and not cliente.get("email"):
+    cliente = await _cliente(None, input.nome, input.telefone, "paciente" if segmento in ("terapia", "odontologia") else "cliente", publico=True)
+    if input.email and not cliente.get("email") and cliente.get("created_at") and (now_utc() - utc_aware(cliente["created_at"])).total_seconds() < 60:
         await db.pessoas.update_one({"id": cliente["id"]}, {"$set": {"email": input.email.strip().lower()}})
     ultimo_erro = None
     for prof in profs:
@@ -157,7 +157,7 @@ async def reservar(slug: str, input: Reserva, request: Request):
         try:
             a = await criar_agendamento(prof=prof, servicos=[servico], dia=dia, inicio=input.inicio, cliente=cliente,
                                         unidade_id=None, observacoes=input.observacao, status="agendado", origem="online",
-                                        criado_por="Agenda online")
+                                        criado_por="Agenda online", cliente_nome=input.nome.strip()[:120])
         except HTTPException as e:
             ultimo_erro = e
             continue

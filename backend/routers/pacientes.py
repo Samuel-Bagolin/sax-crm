@@ -43,9 +43,27 @@ async def _paciente(pid: str) -> dict:
 
 
 async def _atende(principal: Principal, paciente_id: str) -> bool:
+    """Gestor sempre. Profissional só se atende de fato este paciente: precisa estar marcado como
+    quem atende e ter um atendimento confirmado, em andamento ou concluído com ele, ou um agendamento
+    feito por outra pessoa (recepção, gestor ou o próprio paciente pelo link). Um agendamento que o
+    profissional criou para si mesmo e ninguém confirmou não abre o prontuário."""
     if principal.is_admin:
         return True
-    return bool(await db.agendamentos.find_one({"cliente_id": paciente_id, "profissional_id": principal.usuario_id}, {"id": 1}))
+    eu = await db.usuarios.find_one({"id": principal.usuario_id}, {"atende": 1})
+    if not (eu or {}).get("atende"):
+        return False
+    async for a in db.agendamentos.find({"cliente_id": paciente_id, "profissional_id": principal.usuario_id},
+                                        {"status": 1, "criado_por_id": 1}):
+        if a.get("status") in ("confirmado", "em_atendimento", "concluido"):
+            return True
+        if a.get("status") == "agendado" and a.get("criado_por_id") != principal.usuario_id:
+            return True
+    return False
+
+
+async def _exigir_atende(principal: Principal, paciente_id: str) -> None:
+    if not await _atende(principal, paciente_id):
+        raise HTTPException(403, "Só o profissional que atende este paciente ou o gestor faz isso")
 
 
 # ------------------------------------------------------------------ lista e ficha
@@ -121,7 +139,14 @@ async def ficha(paciente_id: str, principal: Principal = Depends(require("pacien
     ag.sort(key=lambda a: (a["data"], a["inicio"]), reverse=True)
     trat = await db.planos_tratamento.find({"paciente_id": paciente_id}).to_list(100)
     trat.sort(key=lambda t: t.get("created_at") or now_utc(), reverse=True)
-    ficha_doc = await db.fichas.find_one({"paciente_id": paciente_id}) or {}
+    from lib.segmentos import COM_PRONTUARIO
+
+    pode = await _atende(principal, paciente_id)
+    # Em clínicas, anamnese, alertas, odontograma e planos de tratamento são dado de saúde: só quem atende.
+    clinico_liberado = pode or principal.segmento not in COM_PRONTUARIO
+    ficha_doc = (await db.fichas.find_one({"paciente_id": paciente_id}) or {}) if clinico_liberado else {}
+    if not clinico_liberado:
+        trat = []
     financeiro = None
     if principal.is_admin:
         tx = await db.transacoes.find({"pessoa_id": paciente_id, "tipo": "receber", "status": {"$ne": "cancelado"}}).to_list(1000)
@@ -142,7 +167,8 @@ async def ficha(paciente_id: str, principal: Principal = Depends(require("pacien
                    "gasto_total": round(sum(float(a.get("valor_cobrado") or 0) for a in concluidos), 2),
                    "primeiro": concluidos[-1]["data"] if concluidos else None, "ultimo": concluidos[0]["data"] if concluidos else None},
         "financeiro": financeiro,
-        "pode_prontuario": await _atende(principal, paciente_id),
+        "pode_prontuario": pode,
+        "dados_clinicos": clinico_liberado,
     }
 
 
@@ -245,6 +271,7 @@ class DenteIn(BaseModel):
 
 @router.put("/{paciente_id}/odontograma/{dente}")
 async def salvar_dente(paciente_id: str, dente: str, input: DenteIn, principal: Principal = Depends(require("tratamento:write"))):
+    await _exigir_atende(principal, paciente_id)
     await _paciente(paciente_id)
     if dente not in DENTES:
         raise HTTPException(422, "Dente inválido (numeração FDI)")
@@ -306,6 +333,7 @@ def _validar_itens(tipo: str, itens: list[ItemTratamento]) -> list[dict]:
 
 @router.post("/{paciente_id}/tratamentos", status_code=201)
 async def criar_tratamento(paciente_id: str, input: TratamentoIn, principal: Principal = Depends(require("tratamento:write"))):
+    await _exigir_atende(principal, paciente_id)
     p = await _paciente(paciente_id)
     itens = _validar_itens(input.tipo, input.itens)
     bruto, total = _totais(itens, input.desconto)
@@ -318,6 +346,7 @@ async def criar_tratamento(paciente_id: str, input: TratamentoIn, principal: Pri
 
 @router.put("/{paciente_id}/tratamentos/{tratamento_id}")
 async def editar_tratamento(paciente_id: str, tratamento_id: str, input: TratamentoIn, principal: Principal = Depends(require("tratamento:write"))):
+    await _exigir_atende(principal, paciente_id)
     t = await db.planos_tratamento.find_one({"id": tratamento_id, "paciente_id": paciente_id})
     if not t:
         raise HTTPException(404, "Plano de tratamento não encontrado")
@@ -348,6 +377,7 @@ class Acao(BaseModel):
 
 @router.post("/{paciente_id}/tratamentos/{tratamento_id}/acao")
 async def acao_tratamento(paciente_id: str, tratamento_id: str, input: Acao, principal: Principal = Depends(require("tratamento:write"))):
+    await _exigir_atende(principal, paciente_id)
     t = await db.planos_tratamento.find_one({"id": tratamento_id, "paciente_id": paciente_id})
     if not t:
         raise HTTPException(404, "Plano de tratamento não encontrado")
@@ -383,32 +413,50 @@ async def acao_tratamento(paciente_id: str, tratamento_id: str, input: Acao, pri
         primeira = t.get("primeira_parcela") or agora_local().date().isoformat()
         from datetime import date
 
-        base = date.fromisoformat(primeira)
-        valores = split_money(t["total"], int(t.get("parcelas") or 1)) if t["total"] > 0 else []
-        for n, v in enumerate(valores):
-            mes = base.month - 1 + n
-            venc = base.replace(year=base.year + mes // 12, month=mes % 12 + 1, day=min(base.day, 28))
-            await db.transacoes.insert_one({
-                "id": new_id(), "descricao": f"{t['titulo']} | {t['paciente_nome']} ({n + 1}/{len(valores)})"[:300], "tipo": "receber",
-                "valor": v, "plano_conta_id": conta["id"], "imovel_id": None, "pessoa_id": paciente_id, "corretor_id": None,
-                "evento_id": None, "contrato_id": None, "tratamento_id": t["id"], "vencimento": venc.isoformat(), "pagamento": None,
-                "status": "pendente", "forma_pagamento": input.forma_pagamento, "vencido": False, "cancelado_em": None, "created_at": now_utc()})
+        try:
+            base = date.fromisoformat(str(primeira)[:10])
+        except ValueError:
+            raise HTTPException(422, "Data da primeira parcela inválida. Edite o plano e use o formato AAAA-MM-DD.")
         dados.update(status="aprovado", aprovado_em=now_utc(), aprovado_por=principal.nome)
+        # Aprova primeiro, com condição no status: dois cliques ao mesmo tempo não geram parcelas em dobro.
+        reservado = await db.planos_tratamento.update_one({"id": tratamento_id, "status": {"$in": ["rascunho", "apresentado"]}}, {"$set": dados})
+        if reservado.modified_count != 1:
+            raise HTTPException(409, "Plano já aprovado")
+        try:
+            valores = split_money(t["total"], int(t.get("parcelas") or 1)) if t["total"] > 0 else []
+            for n, v in enumerate(valores):
+                mes = base.month - 1 + n
+                venc = base.replace(year=base.year + mes // 12, month=mes % 12 + 1, day=min(base.day, 28))
+                await db.transacoes.insert_one({
+                    "id": new_id(), "descricao": f"{t['titulo']} | {t['paciente_nome']} ({n + 1}/{len(valores)})"[:300], "tipo": "receber",
+                    "valor": v, "plano_conta_id": conta["id"], "imovel_id": None, "pessoa_id": paciente_id, "corretor_id": None,
+                    "evento_id": None, "contrato_id": None, "tratamento_id": t["id"], "vencimento": venc.isoformat(), "pagamento": None,
+                    "status": "pendente", "forma_pagamento": input.forma_pagamento, "vencido": False, "cancelado_em": None, "created_at": now_utc()})
+        except Exception:
+            await db.transacoes.delete_many({"tratamento_id": t["id"]})
+            await db.planos_tratamento.update_one({"id": tratamento_id}, {"$set": {"status": t["status"], "aprovado_em": None, "aprovado_por": None}})
+            raise
         if t.get("negocio_id"):
             await db.leads.update_one({"id": t["negocio_id"]}, {"$set": {"status": "ganho", "estagio": "ganho", "closed_at": now_utc(), "updated_at": now_utc()}})
+        return _limpo({**t, **dados})
     else:
         if t["status"] in ("aprovado", "concluido"):
             raise HTTPException(409, "Plano já aprovado. Cancele as parcelas no Financeiro se o paciente desistiu.")
         dados.update(status="recusado", motivo_recusa=input.motivo)
+        r = await db.planos_tratamento.update_one({"id": tratamento_id, "status": {"$in": ["rascunho", "apresentado", "recusado"]}}, {"$set": dados})
+        if r.modified_count != 1:
+            raise HTTPException(409, "Plano já aprovado. Cancele as parcelas no Financeiro se o paciente desistiu.")
         if t.get("negocio_id"):
             await db.leads.update_one({"id": t["negocio_id"]}, {"$set": {"status": "perdido", "estagio": "perdido", "motivo_perda": input.motivo or "Sem motivo",
                                                                          "closed_at": now_utc(), "updated_at": now_utc()}})
-    await db.planos_tratamento.update_one({"id": tratamento_id}, {"$set": dados})
+    if input.acao == "apresentar":
+        await db.planos_tratamento.update_one({"id": tratamento_id, "status": {"$in": ["rascunho", "apresentado"]}}, {"$set": dados})
     return _limpo({**t, **dados})
 
 
 @router.post("/{paciente_id}/tratamentos/{tratamento_id}/itens/{item_id}/realizar")
 async def realizar_item(paciente_id: str, tratamento_id: str, item_id: str, principal: Principal = Depends(require("tratamento:write"))):
+    await _exigir_atende(principal, paciente_id)
     t = await db.planos_tratamento.find_one({"id": tratamento_id, "paciente_id": paciente_id})
     if not t:
         raise HTTPException(404, "Plano de tratamento não encontrado")
@@ -433,6 +481,7 @@ async def realizar_item(paciente_id: str, tratamento_id: str, item_id: str, prin
 
 @router.delete("/{paciente_id}/tratamentos/{tratamento_id}", status_code=204)
 async def excluir_tratamento(paciente_id: str, tratamento_id: str, principal: Principal = Depends(require("tratamento:write"))):
+    await _exigir_atende(principal, paciente_id)
     t = await db.planos_tratamento.find_one({"id": tratamento_id, "paciente_id": paciente_id})
     if not t:
         raise HTTPException(404, "Plano de tratamento não encontrado")

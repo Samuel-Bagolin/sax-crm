@@ -159,8 +159,11 @@ ROTULOS_AMBIENTE = {
 
 
 def to_empresa(doc: dict) -> Empresa:
+    from lib.assinatura import resumo_publico
+
     data = dict(doc)
     data.pop("_id", None)
+    data["assinatura"] = resumo_publico(data.get("assinatura"))  # sem ids do gateway nem token do cartão
     data["created_at"] = utc_aware(data.get("created_at"))
     data["updated_at"] = utc_aware(data.get("updated_at"))
     return Empresa(**data)

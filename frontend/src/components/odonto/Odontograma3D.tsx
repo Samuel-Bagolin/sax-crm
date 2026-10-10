@@ -7,26 +7,8 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
    pré-molar e molar), posicionados ao longo de uma arcada elíptica, com gengiva. Clique em um
    dente para selecionar; arraste para girar. A cor mostra a situação do dente. */
 
-export type EstadoDente = "higido" | "carie" | "restaurado" | "ausente" | "implante" | "canal" | "coroa" | "extracao" | "fratura" | "selante" | "protese";
-
-export const ESTADOS_DENTE: Record<EstadoDente, { rotulo: string; cor: string }> = {
-  higido: { rotulo: "Hígido", cor: "#f3eee2" },
-  carie: { rotulo: "Cárie", cor: "#d1453b" },
-  restaurado: { rotulo: "Restaurado", cor: "#3b82f6" },
-  canal: { rotulo: "Canal", cor: "#8b5cf6" },
-  coroa: { rotulo: "Coroa", cor: "#d4a017" },
-  implante: { rotulo: "Implante", cor: "#94a3b8" },
-  protese: { rotulo: "Prótese", cor: "#14b8a6" },
-  selante: { rotulo: "Selante", cor: "#22c55e" },
-  fratura: { rotulo: "Fratura", cor: "#f97316" },
-  extracao: { rotulo: "Extração indicada", cor: "#7f1d1d" },
-  ausente: { rotulo: "Ausente", cor: "#cbd5e1" },
-};
-
-export const QUADRANTES = {
-  sup: [[18, 17, 16, 15, 14, 13, 12, 11], [21, 22, 23, 24, 25, 26, 27, 28]],
-  inf: [[48, 47, 46, 45, 44, 43, 42, 41], [31, 32, 33, 34, 35, 36, 37, 38]],
-};
+import { ESTADOS_DENTE, QUADRANTES, type EstadoDente } from "./odontoDados";
+export { ESTADOS_DENTE, QUADRANTES, type EstadoDente };
 
 type Tipo = "incisivo" | "lateral" | "canino" | "premolar" | "molar";
 function tipo(n: number): Tipo {
@@ -120,7 +102,7 @@ export default function Odontograma3D({
     const el = caixa.current!;
     const cena = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(36, el.clientWidth / el.clientHeight, 0.1, 100);
-    camera.position.set(0, 2.2, 9.5);
+    camera.position.set(0, 0.6, 10.5);
     const render = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     render.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     render.setSize(el.clientWidth, el.clientHeight);
@@ -136,7 +118,7 @@ export default function Odontograma3D({
     cena.add(contra);
 
     const grupo = new THREE.Group();
-    grupo.position.z = 1.6;
+    grupo.position.z = 1.2;
     cena.add(grupo);
 
     const gengiva = new THREE.MeshPhysicalMaterial({ color: 0xe2899a, roughness: 0.55, clearcoat: 0.3 });
@@ -149,13 +131,21 @@ export default function Odontograma3D({
       const b = sup ? 3.2 : 2.95;
       const pts = pontosArcada(a, b);
       const y = sup ? 0.62 : -0.62;
+      // Boca aberta: cada arcada gira na dobradiça de trás, mostrando as faces oclusais.
+      const dobradica = new THREE.Group();
+      dobradica.position.set(0, sup ? 0.2 : -0.2, -3.0);
+      dobradica.rotation.x = sup ? -0.55 : 0.55;
+      const arco = new THREE.Group();
+      arco.position.z = 3.0;
+      dobradica.add(arco);
+      grupo.add(dobradica);
       // gengiva: tubo ao longo da arcada inteira
       const curva = new THREE.CatmullRomCurve3(
         [...pts].reverse().map((p) => new THREE.Vector3(-p.x, y + (sup ? 0.55 : -0.55), p.z)).concat(pts.slice(1).map((p) => new THREE.Vector3(p.x, y + (sup ? 0.55 : -0.55), p.z))),
       );
       const tubo = new THREE.Mesh(new THREE.TubeGeometry(curva, 160, 0.42, 16, false), gengiva);
       tubo.scale.set(1, 1.1, 1);
-      grupo.add(tubo);
+      arco.add(tubo);
 
       QUADRANTES[arcada].forEach((lado, li) => {
         const sinal = li === 0 ? -1 : 1; // quadrantes 1 e 4 aparecem à esquerda de quem olha
@@ -179,7 +169,7 @@ export default function Odontograma3D({
           anel.position.y = 0.5;
           pivo.add(coroa, raiz, anel);
           coroa.userData.dente = String(n);
-          grupo.add(pivo);
+          arco.add(pivo);
           malhas.current.set(String(n), { coroa, raiz, anel });
         });
       });
@@ -192,7 +182,7 @@ export default function Odontograma3D({
     controles.maxDistance = 13;
     controles.minPolarAngle = Math.PI * 0.18;
     controles.maxPolarAngle = Math.PI * 0.82;
-    controles.target.set(0, 0, 0);
+    controles.target.set(0, 0, -0.6);
 
     const ray = new THREE.Raycaster();
     const ponteiro = new THREE.Vector2();

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -32,6 +32,8 @@ import { StatusImovelBadge } from "@/components/shared/badges";
 import { cn } from "@/lib/utils";
 import MeuDia from "@/components/crm/MeuDia";
 import FunilTrapezios from "@/components/crm/FunilTrapezios";
+import { useSegmento } from "@/lib/segmento";
+import { PainelAtendimento, PainelVeiculos } from "@/components/dashboard/PaineisSegmento";
 import type { Relatorio } from "@/lib/relatorio";
 import { isoLocal } from "@/lib/crm";
 
@@ -69,6 +71,18 @@ function StatCard({
 }
 
 export default function Dashboard() {
+  const seg = useSegmento();
+  const { principal } = useAuth();
+  // Só escolhe o painel depois de saber o segmento da empresa: evita chamar rotas de outro segmento.
+  if (!principal) return <div className="h-40 animate-pulse rounded-xl bg-muted" />;
+  // Administrador de sistema fora de uma empresa não tem dados operacionais: vai direto para Empresas.
+  if (principal.papel === "sysadmin" && !principal.empresa_id) return <Navigate to="/empresas" replace />;
+  if (seg.servicos) return <PainelAtendimento />;
+  if (seg.veiculos) return <PainelVeiculos />;
+  return <DashboardImobiliaria />;
+}
+
+function DashboardImobiliaria() {
   const { isAdmin } = useAuth();
   const imoveisQ = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<Imovel[]>("/imoveis") });
   const leadsQ = useQuery({ queryKey: ["leads"], queryFn: () => apiGet<Lead[]>("/leads") });

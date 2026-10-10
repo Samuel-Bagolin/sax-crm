@@ -18,7 +18,7 @@ from typing import List, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from lib.auth import Principal, require
+from lib.auth import Principal, require, require_module
 from lib.db import controle, db, definir_empresa, empresa_atual_db
 from lib.planos import exigir_recurso, recurso_liberado
 from models.common import now_utc
@@ -216,6 +216,12 @@ def limpar_cache() -> None:
     _CACHE.clear()
 
 
+async def _acesso_site(principal: Principal = Depends(require("unidade:read"))) -> Principal:
+    """Quem usa o CRM pode ver o painel do site, desde que o módulo do estoque do segmento esteja ativo."""
+    await require_module(principal, "veiculo:read" if principal.segmento == "veiculos" else "imovel:read")
+    return principal
+
+
 def _exigir_editor(principal: Principal) -> None:
     if not principal.pode_site:
         raise HTTPException(403, "Só o gestor ou quem ele liberou pode alterar o site")
@@ -225,7 +231,7 @@ def _exigir_editor(principal: Principal) -> None:
 
 
 @router.get("", response_model=PainelSite)
-async def painel(principal: Principal = Depends(require("unidade:read"))):
+async def painel(principal: Principal = Depends(_acesso_site)):
     config, configurado = await carregar_config()
     met = await _metricas()
     return PainelSite(
@@ -238,7 +244,7 @@ async def painel(principal: Principal = Depends(require("unidade:read"))):
 
 
 @router.put("", response_model=PainelSite)
-async def salvar(input: SiteConfigInput, principal: Principal = Depends(require("unidade:read"))):
+async def salvar(input: SiteConfigInput, principal: Principal = Depends(_acesso_site)):
     _exigir_editor(principal)
     await exigir_recurso("site")
     slug = input.slug.strip().lower()
@@ -268,7 +274,7 @@ async def salvar(input: SiteConfigInput, principal: Principal = Depends(require(
 
 
 @router.put("/midia/{tipo}", response_model=PainelSite)
-async def enviar_midia(tipo: Literal["logo", "capa"], input: MidiaInput, principal: Principal = Depends(require("unidade:read"))):
+async def enviar_midia(tipo: Literal["logo", "capa"], input: MidiaInput, principal: Principal = Depends(_acesso_site)):
     _exigir_editor(principal)
     await exigir_recurso("site")
     try:
@@ -291,7 +297,7 @@ async def enviar_midia(tipo: Literal["logo", "capa"], input: MidiaInput, princip
 
 
 @router.delete("/midia/{tipo}", response_model=PainelSite)
-async def remover_midia(tipo: Literal["logo", "capa"], principal: Principal = Depends(require("unidade:read"))):
+async def remover_midia(tipo: Literal["logo", "capa"], principal: Principal = Depends(_acesso_site)):
     _exigir_editor(principal)
     await db.site_midia.delete_one({"id": tipo})
     await db.site_imobiliaria.update_one({"id": DOC_ID}, {"$set": {f"tem_{tipo}": False}, "$inc": {"midia_v": 1}})
@@ -300,7 +306,7 @@ async def remover_midia(tipo: Literal["logo", "capa"], principal: Principal = De
 
 
 @router.get("/imoveis", response_model=List[ImovelNoSite])
-async def imoveis(principal: Principal = Depends(require("unidade:read"))):
+async def imoveis(principal: Principal = Depends(_acesso_site)):
     met = await _metricas()
     campos = {k: 1 for k in ImovelNoSite.model_fields if k not in ("visualizacoes", "cliques_whatsapp", "contatos")}
     saida = []
@@ -322,7 +328,7 @@ async def imoveis(principal: Principal = Depends(require("unidade:read"))):
 
 
 @router.put("/imoveis", status_code=204)
-async def alterar_imoveis(input: AlterarImoveis, principal: Principal = Depends(require("unidade:read"))):
+async def alterar_imoveis(input: AlterarImoveis, principal: Principal = Depends(_acesso_site)):
     _exigir_editor(principal)
     dados: dict = {}
     if input.site_status is not None:

@@ -3,10 +3,13 @@ import { Link } from "react-router-dom";
 import { BellRing, CalendarCheck } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import type { AvisoVisitas } from "@/lib/types";
+import { useConfig } from "@/lib/useConfig";
 
 /** Aviso no topo do sistema: visitas de amanhã (o alerta do dia anterior) e de hoje. */
 export default function AvisoVisitasBanner() {
+  const { moduloAtivo } = useConfig();
   const { data } = useQuery({
+    enabled: moduloAtivo("agenda"),
     queryKey: ["aviso-visitas"],
     queryFn: () => apiGet<AvisoVisitas>("/visitas/aviso"),
     refetchInterval: 5 * 60 * 1000,

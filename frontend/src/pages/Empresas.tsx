@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCatalogoPlanos } from "@/lib/diferenciais";
 import { CatalogoComercial, ComercialDialog } from "@/components/empresas/Comercial";
+import { ConfigPagamentos, PainelSegmentos } from "@/components/empresas/Plataforma";
 import { cn } from "@/lib/utils";
 
 function Uso({ rotulo, uso, limite }: { rotulo: string; uso: number; limite: number | null }) {
@@ -47,10 +48,12 @@ export default function Empresas() {
   const [modal, setModal] = useState(false);
   const [usoAberto, setUsoAberto] = useState<string | null>(null);
   const [comercial, setComercial] = useState<EmpresaResumo | null>(null);
-  const [aba, setAba] = useState<"empresas" | "planos">("empresas");
+  const [aba, setAba] = useState<"painel" | "empresas" | "planos" | "pagamentos">("painel");
+  const [filtroSeg, setFiltroSeg] = useState<string>("");
   const [linkAtivacao, setLinkAtivacao] = useState<{ empresa: string; email: string; link: string; enviado: boolean } | null>(null);
   const { data: catalogo } = useCatalogoPlanos();
   const [form, setForm] = useState({
+    segmento: "imobiliaria",
     plano: "profissional",
     nome: "",
     slug: "",
@@ -80,13 +83,14 @@ export default function Empresas() {
         admin_email: form.admin_email.trim(),
         admin_senha: form.admin_senha.trim() || null,
         plano: form.plano,
+        segmento: form.segmento,
         enviar_convite: true,
       }),
     onSuccess: (e) => {
       qc.invalidateQueries({ queryKey: ["empresas"] });
       qc.invalidateQueries({ queryKey: ["uso-empresas"] });
       setModal(false);
-      setForm({ plano: "profissional", nome: "", slug: "", cnpj: "", admin_nome: "", admin_email: "", admin_senha: "" });
+      setForm({ segmento: "imobiliaria", plano: "profissional", nome: "", slug: "", cnpj: "", admin_nome: "", admin_email: "", admin_senha: "" });
       toast.success(`Empresa ${e.nome} criada`, {
         description: e.convite_enviado ? `Link de ativação enviado para ${form.admin_email}` : undefined,
       });
@@ -200,8 +204,10 @@ export default function Empresas() {
 
       <div className="flex w-fit rounded-lg bg-muted p-1" role="tablist" aria-label="Seções">
         {([
+          ["painel", "Painel por segmento"],
           ["empresas", "Empresas"],
           ["planos", "Planos e adicionais"],
+          ["pagamentos", "Pagamentos"],
         ] as const).map(([v, r]) => (
           <button key={v} role="tab" aria-selected={aba === v} onClick={() => setAba(v)} className={cn("rounded-md px-4 py-1.5 text-sm font-medium", aba === v ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")} data-testid={`aba-${v}`}>
             {r}
@@ -209,7 +215,11 @@ export default function Empresas() {
         ))}
       </div>
 
-      {aba === "planos" ? (
+      {aba === "painel" ? (
+        <PainelSegmentos onFiltrar={(sg) => { setFiltroSeg(sg); setAba("empresas"); }} />
+      ) : aba === "pagamentos" ? (
+        <ConfigPagamentos />
+      ) : aba === "planos" ? (
         <CatalogoComercial />
       ) : (
       <>
@@ -238,8 +248,17 @@ export default function Empresas() {
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-sm text-muted-foreground">Segmento:</span>
+        {[["", "Todos"], ...(catalogo?.segmentos ?? []).map((sg) => [sg.chave, sg.nome])].map(([k, n]) => (
+          <button key={k} type="button" onClick={() => setFiltroSeg(k)} className={cn("rounded-full border px-3 py-1 text-xs", filtroSeg === k ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")}>
+            {n} ({k ? empresas.filter((e) => (e.segmento ?? "imobiliaria") === k).length : empresas.length})
+          </button>
+        ))}
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {empresas.map((e) => (
+        {empresas.filter((e) => !filtroSeg || (e.segmento ?? "imobiliaria") === filtroSeg).map((e) => (
           <Card
             key={e.id}
             className="transition-shadow duration-200 hover:shadow-md"
@@ -247,9 +266,18 @@ export default function Empresas() {
           >
             <CardHeader className="pb-3">
               <CardTitle className="flex items-start justify-between gap-2 text-base">
-                <span className="flex items-center gap-2">
-                  <Building className="h-4 w-4 text-primary" />
-                  {e.nome}
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="flex items-center gap-2">
+                    <Building className="h-4 w-4 shrink-0 text-primary" />
+                    {e.nome}
+                  </span>
+                  <span className="flex flex-wrap gap-1 text-[11px] font-normal">
+                    <span className="rounded bg-accent px-1.5 py-0.5 text-accent-foreground">{e.segmento_nome ?? "Imobiliária"}</span>
+                    {e.assinatura?.demo && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-900 dark:bg-violet-950 dark:text-violet-200">Demonstração</span>}
+                    {e.assinatura?.status === "atrasada" && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900">Em atraso</span>}
+                    {e.assinatura?.status === "cancelada" && <span className="rounded bg-muted px-1.5 py-0.5">Cancelada</span>}
+                    {e.origem === "cadastro" && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">Autoatendimento</span>}
+                  </span>
                 </span>
                 <Badge variant={e.ativo ? "default" : "secondary"}>
                   {e.ativo ? "Ativa" : "Inativa"}
@@ -479,9 +507,20 @@ export default function Empresas() {
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
+              <span className="text-sm font-medium">Segmento</span>
+              <div className="flex flex-wrap gap-1.5">
+                {(catalogo?.segmentos ?? []).map((sg) => (
+                  <button key={sg.chave} type="button" onClick={() => {
+                    const primeiro = catalogo?.planos.find((p) => (p.segmento ?? "imobiliaria") === sg.chave && p.ativo !== false);
+                    setForm((f) => ({ ...f, segmento: sg.chave, plano: primeiro?.chave ?? f.plano }));
+                  }} className={cn("rounded-full border px-3 py-1 text-sm", form.segmento === sg.chave ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")} data-testid={`empresa-seg-${sg.chave}`}>
+                    {sg.nome}
+                  </button>
+                ))}
+              </div>
               <span className="text-sm font-medium">Plano</span>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {catalogo?.planos.map((p) => (
+                {catalogo?.planos.filter((p) => (p.segmento ?? "imobiliaria") === form.segmento && p.ativo !== false).map((p) => (
                   <button
                     key={p.chave}
                     type="button"
@@ -495,7 +534,7 @@ export default function Empresas() {
                       {p.preco ? <span className="text-xs font-normal text-muted-foreground">/mês</span> : null}
                     </p>
                     <p className="text-[11px] leading-snug text-muted-foreground [overflow-wrap:anywhere]">
-                      {p.usuarios ? `${p.usuarios} usuário${p.usuarios > 1 ? "s" : ""}` : "Usuários ilimitados"}, {p.imoveis ? `${p.imoveis} imóveis` : "imóveis ilimitados"}
+                      {p.usuarios ? `${p.usuarios} usuário${p.usuarios > 1 ? "s" : ""}` : "Usuários ilimitados"}, {p.imoveis ? `${p.imoveis} no estoque` : "estoque sem limite"}
                     </p>
                   </button>
                 ))}

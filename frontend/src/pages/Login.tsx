@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { Link as LinkRR } from "react-router-dom";
 import { toast } from "sonner";
 import { Loader2, LogIn } from "lucide-react";
 import MarcaSax from "@/components/shared/MarcaSax";
@@ -147,6 +148,7 @@ export default function Login() {
               try { await apiPost("/auth/recuperar", { email: email.trim() }); toast.success("Se o acesso estiver ativo, você receberá um link por e-mail."); }
               catch (e) { toast.error(detalheErro(e) ?? "Não foi possível solicitar recuperação."); }
             }}>Esqueci minha senha / ativar acesso</Button>
+            <p className="mt-3 text-center text-sm text-muted-foreground">Ainda não tem conta? <LinkRR to="/cadastro" className="font-semibold text-primary hover:underline" data-testid="link-cadastro">Criar conta</LinkRR></p>
           </form>
 
 

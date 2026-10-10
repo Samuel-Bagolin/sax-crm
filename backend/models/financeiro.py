@@ -47,6 +47,10 @@ class TransacaoFinanceira(BaseModel):
     evento_id: str | None = None
     cancelado_em: datetime | None = None
     contrato_id: str | None = None  # parcela gerada por um contrato
+    agendamento_id: str | None = None  # receita/comissão de um atendimento concluído
+    tratamento_id: str | None = None  # parcela de um plano de tratamento aprovado
+    veiculo_id: str | None = None  # venda de veículo
+    forma_pagamento: str | None = None
     vencimento: ISODate  # YYYY-MM-DD
     pagamento: ISODate | None = None  # YYYY-MM-DD quando realizado
     status: Literal["pendente", "pago", "cancelado"] = "pendente"  # pendente | pago

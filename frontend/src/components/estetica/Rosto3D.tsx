@@ -118,7 +118,7 @@ export default function Rosto3D({
     const el = caixa.current!;
     const cena = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(30, el.clientWidth / el.clientHeight, 0.1, 50);
-    camera.position.set(0, 0.05, 6.2);
+    camera.position.set(1.6, 0.25, 5.95); // de leve três quartos: mostra que é 3D
     const render = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     render.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     render.setSize(el.clientWidth, el.clientHeight);

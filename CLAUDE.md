@@ -1,7 +1,8 @@
 # SAX CRM
 
-CRM para imobiliárias (estilo Pipedrive), vendido como SaaS: cada imobiliária é uma empresa com
-banco de dados próprio. Produção no Vercel, banco no Firebase Firestore.
+CRM vertical vendido como SaaS (SAX CRM): cada cliente é uma empresa com banco de dados próprio e um
+segmento (imobiliária, loja de veículos, barbearia, clínica terapêutica, odontologia, estética).
+Produção no Vercel, banco no Firebase Firestore, cobrança recorrente no Asaas.
 
 Este arquivo é lido pelo Claude Code de qualquer pessoa do time ao abrir o projeto. Mantenha curto,
 verdadeiro e atualizado: quando uma regra mudar, mude aqui no mesmo pull request.
@@ -36,7 +37,7 @@ CRM_ADMIN=admin@imobierp.com CRM_ADMIN_SENHA=admin123 \
 CRM_CORRETOR=rafael@imobierp.com CRM_CORRETOR_SENHA=corretor123 \
 CRM_SYSADMIN=root@cedronexxo.com CRM_SYSADMIN_SENHA=root12345 \
 python -m pytest ../tests -q                                  # tudo, com o dev_local no ar na 8001
-cd ../frontend && node_modules/.bin/tsc --noEmit -p . && yarn build
+cd ../frontend && node_modules/.bin/tsc -b && yarn build
 ```
 
 Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
@@ -60,7 +61,19 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    Agregações (`aggregate`) não existem no adaptador: calcule em Python.
 5. **Dinheiro e datas.** Valores em reais com 2 casas: use `percentage` e `split_money` de `lib/integrity.py` (nunca float solto em
    parcelas). Datas de vencimento são texto `AAAA-MM-DD`.
-6. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
+6. **Segmento.** O segmento vem da empresa (`lib/segmentos.py`, `principal.segmento`). Ele define
+   módulos, termos da tela, funis, plano de contas e planos. Na tela use `useSegmento()`. Plano de um
+   segmento não vale para outro. Rotas de agenda: `routers/atendimentos.py` e `agendar_publico.py`
+   (travas em `agenda_travas`, nunca grave agendamento sem `travar`). Prontuário só para quem atende
+   o paciente (`_atende` em `routers/pacientes.py`) e todo acesso fica registrado.
+7. **Dinheiro lançado uma vez só.** Concluir atendimento, aprovar tratamento e vender veículo mudam o
+   status com `update_one` condicional e só lançam no Financeiro se `modified_count == 1`.
+8. **Cartão e Asaas.** Número e CVV só passam pela memória a caminho do Asaas (`lib/asaas.py`): nunca
+   gravar, logar ou devolver em erro. Guardamos final, bandeira e token. A chave do Asaas fica na tela
+   Empresas > Pagamentos ou em `ASAAS_API_KEY`. O webhook (`/api/webhooks/asaas`) confere o token,
+   é idempotente pelo id do evento e grava só campos `assinatura.*`. O cartão de demonstração
+   (gerado em Empresas > Pagamentos) cria conta paga sem cobrança, só para o dono da plataforma testar.
+9. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
    `FIREBASE_SERVICE_ACCOUNT`; o resto é gerado e guardado no banco (`lib/autoconfig.py`).
 
 ## Texto da interface

@@ -6,6 +6,7 @@ fica em routers/agendar_publico.py e usa as mesmas regras (lib/agenda_online.py)
 
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import date, timedelta
 from typing import List, Literal
@@ -20,6 +21,7 @@ from lib.db import controle, db, empresa_atual_db
 from models.common import new_id, now_utc
 
 router = APIRouter(prefix="/atendimentos", tags=["atendimentos"])
+logger = logging.getLogger(__name__)
 
 Status = Literal["agendado", "confirmado", "em_atendimento", "concluido", "faltou", "cancelado"]
 
@@ -243,8 +245,18 @@ async def _servicos(ids: list[str]) -> list[dict]:
     return [por_id[i] for i in ids]
 
 
-async def _cliente(cliente_id: str | None, nome: str | None, telefone: str | None, papel: str = "cliente") -> dict:
-    """Usa o cadastro existente; sem ele, procura pelo telefone e por fim cria."""
+def _primeiro_nome(n: str | None) -> str:
+    import unicodedata
+
+    t = unicodedata.normalize("NFKD", (n or "").strip().split(" ")[0]).encode("ascii", "ignore").decode().lower()
+    return t
+
+
+async def _cliente(cliente_id: str | None, nome: str | None, telefone: str | None, papel: str = "cliente", publico: bool = False) -> dict:
+    """Usa o cadastro existente; sem ele, procura pelo telefone e por fim cria.
+
+    No link público o telefone sozinho não basta: alguém poderia digitar o número de outra pessoa
+    e ver ou mexer no cadastro dela. Lá o cadastro só é reaproveitado se o primeiro nome também bater."""
     from lib.assinatura import so_digitos
     from models.pessoas import Pessoa
 
@@ -258,7 +270,8 @@ async def _cliente(cliente_id: str | None, nome: str | None, telefone: str | Non
     tel = so_digitos(telefone)
     if tel:
         async for p in db.pessoas.find({"telefone_digitos": tel}):
-            return p
+            if not publico or _primeiro_nome(p.get("nome")) == _primeiro_nome(nome):
+                return p
     p = Pessoa(nome=nome.strip(), papeis=[papel], telefone=(telefone or "").strip() or None).model_dump()
     p["telefone_digitos"] = tel or None
     await db.pessoas.insert_one(p)
@@ -271,7 +284,8 @@ def _saida(a: dict) -> dict:
 
 
 async def criar_agendamento(*, prof: dict, servicos: list[dict], dia: date, inicio: str, cliente: dict, unidade_id: str | None,
-                            observacoes: str | None, status: str, origem: str, criado_por: str, encaixe: bool = False) -> dict:
+                            observacoes: str | None, status: str, origem: str, criado_por: str, encaixe: bool = False,
+                            criado_por_id: str | None = None, cliente_nome: str | None = None) -> dict:
     cfg = await config()
     duracao = sum(int(s["duracao_min"]) for s in servicos)
     ini = minutos(validar_hora(inicio))
@@ -291,9 +305,10 @@ async def criar_agendamento(*, prof: dict, servicos: list[dict], dia: date, inic
     a = {
         "id": new_id(), "profissional_id": prof["id"], "profissional_nome": prof["nome"], "unidade_id": unidade_id,
         "servico_ids": [s["id"] for s in servicos], "servicos": [{"id": s["id"], "nome": s["nome"], "preco": s["preco"], "duracao_min": s["duracao_min"]} for s in servicos],
-        "cliente_id": cliente["id"], "cliente_nome": cliente["nome"], "cliente_telefone": cliente.get("telefone"),
+        "cliente_id": cliente["id"], "cliente_nome": cliente_nome or cliente["nome"], "cliente_telefone": cliente.get("telefone"),
         "data": dia.isoformat(), "inicio": hhmm(ini), "fim": hhmm(fim), "status": status, "valor": round(sum(float(s["preco"]) for s in servicos), 2),
         "origem": origem, "observacoes": observacoes, "token_cliente": secrets.token_urlsafe(18), "criado_por": criado_por,
+        "criado_por_id": criado_por_id,
         "created_at": now_utc(), "updated_at": now_utc(),
     }
     await travar(prof["id"], a["data"], ini, fim, a["id"])
@@ -350,7 +365,8 @@ async def criar(input: AgendamentoIn, principal: Principal = Depends(require("ag
         try:
             criados.append(await criar_agendamento(prof=prof, servicos=servicos, dia=dia, inicio=input.inicio, cliente=cliente,
                                                    unidade_id=input.unidade_id, observacoes=input.observacoes, status=input.status,
-                                                   origem="manual", criado_por=principal.nome, encaixe=input.encaixe))
+                                                   origem="manual", criado_por=principal.nome, encaixe=input.encaixe,
+                                                   criado_por_id=principal.usuario_id))
         except HTTPException as e:
             if k == 0:
                 raise
@@ -383,24 +399,40 @@ async def atualizar(agendamento_id: str, input: AgendamentoUpdate, principal: Pr
             livres = await horarios_livres(prof, dia, duracao, {**cfg, "antecedencia_min": -10**7, "intervalo_min": 5}, ignorar=a["id"])
             if inicio not in livres:
                 raise HTTPException(409, "Horário indisponível para este profissional")
-        novo = {**a, "profissional_id": prof["id"], "profissional_nome": prof["nome"], "data": dia.isoformat(),
-                "inicio": inicio, "fim": hhmm(minutos(inicio) + duracao)}
-        await destravar(a)
-        try:
-            await travar(novo["profissional_id"], novo["data"], minutos(novo["inicio"]), minutos(novo["fim"]), a["id"])
-        except HTTPException:
-            await travar(a["profissional_id"], a["data"], minutos(a["inicio"]), minutos(a["fim"]), a["id"])
-            raise
-        dados.update({k: novo[k] for k in ("profissional_id", "profissional_nome", "data", "inicio", "fim")})
+        dados.update({"profissional_id": prof["id"], "profissional_nome": prof["nome"], "data": dia.isoformat(),
+                      "inicio": inicio, "fim": hhmm(minutos(inicio) + duracao)})
     if input.status:
         dados["status"] = input.status
-        if input.status in ("cancelado", "faltou") and a["status"] in ATIVOS:
-            await destravar({**a, **dados})
-        elif input.status in ATIVOS and a["status"] not in ATIVOS:
-            alvo = {**a, **dados}
-            await travar(alvo["profissional_id"], alvo["data"], minutos(alvo["inicio"]), minutos(alvo["fim"]), a["id"])
-    await db.agendamentos.update_one({"id": agendamento_id}, {"$set": dados})
-    return _saida({**a, **dados})
+    # Travas: decide pelo estado final (horário e status juntos) e grava uma única vez.
+    final = {**a, **dados}
+    estava_ativo, fica_ativo = a["status"] in ATIVOS, final["status"] in ATIVOS
+    mexe_trava = (estava_ativo != fica_ativo) or (fica_ativo and mudou_horario)
+    if mexe_trava:
+        if estava_ativo:
+            await destravar(a)
+        if fica_ativo:
+            try:
+                await travar(final["profissional_id"], final["data"], minutos(final["inicio"]), minutos(final["fim"]), a["id"])
+            except HTTPException:
+                if estava_ativo:
+                    try:
+                        await travar(a["profissional_id"], a["data"], minutos(a["inicio"]), minutos(a["fim"]), a["id"])
+                    except HTTPException:
+                        logger.warning("agendamento %s: não foi possível restaurar a trava original", a["id"])
+                raise
+    try:
+        await db.agendamentos.update_one({"id": agendamento_id}, {"$set": dados})
+    except Exception:
+        if mexe_trava:
+            if fica_ativo:
+                await destravar(final)
+            if estava_ativo:
+                try:
+                    await travar(a["profissional_id"], a["data"], minutos(a["inicio"]), minutos(a["fim"]), a["id"])
+                except HTTPException:
+                    pass
+        raise
+    return _saida(final)
 
 
 @router.post("/{agendamento_id}/concluir")
@@ -413,6 +445,25 @@ async def concluir(agendamento_id: str, input: Conclusao, principal: Principal =
         raise HTTPException(409, "Atendimento já concluído")
     if a["status"] in ("cancelado", "faltou"):
         raise HTTPException(409, "Reative o agendamento antes de concluir")
+    if not principal.is_admin and a["profissional_id"] != principal.usuario_id:
+        raise HTTPException(403, "Só o profissional do atendimento ou o gestor pode concluir")
+    # Reserva a conclusão antes de lançar no caixa: dois cliques ao mesmo tempo não lançam a receita duas vezes.
+    reservado = await db.agendamentos.update_one(
+        {"id": a["id"], "status": {"$in": ["agendado", "confirmado", "em_atendimento"]}},
+        {"$set": {"status": "concluido", "concluido_em": now_utc(), "concluido_por": principal.nome, "updated_at": now_utc()}})
+    if reservado.modified_count != 1:
+        raise HTTPException(409, "Atendimento já concluído")
+    try:
+        return await _lancar_conclusao(a, input, principal)
+    except Exception:
+        # Desfaz: tira o que foi lançado no caixa e devolve o status, para a pessoa poder tentar de novo.
+        await db.transacoes.delete_many({"agendamento_id": a["id"]})
+        await db.agendamentos.update_one({"id": a["id"]}, {"$set": {"status": a["status"], "concluido_em": None, "concluido_por": None,
+                                                                    "updated_at": now_utc()}})
+        raise
+
+
+async def _lancar_conclusao(a: dict, input: Conclusao, principal: Principal) -> dict:
     hoje = agora_local().date().isoformat()
     transacao_id = None
     if input.valor > 0:
@@ -445,7 +496,10 @@ async def concluir(agendamento_id: str, input: Conclusao, principal: Principal =
     if input.observacoes:
         dados["observacoes"] = input.observacoes
     await db.agendamentos.update_one({"id": a["id"]}, {"$set": dados})
-    await db.pessoas.update_one({"id": a["cliente_id"]}, {"$set": {"ultimo_atendimento": a["data"]}})
+    try:  # informativo: não desfaz a conclusão se falhar
+        await db.pessoas.update_one({"id": a["cliente_id"]}, {"$set": {"ultimo_atendimento": a["data"]}})
+    except Exception:
+        logger.warning("agendamento %s: não atualizou o último atendimento do cliente", a["id"])
     return _saida({**a, **dados})
 
 

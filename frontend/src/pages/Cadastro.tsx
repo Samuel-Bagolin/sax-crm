@@ -312,7 +312,7 @@ export default function Cadastro() {
                 <Campo rotulo="Número do cartão" cheio>
                   <div className="relative">
                     <CreditCard className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8b80a3]" />
-                    <input className="campo-cad pl-9" inputMode="numeric" autoComplete="cc-number" value={c.numero} onChange={(e) => setC({ ...c, numero: mascaraCartao(e.target.value) })} data-testid="cad-cartao" />
+                    <input className="campo-cad" style={{ paddingLeft: 36 }} inputMode="numeric" autoComplete="cc-number" value={c.numero} onChange={(e) => setC({ ...c, numero: mascaraCartao(e.target.value) })} data-testid="cad-cartao" />
                     {bandeira(c.numero) && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#6b5f86]">{bandeira(c.numero)}</span>}
                   </div>
                 </Campo>

@@ -20,6 +20,8 @@ export interface PlanoAtual {
   modulos: string[];
   recursos: Recurso[];
   resumo: string;
+  segmento?: string | null;
+  unidades?: number | null;
   uso_usuarios: number;
   uso_imoveis: number;
 }
@@ -46,6 +48,7 @@ export interface CatalogoPlanos {
   recursos: Record<Recurso, string>;
   modulos?: Record<string, string>;
   tipos_adicional?: Record<TipoAdicional, string>;
+  segmentos?: import("@/lib/types").SegmentoInfo[];
 }
 
 export function useCatalogoCompleto() {

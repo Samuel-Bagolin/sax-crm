@@ -5,8 +5,12 @@ import {
   ArrowLeft,
   Bath,
   BedDouble,
+  CalendarDays,
   Car,
   ChevronLeft,
+  Cog,
+  Fuel,
+  Gauge,
   ChevronRight,
   Clock3,
   Facebook,
@@ -52,7 +56,25 @@ const FONTES: Record<MarcaSite["fonte"], { titulo: string; corpo: string; css: s
   classica: { titulo: "'Lora'", corpo: "'Source Sans 3'", css: "Lora:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700" },
 };
 
-const TIPO: Record<string, string> = { apartamento: "Apartamento", casa: "Casa", terreno: "Terreno", comercial: "Comercial" };
+const TIPO: Record<string, string> = {
+  apartamento: "Apartamento", casa: "Casa", terreno: "Terreno", comercial: "Comercial",
+  hatch: "Hatch", sedan: "Sedã", suv: "SUV", picape: "Picape", utilitario: "Utilitário", moto: "Moto", esportivo: "Esportivo", outro: "Outro",
+};
+const CAMBIO: Record<string, string> = { manual: "Manual", automatico: "Automático", cvt: "CVT", automatizado: "Automatizado" };
+const COMBUSTIVEL: Record<string, string> = { flex: "Flex", gasolina: "Gasolina", etanol: "Etanol", diesel: "Diesel", eletrico: "Elétrico", hibrido: "Híbrido", gnv: "GNV" };
+
+/** Palavras do site conforme o estoque: imóveis (imobiliária) ou veículos (loja). */
+function vocab(marca: MarcaSite) {
+  const v = marca.segmento === "veiculos";
+  return {
+    veiculo: v,
+    um: v ? "veículo" : "imóvel",
+    uns: v ? "veículos" : "imóveis",
+    Uns: v ? "Veículos" : "Imóveis",
+    tipo: v ? "Categoria" : "Tipo de imóvel",
+    profissional: v ? "vendedor" : "corretor",
+  };
+}
 
 function textoSobre(hex: string): string {
   const n = parseInt(hex.slice(1), 16);
@@ -71,8 +93,9 @@ function preco(i: ImovelSitePublico): { valor: string; sufixo: string; legenda: 
 }
 
 function msgWhats(marca: MarcaSite, i?: ImovelSitePublico): string {
-  if (!i) return `Olá! Vim pelo site da ${marca.nome} e quero ajuda para encontrar um imóvel.`;
-  return (marca.mensagem_whatsapp || "Olá! Vi o imóvel {codigo} no site e quero mais informações.")
+  const V = vocab(marca);
+  if (!i) return `Olá! Vim pelo site da ${marca.nome} e quero ajuda para encontrar um ${V.um}.`;
+  return (marca.mensagem_whatsapp || `Olá! Vi o ${V.um} {codigo} no site e quero mais informações.`)
     .replaceAll("{codigo}", i.codigo)
     .replaceAll("{titulo}", i.titulo)
     .concat(`\n${window.location.origin}/s/${marca.slug}/imovel/${i.codigo}`);
@@ -182,12 +205,17 @@ function BotaoWhats({ marca, imovel, children, className, grande }: { marca: Mar
 
 function Specs({ i, compacto }: { i: ImovelSitePublico; compacto?: boolean }) {
   const area = i.area_util ?? i.area_total;
-  const itens = [
+  const itens = (i.marca ? [
+    { icone: CalendarDays, txt: `${i.ano_fabricacao}/${i.ano_modelo}`, titulo: "Ano" },
+    { icone: Gauge, txt: `${(i.km ?? 0).toLocaleString("pt-BR")} km`, titulo: "Quilometragem" },
+    i.cambio ? { icone: Cog, txt: CAMBIO[i.cambio] ?? i.cambio, titulo: "Câmbio" } : null,
+    i.combustivel ? { icone: Fuel, txt: COMBUSTIVEL[i.combustivel] ?? i.combustivel, titulo: "Combustível" } : null,
+  ] : [
     area ? { icone: Ruler, txt: `${area.toLocaleString("pt-BR")} m²`, titulo: "Área" } : null,
     i.quartos ? { icone: BedDouble, txt: `${i.quartos} ${i.quartos > 1 ? "quartos" : "quarto"}`, titulo: "Quartos" } : null,
     i.banheiros ? { icone: Bath, txt: `${i.banheiros} ${i.banheiros > 1 ? "banheiros" : "banheiro"}`, titulo: "Banheiros" } : null,
     i.vagas ? { icone: Car, txt: `${i.vagas} ${i.vagas > 1 ? "vagas" : "vaga"}`, titulo: "Vagas" } : null,
-  ].filter(Boolean) as { icone: typeof Ruler; txt: string; titulo: string }[];
+  ]).filter(Boolean) as { icone: typeof Ruler; txt: string; titulo: string }[];
   if (!itens.length) return null;
   return (
     <ul className={cn("flex flex-wrap gap-x-4 gap-y-1.5", compacto ? "text-[13px]" : "text-sm")} style={{ color: CINZA }}>
@@ -236,8 +264,9 @@ function Card({ i, marca }: { i: ImovelSitePublico; marca: MarcaSite }) {
         </p>
         <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug">{i.titulo}</h3>
         <p className="flex items-center gap-1 text-[13px]" style={{ color: CINZA }}>
+          {i.marca ? <>{[i.cor, i.aceita_troca ? "aceita troca" : null].filter(Boolean).join(", ")}</> : <>
           <MapPin className="h-3.5 w-3.5 shrink-0" />
-          {[i.bairro, i.cidade].filter(Boolean).join(", ")}
+          {[i.bairro, i.cidade].filter(Boolean).join(", ")}</>}
         </p>
         <div className="mt-auto pt-1">
           <Specs i={i} compacto />
@@ -255,7 +284,7 @@ function Topo({ marca, sobre }: { marca: MarcaSite; sobre?: boolean }) {
           <Logo marca={marca} />
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
-          <a href={`/s/${marca.slug}#imoveis`} className="hidden rounded-full px-3 py-2 text-sm font-medium hover:bg-[#f3f5f8] sm:block">Imóveis</a>
+          <a href={`/s/${marca.slug}#imoveis`} className="hidden rounded-full px-3 py-2 text-sm font-medium hover:bg-[#f3f5f8] sm:block">{vocab(marca).Uns}</a>
           {sobre && <a href={`/s/${marca.slug}#sobre`} className="hidden rounded-full px-3 py-2 text-sm font-medium hover:bg-[#f3f5f8] sm:block">Quem somos</a>}
           <a href={`/s/${marca.slug}#contato`} className="hidden rounded-full px-3 py-2 text-sm font-medium hover:bg-[#f3f5f8] md:block">Contato</a>
           <BotaoWhats marca={marca} className="ml-1">
@@ -418,7 +447,7 @@ export default function SitePublico() {
 function PaginaInicial({ slug }: { slug: string }) {
   const q = useQuery({ queryKey: ["site-publico", slug], queryFn: () => apiGet<Pagina>(`/publico/site/${slug}`), retry: false, staleTime: 60_000 });
   const marca = q.data?.marca;
-  useTema(marca, marca ? `${marca.nome}: imóveis à venda e para alugar` : "");
+  useTema(marca, marca ? `${marca.nome}: ${marca.segmento === "veiculos" ? "veículos à venda" : "imóveis à venda e para alugar"}` : "");
   useEffect(() => {
     if (marca) registrar(slug, "visualizacao");
   }, [marca, slug]);
@@ -477,7 +506,7 @@ function PaginaInicial({ slug }: { slug: string }) {
               className="max-w-3xl text-[34px] font-bold leading-[1.08] tracking-tight sm:text-[52px]"
               style={{ fontFamily: "var(--f-titulo)", color: capa ? "#fff" : "var(--p-txt)" }}
             >
-              {marca.titulo || `Imóveis da ${marca.nome}`}
+              {marca.titulo || `${vocab(marca).Uns} da ${marca.nome}`}
             </h1>
             {marca.subtitulo && (
               <p className="mt-3 max-w-xl text-base sm:text-lg" style={{ color: capa ? "rgba(255,255,255,.88)" : "var(--p-txt)", opacity: capa ? 1 : 0.85 }}>
@@ -495,7 +524,7 @@ function PaginaInicial({ slug }: { slug: string }) {
             }}
             className="rounded-2xl bg-white p-3 sm:p-4"
             style={{ boxShadow: "0 24px 48px -24px rgba(20,25,40,.35), 0 0 0 1px rgba(20,25,40,.06)" }}
-            aria-label="Buscar imóveis"
+            aria-label={`Buscar ${vocab(marca).uns}`}
           >
             <div className="mb-3 flex gap-1" role="tablist" aria-label="Finalidade">
               {([
@@ -523,18 +552,26 @@ function PaginaInicial({ slug }: { slug: string }) {
                 <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: CINZA }} />
                 <input value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Bairro, cidade ou código" className={cn(seletor, "pl-10")} style={{ borderColor: LINHA }} data-testid="site-busca" />
               </label>
-              <select aria-label="Tipo de imóvel" value={tipo} onChange={(e) => setTipo(e.target.value)} className={seletor} style={{ borderColor: LINHA }}>
+              <select aria-label={vocab(marca).tipo} value={tipo} onChange={(e) => setTipo(e.target.value)} className={seletor} style={{ borderColor: LINHA }}>
                 <option value="">Todos os tipos</option>
                 {tipos.map((t) => (
                   <option key={t} value={t}>{TIPO[t] ?? t}</option>
                 ))}
               </select>
+              {vocab(marca).veiculo ? (
+                <select aria-label="Ordenar" value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className={seletor} style={{ borderColor: LINHA }}>
+                  <option value="recentes">Mais recentes</option>
+                  <option value="menor">Menor preço</option>
+                  <option value="maior">Maior preço</option>
+                </select>
+              ) : (
               <select aria-label="Quartos" value={quartos} onChange={(e) => setQuartos(Number(e.target.value))} className={seletor} style={{ borderColor: LINHA }}>
                 <option value={0}>Quartos: qualquer</option>
                 {[1, 2, 3, 4].map((n) => (
                   <option key={n} value={n}>{n}+ quartos</option>
                 ))}
               </select>
+              )}
               <button type="submit" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl px-6 text-[15px] font-semibold" style={{ background: "var(--d)", color: "var(--d-txt)" }}>
                 <Search className="h-4 w-4" /> Buscar
               </button>
@@ -560,10 +597,10 @@ function PaginaInicial({ slug }: { slug: string }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 id="t-imoveis" className="text-2xl font-bold tracking-tight sm:text-[28px]" style={{ fontFamily: "var(--f-titulo)" }}>
-              {filtrando ? "Resultado da busca" : "Imóveis disponíveis"}
+              {filtrando ? "Resultado da busca" : `${vocab(marca).Uns} disponíveis`}
             </h2>
             <p className="mt-1 text-sm" style={{ color: CINZA }} data-testid="site-contagem">
-              {lista.length} {lista.length === 1 ? "imóvel encontrado" : "imóveis encontrados"}
+              {lista.length} {lista.length === 1 ? `${vocab(marca).um} encontrado` : `${vocab(marca).uns} encontrados`}
               {filtrando && (
                 <button type="button" onClick={limpar} className="ml-2 font-semibold underline underline-offset-2" style={{ color: "var(--p)" }}>
                   Limpar busca
@@ -585,7 +622,7 @@ function PaginaInicial({ slug }: { slug: string }) {
           </div>
         ) : (
           <div className="mt-6 rounded-2xl px-6 py-12 text-center" style={{ background: NEVOA }}>
-            <p className="text-lg font-semibold">Nenhum imóvel com esses filtros agora.</p>
+            <p className="text-lg font-semibold">Nenhum {vocab(marca).um} com esses filtros agora.</p>
             <p className="mx-auto mt-1 max-w-md text-sm" style={{ color: CINZA }}>
               Conte o que você procura e a equipe avisa quando entrar algo do seu perfil.
             </p>
@@ -613,7 +650,7 @@ function PaginaInicial({ slug }: { slug: string }) {
             Não achou o que procura?
           </h2>
           <p className="mt-3 max-w-md text-base" style={{ color: CINZA }}>
-            Nem todo imóvel da carteira está no site. Diga o bairro, o tipo e quanto quer investir, e um corretor busca para você.
+            {vocab(marca).veiculo ? "Nem todo veículo do estoque está no site. Diga o modelo, o ano e quanto quer investir, e um vendedor busca para você." : "Nem todo imóvel da carteira está no site. Diga o bairro, o tipo e quanto quer investir, e um corretor busca para você."}
           </p>
           <BotaoWhats marca={marca} grande className="mt-6" />
         </div>
@@ -671,7 +708,21 @@ function PaginaImovel({ slug, codigo }: { slug: string; codigo: string }) {
       /* sem permissão */
     }
   };
-  const caracteristicas = [
+  const caracteristicas = (i.marca ? [
+    ["Marca", i.marca],
+    ["Modelo", [i.modelo, i.versao].filter(Boolean).join(" ")],
+    ["Ano", `${i.ano_fabricacao}/${i.ano_modelo}`],
+    ["Quilometragem", `${(i.km ?? 0).toLocaleString("pt-BR")} km`],
+    ["Câmbio", CAMBIO[i.cambio ?? ""] ?? i.cambio],
+    ["Combustível", COMBUSTIVEL[i.combustivel ?? ""] ?? i.combustivel],
+    ["Cor", i.cor],
+    ["Categoria", TIPO[i.tipo] ?? i.tipo],
+    ["Aceita troca", i.aceita_troca ? "Sim" : null],
+    ["Único dono", i.unico_dono ? "Sim" : null],
+    ["IPVA pago", i.ipva_pago ? "Sim" : null],
+    ["Garantia", i.garantia],
+    ["Código", i.codigo],
+  ] : [
     ["Tipo", TIPO[i.tipo] ?? i.tipo],
     ["Área útil", i.area_util ? `${i.area_util.toLocaleString("pt-BR")} m²` : null],
     ["Área total", i.area_total ? `${i.area_total.toLocaleString("pt-BR")} m²` : null],
@@ -680,7 +731,7 @@ function PaginaImovel({ slug, codigo }: { slug: string; codigo: string }) {
     ["Banheiros", i.banheiros || null],
     ["Vagas", i.vagas || null],
     ["Código", i.codigo],
-  ].filter(([, v]) => v != null && v !== "") as [string, string | number][];
+  ]).filter(([, v]) => v != null && v !== "") as [string, string | number][];
   const local = [i.bairro, i.cidade, i.estado].filter(Boolean).join(", ");
 
   return (
@@ -690,7 +741,7 @@ function PaginaImovel({ slug, codigo }: { slug: string; codigo: string }) {
       <main className="mx-auto max-w-6xl px-4 pb-16 pt-5 sm:px-6">
         <div className="flex items-center justify-between gap-3">
           <Link to={`/s/${slug}`} className="inline-flex items-center gap-1.5 rounded-full py-1.5 pr-3 text-sm font-medium hover:underline" style={{ color: CINZA }}>
-            <ArrowLeft className="h-4 w-4" /> Todos os imóveis
+            <ArrowLeft className="h-4 w-4" /> Todos os {vocab(marca).uns}
           </Link>
           <button type="button" onClick={compartilhar} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium hover:bg-[#f3f5f8]" style={{ borderColor: LINHA }}>
             <Share2 className="h-4 w-4" /> {copiado ? "Link copiado" : "Compartilhar"}
@@ -739,7 +790,7 @@ function PaginaImovel({ slug, codigo }: { slug: string; codigo: string }) {
               {i.titulo}
             </h1>
             <p className="mt-2 flex items-center gap-1.5 text-[15px]" style={{ color: CINZA }}>
-              <MapPin className="h-4 w-4" /> {local}
+              {i.marca ? <>{[i.versao, i.cor].filter(Boolean).join(", ")}</> : <><MapPin className="h-4 w-4" /> {local}</>}
             </p>
             <div className="mt-5 border-y py-4" style={{ borderColor: LINHA }}>
               <Specs i={i} />
@@ -747,7 +798,7 @@ function PaginaImovel({ slug, codigo }: { slug: string; codigo: string }) {
 
             {i.descricao && (
               <section className="mt-8">
-                <h2 className="text-xl font-bold" style={{ fontFamily: "var(--f-titulo)" }}>Sobre o imóvel</h2>
+                <h2 className="text-xl font-bold" style={{ fontFamily: "var(--f-titulo)" }}>Sobre o {vocab(marca).um}</h2>
                 <p className="mt-3 max-w-[70ch] whitespace-pre-line text-[16px] leading-relaxed" style={{ color: "#3b4352" }}>{i.descricao}</p>
               </section>
             )}
@@ -764,6 +815,15 @@ function PaginaImovel({ slug, codigo }: { slug: string; codigo: string }) {
               </dl>
             </section>
 
+            {i.marca && !!i.opcionais?.length && (
+              <section className="mt-8">
+                <h2 className="text-xl font-bold" style={{ fontFamily: "var(--f-titulo)" }}>Opcionais</h2>
+                <ul className="mt-3 flex flex-wrap gap-2">
+                  {i.opcionais.map((o) => <li key={o} className="rounded-full px-3 py-1 text-sm" style={{ background: NEVOA }}>{o}</li>)}
+                </ul>
+              </section>
+            )}
+            {!i.marca && (
             <section className="mt-8">
               <h2 className="text-xl font-bold" style={{ fontFamily: "var(--f-titulo)" }}>Região</h2>
               <p className="mt-1 text-sm" style={{ color: CINZA }}>O endereço exato é passado pelo corretor no agendamento da visita.</p>
@@ -777,6 +837,7 @@ function PaginaImovel({ slug, codigo }: { slug: string; codigo: string }) {
                 />
               </div>
             </section>
+            )}
           </div>
 
           <aside className="lg:sticky lg:top-24 lg:self-start">
@@ -809,7 +870,7 @@ function PaginaImovel({ slug, codigo }: { slug: string; codigo: string }) {
                 {i.reservado ? "Avise-me se liberar" : "Quero saber mais"}
               </BotaoWhats>
               <div className="my-5 h-px" style={{ background: LINHA }} />
-              <FormContato marca={marca} imovel={i} titulo="Agendar uma visita" inicial={`Quero visitar o imóvel ${i.codigo}.`} />
+              <FormContato marca={marca} imovel={i} titulo={i.marca ? "Agendar um test drive" : "Agendar uma visita"} inicial={i.marca ? `Quero agendar um test drive do ${i.codigo}.` : `Quero visitar o imóvel ${i.codigo}.`} />
             </div>
           </aside>
         </div>

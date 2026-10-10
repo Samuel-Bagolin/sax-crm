@@ -209,3 +209,47 @@ def test_planos_do_segmento_e_troca(cartao_demo):
     assert c.get("/plano").json()["chave"] == "terapia_profissional"
     # limite de unidades do Essencial/Profissional = 1
     assert c.post("/unidades", json={"nome": "Filial"}).status_code == 402
+
+
+def test_travas_e_conclusao_sem_duplicar(cartao_demo):
+    """Cancelar e mudar horário não deixa trava presa; concluir duas vezes não lança no caixa duas vezes."""
+    c, _ = _cadastrar("barbearia", cartao_demo)
+    me = c.get("/auth/me").json()
+    corte = next(s for s in c.get("/atendimentos/servicos").json() if s["nome"] == "Corte")
+    jornada = {str(d): [["08:00", "20:00"]] for d in range(7)}
+    assert c.put(f"/atendimentos/profissionais/{me['usuario_id']}", json={"atende": True, "jornada": jornada, "comissao_pct": 0}).status_code == 200
+    dia = (date.today() + timedelta(days=2)).isoformat()
+    base = {"profissional_id": me["usuario_id"], "servico_ids": [corte["id"]], "data": dia, "cliente_nome": "Trava Teste",
+            "cliente_telefone": "41911112222"}
+    a = c.post("/atendimentos", json={**base, "inicio": "10:00"}).json()["criados"][0]
+    # cancelado e remarcado para outro horário: nem o horário antigo nem o novo ficam presos
+    assert c.patch(f"/atendimentos/{a['id']}", json={"status": "cancelado"}).status_code == 200
+    assert c.patch(f"/atendimentos/{a['id']}", json={"inicio": "15:00"}).status_code == 200
+    for hora in ("10:00", "15:00"):
+        r = c.post("/atendimentos", json={**base, "inicio": hora, "cliente_telefone": "41933334444", "cliente_nome": f"Outro {hora}"})
+        assert r.status_code == 201, (hora, r.text)
+    # reativar em cima de um horário ocupado falha
+    assert c.patch(f"/atendimentos/{a['id']}", json={"status": "agendado"}).status_code == 409
+    b = c.post("/atendimentos", json={**base, "inicio": "17:00"}).json()["criados"][0]
+    assert c.post(f"/atendimentos/{b['id']}/concluir", json={"valor": 50, "forma_pagamento": "pix"}).status_code == 200
+    assert c.post(f"/atendimentos/{b['id']}/concluir", json={"valor": 50, "forma_pagamento": "pix"}).status_code == 409
+    assert len([t for t in c.get("/transacoes").json() if t.get("agendamento_id") == b["id"]]) == 1
+
+
+def test_aprovar_e_vender_uma_vez(cartao_demo):
+    c, _ = _cadastrar("odontologia", cartao_demo)
+    pid = c.post("/pacientes", json={"nome": "Paciente Dois", "telefone": "41955550000", "cpf_cnpj": _cpf()}).json()["id"]
+    tid = c.post(f"/pacientes/{pid}/tratamentos", json={"tipo": "odonto", "titulo": "Plano", "parcelas": 2, "itens": [
+        {"descricao": "Limpeza", "valor_unitario": 300}]}).json()["id"]
+    assert c.post(f"/pacientes/{pid}/tratamentos/{tid}/acao", json={"acao": "aprovar"}).status_code == 200
+    assert c.post(f"/pacientes/{pid}/tratamentos/{tid}/acao", json={"acao": "aprovar"}).status_code == 409
+    assert c.post(f"/pacientes/{pid}/tratamentos/{tid}/acao", json={"acao": "recusar"}).status_code == 409
+    assert len([x for x in c.get("/transacoes").json() if x.get("pessoa_id") == pid]) == 2
+
+    v, _ = _cadastrar("veiculos", cartao_demo)
+    vid = v.post("/veiculos", json={"marca": "Fiat", "modelo": "Argo", "ano_fabricacao": 2021, "ano_modelo": 2021, "preco_venda": 70000}).json()["id"]
+    assert v.post(f"/veiculos/{vid}/vender", json={"valor": 69000, "data": "31/12/2026"}).status_code == 422
+    assert v.post(f"/veiculos/{vid}/vender", json={"valor": 69000, "negocio_id": "nao-existe"}).status_code == 404
+    assert v.post(f"/veiculos/{vid}/vender", json={"valor": 69000}).status_code == 200
+    assert v.post(f"/veiculos/{vid}/vender", json={"valor": 69000}).status_code == 409
+    assert len([t for t in v.get("/transacoes").json() if t.get("veiculo_id") == vid]) == 1

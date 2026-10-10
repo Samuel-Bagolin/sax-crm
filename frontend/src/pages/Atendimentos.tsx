@@ -98,7 +98,7 @@ export default function Atendimentos() {
         </div>
         <p className="font-semibold capitalize sm:ml-2">{rotuloDia(dia)}</p>
         <Button className="sm:ml-auto" onClick={() => setNovo({})} disabled={semProfissionais} data-testid="novo-agendamento">
-          <Plus className="h-4 w-4" /> Novo {seg.termos.atendimento.toLowerCase()}
+          <Plus className="h-4 w-4" /> Agendar
         </Button>
       </div>
 
@@ -149,14 +149,24 @@ export default function Atendimentos() {
                       key={a.id}
                       type="button"
                       onClick={() => setAberto(a)}
-                      className={cn("absolute inset-x-1 z-10 overflow-hidden rounded-md border-l-4 px-2 py-1 text-left text-xs shadow-sm", STATUS_AG[a.status].classe)}
-                      style={{ top: (ini - INICIO_DIA) * PX_POR_MIN + 1, height: alt }}
+                      className={cn("absolute inset-x-1 z-10 overflow-hidden rounded-md border-l-4 px-2 text-left text-xs shadow-sm", STATUS_AG[a.status].classe)}
+                      style={{ top: (ini - INICIO_DIA) * PX_POR_MIN + 1, height: alt, paddingTop: alt < 48 ? 2 : 4, paddingBottom: alt < 48 ? 2 : 4 }}
                       data-testid={`ag-${a.id}`}
                     >
-                      <p className="flex items-center gap-1 font-semibold">
-                        {a.inicio} {a.origem === "online" && <Globe className="h-3 w-3" aria-label="Agendado pelo link" />}
-                      </p>
-                      <p className="truncate font-medium">{a.cliente_nome}</p>
+                      {alt < 48 ? (
+                        <p className="flex items-center gap-1 truncate leading-tight">
+                          <span className="font-semibold">{a.inicio}</span>
+                          {a.origem === "online" && <Globe className="h-3 w-3 shrink-0" aria-label="Agendado pelo link" />}
+                          <span className="truncate font-medium">{a.cliente_nome}</span>
+                        </p>
+                      ) : (
+                        <>
+                          <p className="flex items-center gap-1 font-semibold">
+                            {a.inicio} {a.origem === "online" && <Globe className="h-3 w-3" aria-label="Agendado pelo link" />}
+                          </p>
+                          <p className="truncate font-medium">{a.cliente_nome}</p>
+                        </>
+                      )}
                       {alt > 50 && <p className="truncate opacity-75">{a.servicos.map((s) => s.nome).join(", ")}</p>}
                     </button>
                   );
@@ -258,7 +268,7 @@ function NovoAgendamento({
     <Dialog open={aberto} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo {seg.termos.atendimento.toLowerCase()}</DialogTitle>
+          <DialogTitle>Agendar</DialogTitle>
           <DialogDescription>Os horários livres já consideram a jornada, os bloqueios e o que está marcado.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">

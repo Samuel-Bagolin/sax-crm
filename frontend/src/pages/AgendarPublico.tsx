@@ -200,7 +200,7 @@ function Agendar({ slug, profSlug }: { slug: string; profSlug?: string }) {
         {(servico || profissional) && (
           <div className="mb-4 rounded-2xl bg-white p-4 text-sm">
             <button type="button" onClick={voltar} className="mb-2 inline-flex items-center gap-1 font-medium text-slate-500 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Voltar</button>
-            {servico && <p className="font-semibold">{servico.nome} <span className="font-normal text-slate-500">· {duracao(servico.duracao_min)} · {brl(servico.preco)}</span></p>}
+            {servico && <p className="font-semibold">{servico.nome}<span className="font-normal text-slate-500">, {duracao(servico.duracao_min)}, {brl(servico.preco)}</span></p>}
             {profNome && <p className="text-slate-600">{profNome}</p>}
             {dia && <p className="text-slate-600">{dataExtenso(dia)}{hora ? `, ${hora}` : ""}</p>}
           </div>

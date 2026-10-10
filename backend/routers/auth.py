@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 from lib.auth import (
     COOKIE_NAME,
+    _dados_empresa,
     Principal,
     conferir_senha,
     criar_token,
@@ -78,6 +79,10 @@ async def login(input: LoginInput, response: Response):
         tem_foto=bool(doc.get("tem_foto")),
         foto_v=int(doc.get("foto_v", 0)),
         trocar_senha=bool(doc.get("trocar_senha")),
+        telefone=doc.get("telefone"),
+        gerencia_site=bool(doc.get("gerencia_site")),
+        # Mesmo formato do /auth/me: a tela já escolhe menu e painel do segmento certo no primeiro render.
+        **_dados_empresa(empresa, sysadmin=doc.get("papel") == "sysadmin"),
     )
 
 

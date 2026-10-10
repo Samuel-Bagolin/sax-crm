@@ -90,9 +90,11 @@ async def trocar_cartao(request: Request, principal: Principal = Depends(require
     except asaas.ErroAsaas as err:
         raise asaas.http(err)
     cartao = None  # noqa: F841
-    ass.update(cartao_final=r.get("creditCardNumber") or ass.get("cartao_final"), cartao_bandeira=r.get("creditCardBrand") or ass.get("cartao_bandeira"),
-               cartao_token=r.get("creditCardToken") or ass.get("cartao_token"), cartao_trocado_em=now_utc())
-    await controle.empresas.update_one({"id": e["id"]}, {"$set": {"assinatura": ass}})
+    novo = {"cartao_final": r.get("creditCardNumber") or ass.get("cartao_final"), "cartao_bandeira": r.get("creditCardBrand") or ass.get("cartao_bandeira"),
+            "cartao_token": r.get("creditCardToken") or ass.get("cartao_token"), "cartao_trocado_em": now_utc()}
+    # Só os campos do cartão: o webhook pode ter acabado de reativar a assinatura.
+    await controle.empresas.update_one({"id": e["id"]}, {"$set": {f"assinatura.{k}": v for k, v in novo.items()}})
+    ass.update(novo)
     logger.info("cartão trocado: empresa %s por %s", e.get("slug"), principal.email)
     return {"ok": True, "assinatura": resumo_publico(ass)}
 
@@ -128,12 +130,10 @@ async def mudar_plano(input: MudarPlano, principal: Principal = Depends(require(
                                              descricao=f"SAX CRM {info(seg)['nome']}, plano {novo['nome']} ({input.periodicidade})")
         except asaas.ErroAsaas as err:
             raise asaas.http(err)
-    ass.update(plano=input.plano, periodicidade=input.periodicidade, valor=round(valor, 2))
-    comercial = dict(e.get("comercial") or {})
-    comercial["periodicidade"] = input.periodicidade
     await controle.empresas.update_one({"id": e["id"]}, {"$set": {
-        "plano": input.plano, "plano_aplicado": True, "modulos": list(novo["modulos"]), "assinatura": ass,
-        "comercial": comercial, "updated_at": now_utc()}})
+        "plano": input.plano, "plano_aplicado": True, "modulos": list(novo["modulos"]),
+        "assinatura.plano": input.plano, "assinatura.periodicidade": input.periodicidade, "assinatura.valor": round(valor, 2),
+        "comercial.periodicidade": input.periodicidade, "updated_at": now_utc()}})
     logger.info("plano trocado: empresa %s -> %s (%s)", e.get("slug"), input.plano, input.periodicidade)
     return {"ok": True}
 
@@ -146,13 +146,28 @@ async def cancelar(principal: Principal = Depends(require("assinatura_plataforma
         raise HTTPException(409, "O contrato desta empresa é pelo comercial. Fale com o suporte para cancelar.")
     if ass.get("status") == "cancelada":
         return {"ok": True, "assinatura": resumo_publico(ass)}
+    hoje = datetime.now(timezone.utc).date()
+    acesso_ate = ass.get("proximo_vencimento")
     if not ass.get("demo") and ass.get("asaas_assinatura_id"):
+        # O acesso vale até o fim do último período pago (consulta o Asaas, não confia no que está gravado).
+        try:
+            from datetime import date as _date
+
+            from routers.cadastro import somar_periodo
+
+            pagos = [p["dueDate"] for p in await asaas.cobrancas(ass["asaas_assinatura_id"]) if p.get("status") in ("CONFIRMED", "RECEIVED") and p.get("dueDate")]
+            if pagos:
+                acesso_ate = somar_periodo(_date.fromisoformat(max(pagos)[:10]), ass.get("periodicidade") == "anual").isoformat()
+        except asaas.ErroAsaas:
+            pass
         try:
             await asaas.cancelar_assinatura(ass["asaas_assinatura_id"])
         except asaas.ErroAsaas as err:
             raise asaas.http(err)
-    ass.update(status="cancelada", cancelada_em=now_utc(), cancelada_por=principal.email,
-               acesso_ate=ass.get("proximo_vencimento") or datetime.now(timezone.utc).date().isoformat())
-    await controle.empresas.update_one({"id": e["id"]}, {"$set": {"assinatura": ass, "updated_at": now_utc()}})
+    if not acesso_ate or acesso_ate < hoje.isoformat():
+        acesso_ate = hoje.isoformat()
+    mudar = {"status": "cancelada", "cancelada_em": now_utc(), "cancelada_por": principal.email, "acesso_ate": acesso_ate}
+    await controle.empresas.update_one({"id": e["id"]}, {"$set": {**{f"assinatura.{k}": v for k, v in mudar.items()}, "updated_at": now_utc()}})
+    ass.update(mudar)
     logger.info("assinatura cancelada: empresa %s por %s", e.get("slug"), principal.email)
     return {"ok": True, "assinatura": resumo_publico(ass)}

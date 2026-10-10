@@ -218,6 +218,11 @@ export interface Empresa {
 }
 
 export interface EmpresaResumo extends Empresa {
+  segmento?: SegmentoChave;
+  segmento_nome?: string | null;
+  categoria?: string | null;
+  origem?: string;
+  assinatura?: AssinaturaResumo | null;
   plano_aplicado: boolean;
   plano_nome: string | null;
   plano_preco: number | null;
@@ -880,6 +885,21 @@ export interface ImovelSitePublico {
   destaque: boolean;
   descricao?: string | null;
   fotos?: string[];
+  // loja de veículos
+  marca?: string;
+  modelo?: string;
+  versao?: string | null;
+  ano_fabricacao?: number;
+  ano_modelo?: number;
+  km?: number;
+  cor?: string | null;
+  cambio?: string;
+  combustivel?: string;
+  opcionais?: string[];
+  aceita_troca?: boolean;
+  unico_dono?: boolean;
+  ipva_pago?: boolean;
+  garantia?: string | null;
 }
 
-export type MarcaSite = Omit<SiteConfig, "ativo" | "atualizado_em" | "atualizado_por"> & { logo_url: string | null; capa_url: string | null };
+export type MarcaSite = Omit<SiteConfig, "ativo" | "atualizado_em" | "atualizado_por"> & { logo_url: string | null; capa_url: string | null; segmento?: "imobiliaria" | "veiculos" };

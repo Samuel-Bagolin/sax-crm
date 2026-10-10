@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { Lock } from "lucide-react";
+import { useConfig } from "@/lib/useConfig";
 import { apiGet } from "@/lib/api";
 import { brl } from "@/lib/format";
 import { useAuth } from "@/lib/useAuth";
@@ -26,7 +27,8 @@ export default function Financeiro() {
     queryFn: () => apiGet<TransacaoFinanceira[]>("/transacoes"),
   });
   const contasQ = useQuery({ queryKey: ["plano-contas"], queryFn: () => apiGet<PlanoConta[]>("/plano-contas") });
-  const imoveisQ = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<Imovel[]>("/imoveis") });
+  const { moduloAtivo } = useConfig();
+  const imoveisQ = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<Imovel[]>("/imoveis"), enabled: moduloAtivo("imoveis") });
 
   // Fluxo de caixa e DRE são do gestor; o corretor recebe o resumo das próprias comissões.
   const resumoQ = useQuery({

@@ -123,6 +123,25 @@ async def cancelar_assinatura(assinatura_id: str) -> None:
     await _chamar("DELETE", f"/subscriptions/{assinatura_id}")
 
 
+async def estornar_e_cancelar(assinatura_id: str) -> bool:
+    """Estorna as cobranças já pagas da assinatura e cancela a assinatura. True se tudo deu certo."""
+    ok = True
+    try:
+        for pag in await cobrancas(assinatura_id):
+            if pag.get("status") in ("CONFIRMED", "RECEIVED"):
+                try:
+                    await _chamar("POST", f"/payments/{pag['id']}/refund", {})
+                except ErroAsaas:
+                    ok = False
+    except ErroAsaas:
+        ok = False
+    try:
+        await cancelar_assinatura(assinatura_id)
+    except ErroAsaas:
+        ok = False
+    return ok
+
+
 async def cobrancas(assinatura_id: str) -> list[dict]:
     r = await _chamar("GET", f"/subscriptions/{assinatura_id}/payments?limit=24")
     return r.get("data") or []

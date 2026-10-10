@@ -47,9 +47,10 @@ function Caixas<T extends string>({ opcoes, valores, onChange }: { opcoes: Recor
 
 // ------------------------------------------------------------------ plano
 
-export function PlanoDialog({ plano, catalogo, open, onClose }: { plano: PlanoCatalogo | null; catalogo: CatalogoPlanos; open: boolean; onClose: () => void }) {
+export function PlanoDialog({ plano, catalogo, open, onClose, segmento = "imobiliaria" }: { plano: PlanoCatalogo | null; catalogo: CatalogoPlanos; open: boolean; onClose: () => void; segmento?: string }) {
   const invalidar = useInvalidar();
-  const vazio = { nome: "", resumo: "", preco_mensal: "", preco_anual: "", implantacao: "", usuarios: "", imoveis: "", ordem: "50", ativo: true, modulos: ["dashboard", "imoveis", "crm", "agenda", "usuarios"], recursos: [] as Recurso[] };
+  const modSeg = catalogo.segmentos?.find((s) => s.chave === segmento)?.modulos ?? ["dashboard", "imoveis", "crm", "agenda", "usuarios"];
+  const vazio = { nome: "", resumo: "", preco_mensal: "", preco_anual: "", implantacao: "", usuarios: "", imoveis: "", unidades: "1", ordem: "50", ativo: true, modulos: modSeg, recursos: [] as Recurso[] };
   const [f, setF] = useState(vazio);
   useEffect(() => {
     if (!open) return;
@@ -57,7 +58,7 @@ export function PlanoDialog({ plano, catalogo, open, onClose }: { plano: PlanoCa
       plano
         ? {
             nome: plano.nome, resumo: plano.resumo, preco_mensal: numero(plano.preco_mensal ?? plano.preco), preco_anual: numero(plano.preco_anual),
-            implantacao: numero(plano.implantacao), usuarios: numero(plano.usuarios), imoveis: numero(plano.imoveis), ordem: String(plano.ordem ?? 50),
+            implantacao: numero(plano.implantacao), usuarios: numero(plano.usuarios), imoveis: numero(plano.imoveis), unidades: numero(plano.unidades ?? null), ordem: String(plano.ordem ?? 50),
             ativo: plano.ativo ?? true, modulos: plano.modulos, recursos: plano.recursos,
           }
         : vazio,
@@ -69,6 +70,7 @@ export function PlanoDialog({ plano, catalogo, open, onClose }: { plano: PlanoCa
       const corpo = {
         nome: f.nome.trim(), resumo: f.resumo.trim(), preco_mensal: parseNumber(f.preco_mensal) ?? 0, preco_anual: parseNumber(f.preco_anual),
         implantacao: parseNumber(f.implantacao), usuarios: parseNumber(f.usuarios), imoveis: parseNumber(f.imoveis), ordem: parseNumber(f.ordem) ?? 50,
+        unidades: parseNumber(f.unidades), segmento: plano?.segmento ?? segmento,
         ativo: f.ativo, modulos: f.modulos, recursos: f.recursos,
       };
       return plano ? apiPut(`/planos/${plano.chave}`, corpo) : apiPost("/planos", corpo);
@@ -127,14 +129,18 @@ export function PlanoDialog({ plano, catalogo, open, onClose }: { plano: PlanoCa
 
           <fieldset className="grid gap-3 border-t pt-4">
             <legend className="text-sm font-semibold">Limites</legend>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="grid gap-1.5">
                 <Label htmlFor="pl-usu">Usuários</Label>
                 <Input id="pl-usu" inputMode="numeric" value={f.usuarios} onChange={(e) => setF({ ...f, usuarios: e.target.value })} placeholder="Vazio = sem limite" data-testid="plano-usuarios" />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="pl-imo">Imóveis em carteira</Label>
+                <Label htmlFor="pl-imo">Estoque (imóveis ou veículos)</Label>
                 <Input id="pl-imo" inputMode="numeric" value={f.imoveis} onChange={(e) => setF({ ...f, imoveis: e.target.value })} placeholder="Vazio = sem limite" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="pl-uni">Unidades (lojas ou clínicas)</Label>
+                <Input id="pl-uni" inputMode="numeric" value={f.unidades} onChange={(e) => setF({ ...f, unidades: e.target.value })} placeholder="Vazio = sem limite" />
               </div>
             </div>
           </fieldset>
@@ -267,6 +273,7 @@ export function AdicionalDialog({ adicional, catalogo, open, onClose }: { adicio
 export function CatalogoComercial() {
   const { data } = useCatalogoCompleto();
   const invalidar = useInvalidar();
+  const [seg, setSeg] = useState("imobiliaria");
   const [plano, setPlano] = useState<PlanoCatalogo | null | "novo">(null);
   const [adicional, setAdicional] = useState<Adicional | null | "novo">(null);
   const excluirPlano = useMutation({
@@ -292,8 +299,16 @@ export function CatalogoComercial() {
           </div>
           <Button size="sm" onClick={() => setPlano("novo")} data-testid="plano-novo"><Plus className="h-4 w-4" /> Novo plano</Button>
         </div>
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Segmento">
+          {(data.segmentos ?? []).map((sg) => (
+            <button key={sg.chave} type="button" role="tab" aria-selected={seg === sg.chave} onClick={() => setSeg(sg.chave)}
+              className={cn("rounded-full border px-3 py-1 text-sm", seg === sg.chave ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")} data-testid={`planos-seg-${sg.chave}`}>
+              {sg.nome}
+            </button>
+          ))}
+        </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {data.planos.map((p) => (
+          {data.planos.filter((p) => (p.segmento ?? "imobiliaria") === seg).map((p) => (
             <article key={p.chave} className={cn("flex flex-col gap-3 rounded-lg border bg-card p-4", p.ativo === false && "opacity-60")} data-testid={`plano-${p.chave}`}>
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -356,7 +371,7 @@ export function CatalogoComercial() {
         <p className="text-xs text-muted-foreground">As funcionalidades disponíveis são as que o sistema já tem. Uma funcionalidade nova precisa ser desenvolvida antes de entrar num plano.</p>
       </section>
 
-      <PlanoDialog plano={plano === "novo" ? null : plano} catalogo={data} open={plano !== null} onClose={() => setPlano(null)} />
+      <PlanoDialog plano={plano === "novo" ? null : plano} catalogo={data} open={plano !== null} onClose={() => setPlano(null)} segmento={seg} />
       <AdicionalDialog adicional={adicional === "novo" ? null : adicional} catalogo={data} open={adicional !== null} onClose={() => setAdicional(null)} />
     </div>
   );
