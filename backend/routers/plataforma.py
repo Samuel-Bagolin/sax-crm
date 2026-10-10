@@ -94,6 +94,48 @@ async def ativar_cartao_demo(ativo: bool, principal: Principal = Depends(require
     return await _painel_pagamentos()
 
 
+class DemonstracaoIn(BaseModel):
+    ativo: bool = True
+
+
+@router.post("/empresas/{empresa_id}/demonstracao")
+async def demonstracao(empresa_id: str, input: DemonstracaoIn, principal: Principal = Depends(require("empresa:manage"))):
+    """Marca uma empresa já existente como paga com o cartão de demonstração (sem cobrança), ou tira a marca.
+
+    Serve para as contas de teste do dono da plataforma. Empresa com assinatura real no Asaas não muda aqui."""
+    from datetime import date
+
+    from lib.assinatura import resumo_publico
+    from routers.cadastro import somar_periodo
+
+    await carregar_catalogo()
+    e = await controle.empresas.find_one({"id": empresa_id})
+    if not e:
+        raise HTTPException(404, "Empresa não encontrada")
+    atual = e.get("assinatura") or {}
+    if atual.get("gateway") == "asaas" and atual.get("status") != "cancelada":
+        raise HTTPException(409, "Esta empresa tem assinatura paga no Asaas. Cancele a assinatura antes de usar a demonstração.")
+    if not input.ativo:
+        if not atual.get("demo"):
+            raise HTTPException(409, "Esta empresa não está em demonstração.")
+        await controle.empresas.update_one({"id": empresa_id}, {"$set": {"assinatura": None, "updated_at": now_utc()}})
+        logger.info("demonstração encerrada: empresa %s por %s", e.get("slug"), principal.email)
+        return {"ok": True, "assinatura": None}
+    cfg = await asaas.config()
+    numero = cfg.get("cartao_demo")
+    if not numero or not cfg.get("cartao_demo_ativo", True):
+        raise HTTPException(409, "Gere e ative o cartão de demonstração em Pagamentos antes de liberar a empresa.")
+    plano = plano_de(e)
+    valor = float(plano.get("preco_mensal") or 0)
+    assinatura = {"gateway": "demonstracao", "demo": True, "status": "ativa", "periodicidade": "mensal", "valor": round(valor, 2),
+                  "plano": plano.get("chave"), "cartao_final": str(numero)[-4:], "cartao_bandeira": "Demonstração",
+                  "criada_em": now_utc(), "proximo_vencimento": somar_periodo(date.today(), False).isoformat(),
+                  "liberada_por": principal.email}
+    await controle.empresas.update_one({"id": empresa_id}, {"$set": {"assinatura": assinatura, "updated_at": now_utc()}})
+    logger.info("demonstração liberada: empresa %s por %s", e.get("slug"), principal.email)
+    return {"ok": True, "assinatura": resumo_publico(assinatura)}
+
+
 # ------------------------------------------------------------------ painel por segmento
 
 

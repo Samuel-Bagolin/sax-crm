@@ -117,6 +117,16 @@ export default function Empresas() {
     onError: (err) => toast.error(detalheErro(err) ?? "Não foi possível mudar o plano."),
   });
 
+  const demonstracao = useMutation({
+    mutationFn: ({ e, ativo }: { e: EmpresaResumo; ativo: boolean }) => apiPost(`/plataforma/empresas/${e.id}/demonstracao`, { ativo }),
+    onSuccess: (_r, v) => {
+      qc.invalidateQueries({ queryKey: ["empresas"] });
+      qc.invalidateQueries({ queryKey: ["plataforma-painel"] });
+      toast.success(v.ativo ? `${v.e.nome} liberada com o cartão de demonstração.` : `Demonstração de ${v.e.nome} encerrada.`);
+    },
+    onError: (err) => toast.error(detalheErro(err) ?? "Não foi possível alterar a demonstração."),
+  });
+
   const excluir = useMutation({
     mutationFn: (e: EmpresaResumo) => apiDelete(`/empresas/${e.id}?confirmar=${e.slug}`),
     onSuccess: () => {
@@ -370,6 +380,19 @@ export default function Empresas() {
                     }}
                   />
                 </label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={demonstracao.isPending}
+                  onClick={() => {
+                    const ativo = !e.assinatura?.demo;
+                    if (!ativo && !window.confirm(`Encerrar a demonstração de ${e.nome}? A empresa volta para a cobrança pelo comercial.`)) return;
+                    demonstracao.mutate({ e, ativo });
+                  }}
+                  data-testid={`empresa-demo-${e.slug}`}
+                >
+                  {e.assinatura?.demo ? "Encerrar demonstração" : "Liberar com cartão demo"}
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"

@@ -156,12 +156,12 @@ export default function Cadastro() {
   return (
     <div className="min-h-dvh bg-[#f6f4fb] text-[#1d1530] lg:grid lg:grid-cols-[380px_1fr]">
       {/* Coluna da marca: o que a pessoa ganha e em que passo está */}
-      <aside className="relative overflow-hidden bg-[#140634] px-6 py-6 text-white lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:px-9 lg:py-10">
-        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[#6d28d9]/40 blur-3xl" />
+      <aside className="relative overflow-hidden bg-[#4a03a2] px-6 py-6 text-white lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:px-9 lg:py-10">
+        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[#7c3aed]/40 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 right-[-60px] h-64 w-64 rounded-full bg-[#ff7a00]/25 blur-3xl" />
         <div className="relative flex items-center justify-between lg:block">
           <Link to="/login" aria-label="Voltar para o login">
-            <MarcaSax className="w-24 text-white lg:w-28" />
+            <MarcaSax className="w-24 text-sax lg:w-28" />
           </Link>
           <span className="text-sm text-white/70 lg:hidden">Passo {passo + 1} de 4</span>
         </div>

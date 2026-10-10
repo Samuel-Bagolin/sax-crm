@@ -30,6 +30,7 @@ from lib.crm import garantir_crm_todas
 SERVERLESS = bool(os.environ.get("VERCEL"))
 _inicializado = False
 _trava_inicio = asyncio.Lock()
+AVISOS_INICIO: list[str] = []  # passos de manutenção que falharam na última inicialização
 
 
 async def inicializar() -> None:
@@ -40,14 +41,20 @@ async def inicializar() -> None:
     async with _trava_inicio:
         if not _inicializado:
             from lib.autoconfig import carregar_segredos, trancar_regras
-            await carregar_segredos(controle)
-            await trancar_regras(client)
-            await ensure_indexes()
-            await garantir_crm_todas()
-            await _primeiro_administrador()
-            await _migrar_marca()
+            await carregar_segredos(controle)  # sem os segredos não há sessão: este passo é obrigatório
             from lib.planos import carregar_catalogo
-            await carregar_catalogo(forcar=True)
+            # Os demais passos são manutenção. Se um falhar, o sistema sobe assim mesmo e o erro vai para o log
+            # (e para /api/status), em vez de derrubar o site inteiro.
+            avisos = []
+            for nome, passo in (("regras", lambda: trancar_regras(client)), ("indices", ensure_indexes),
+                                ("crm", garantir_crm_todas), ("admin", _primeiro_administrador),
+                                ("marca", _migrar_marca), ("planos", lambda: carregar_catalogo(forcar=True))):
+                try:
+                    await passo()
+                except Exception as exc:
+                    avisos.append(f"{nome}: {type(exc).__name__}: {str(exc)[:200]}")
+                    logging.getLogger(__name__).exception("inicialização: passo %s falhou", nome)
+            AVISOS_INICIO[:] = avisos
             _inicializado = True
 
 
@@ -144,6 +151,8 @@ async def health():
     saida = {"status": "ok" if not erro_inicio else "erro", "banco": banco, "inicializado": _inicializado}
     if erro_inicio:
         saida["erro_inicializacao"] = erro_inicio
+    if AVISOS_INICIO:
+        saida["avisos_inicializacao"] = AVISOS_INICIO
     if USA_FIRESTORE:
         saida.update({"regras_firebase": ESTADO["regras"], "segredos": ESTADO["segredos"],
                       "local_do_banco": await local_do_banco(client), "regiao_vercel": os.environ.get("VERCEL_REGION")})
