@@ -247,7 +247,7 @@ async def vender(veiculo_id: str, input: Venda, principal: Principal = Depends(r
     conta = await db.plano_contas.find_one({"codigo": "1.1.1"}) or await db.plano_contas.find_one({"tipo": "receita"})
     vendedor = await db.usuarios.find_one({"id": input.vendedor_usuario_id or principal.usuario_id}, {"pessoa_id": 1, "nome": 1}) or {}
     dados = {"status": "vendido", "site_status": "inativo", "vendido_em": dia, "valor_vendido": round(input.valor, 2),
-             "comprador_id": input.cliente_id, "vendedor_nome": vendedor.get("nome"), "updated_at": now_utc()}
+             "comprador_id": input.cliente_id, "vendedor_nome": vendedor.get("nome"), "forma_pagamento": input.forma_pagamento, "updated_at": now_utc()}
     # Marca como vendido com condição no status: duas vendas ao mesmo tempo não lançam a receita duas vezes.
     r = await db.veiculos.update_one({"id": veiculo_id, "status": {"$ne": "vendido"}}, {"$set": dados})
     if r.modified_count != 1:

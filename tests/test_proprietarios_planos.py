@@ -122,7 +122,7 @@ def test_catalogo_planos_adicionais_e_condicoes():
     assert ad.status_code == 201, ad.text
     assert s.post("/adicionais", json={"nome": "Sem recurso", "tipo": "recurso", "preco_mensal": 1}).status_code == 422
     empresas = s.get("/empresas").json()
-    alvo = next((e for e in empresas if e["slug"].startswith("teste")), None) or s.post(
+    alvo = next((e for e in empresas if e["slug"].startswith("teste") and (e.get("segmento") or "imobiliaria") == "imobiliaria"), None) or s.post(
         "/empresas", json={"nome": f"Teste Comercial {uuid.uuid4().hex[:4]}", "admin_nome": "Gestor", "admin_email": f"g{uuid.uuid4().hex[:6]}@teste.com",
                            "admin_senha": "senha-forte-123", "enviar_convite": False}).json()
     assert s.patch(f"/empresas/{alvo['id']}", json={"plano": chave}).status_code == 200

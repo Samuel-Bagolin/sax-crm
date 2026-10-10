@@ -281,7 +281,11 @@ async def editar_entrada(entrada_id: str, input: EntradaUpdate, principal: Princ
     await reference("imoveis", data.get("imovel_id"))
     await reference("veiculos", data.get("veiculo_id"))
     await reference("pessoas", data.get("corretor_id"), principal)
-    if "corretor_id" in data and data["corretor_id"] != doc.get("corretor_id"):
+    if data.get("na_fila") is not None and not principal.is_admin:
+        data.pop("na_fila")
+    if data.get("na_fila"):
+        data.update(corretor_id=None, fila_desde=now_utc(), devolvido_de=doc.get("corretor_id"))
+    elif "corretor_id" in data and data["corretor_id"] != doc.get("corretor_id"):
         data.update(atribuido_em=now_utc() if data["corretor_id"] else None, na_fila=False)
     data["updated_at"] = now_utc()
     if data.get("status") in ("em_contato", "descartado") and not doc.get("primeiro_contato_em"):

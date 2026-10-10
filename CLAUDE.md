@@ -66,6 +66,11 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    segmento não vale para outro. Rotas de agenda: `routers/atendimentos.py` e `agendar_publico.py`
    (travas em `agenda_travas`, nunca grave agendamento sem `travar`). Prontuário só para quem atende
    o paciente (`_atende` em `routers/pacientes.py`) e todo acesso fica registrado.
+   Menu de cada segmento (`AppShell.tsx`): Leads, Negócios (vendas) ou Pacientes/Clientes (atendimento),
+   Agenda, Orçamentos, Contratos, depois Operação e Gestão. Item de interesse do negócio por segmento:
+   `useItemSegmento()` (imóvel ou veículo; atendimento não tem). Leads: rodízio e fila livre
+   (`repescar_leads` em `routers/crm.py`; quem pega primeiro fica, com `update_one` condicional).
+   Barbearia: clube de assinantes em `routers/clube.py` (mensalidade com id fixo por mês, não duplica).
 7. **Dinheiro lançado uma vez só.** Concluir atendimento, aprovar tratamento e vender veículo mudam o
    status com `update_one` condicional e só lançam no Financeiro se `modified_count == 1`.
 8. **Cartão e Asaas.** Número e CVV só passam pela memória a caminho do Asaas (`lib/asaas.py`): nunca

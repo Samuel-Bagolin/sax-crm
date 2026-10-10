@@ -52,6 +52,9 @@ async def _atende(principal: Principal, paciente_id: str) -> bool:
     eu = await db.usuarios.find_one({"id": principal.usuario_id}, {"atende": 1})
     if not (eu or {}).get("atende"):
         return False
+    p = await db.pessoas.find_one({"id": paciente_id}, {"criado_por_id": 1})
+    if (p or {}).get("criado_por_id") == principal.usuario_id:
+        return True  # cadastro feito por este profissional (ex.: orçamento de paciente novo): ninguém mais tem histórico nele
     async for a in db.agendamentos.find({"cliente_id": paciente_id, "profissional_id": principal.usuario_id},
                                         {"status": 1, "criado_por_id": 1}):
         if a.get("status") in ("confirmado", "em_atendimento", "concluido"):
@@ -111,8 +114,101 @@ async def criar(input: PacienteIn, principal: Principal = Depends(require("pacie
     p = Pessoa(**{**input.model_dump(), "cpf_cnpj": formatar_documento(doc) if doc else None, "papeis": [papel]}).model_dump()
     p["telefone_digitos"] = so_digitos(input.telefone) or None
     p["documento_digitos"] = doc or None
+    p["criado_por_id"] = principal.usuario_id
     await db.pessoas.insert_one(p)
     return _limpo(p)
+
+
+# ------------------------------------------------------------------ orçamentos (tela direta)
+
+
+@router.get("/orcamentos/lista")
+async def listar_orcamentos(status: str | None = None, principal: Principal = Depends(require("tratamento:read"))):
+    """Todos os orçamentos (planos de tratamento). O gestor vê todos; o profissional, os dele."""
+    filtro: dict = {} if principal.is_admin else {"profissional_id": principal.usuario_id}
+    if status:
+        filtro["status"] = status
+    docs = await db.planos_tratamento.find(filtro).to_list(2000)
+    docs.sort(key=lambda t: t.get("created_at") or now_utc(), reverse=True)
+    return [{k: t.get(k) for k in ("id", "paciente_id", "paciente_nome", "titulo", "tipo", "status", "total", "parcelas", "profissional_nome",
+                                   "created_at", "negocio_id")} for t in docs]
+
+
+@router.get("/orcamentos/buscar")
+async def buscar_para_orcamento(q: str = Query(min_length=2, max_length=80), principal: Principal = Depends(require("tratamento:read"))):
+    """Procura quem vai receber o orçamento: pacientes e leads ainda não cadastrados como paciente.
+    Busca por nome, telefone ou CPF."""
+    from lib.assinatura import so_digitos
+
+    t = q.lower().strip()
+    dig = so_digitos(q)
+    saida = []
+    async for p in db.pessoas.find({"papeis": {"$in": PAPEIS_ATENDIDOS}}):
+        texto = " ".join(str(p.get(k) or "") for k in ("nome", "email")).lower()
+        if t in texto or (dig and len(dig) >= 4 and (dig in (p.get("telefone_digitos") or "") or dig in (p.get("documento_digitos") or ""))):
+            saida.append({"tipo": "paciente", "id": p["id"], "nome": p["nome"], "telefone": p.get("telefone"), "cpf": p.get("cpf_cnpj")})
+        if len(saida) >= 8:
+            break
+    filtro_e = {"status": {"$in": ["novo", "em_contato"]}, "cliente_id": None}
+    if not principal.is_admin:
+        filtro_e["corretor_id"] = principal.pessoa_id or "__sem_vinculo__"
+    async for e in db.entradas.find(filtro_e):
+        tel = so_digitos(e.get("telefone"))
+        if t in (e.get("nome") or "").lower() or (dig and len(dig) >= 4 and dig in tel):
+            saida.append({"tipo": "lead", "id": e["id"], "nome": e["nome"], "telefone": e.get("telefone"), "cpf": None})
+        if len(saida) >= 12:
+            break
+    return saida
+
+
+class PacienteOrcamento(BaseModel):
+    """Quem recebe o orçamento: um lead existente (vira paciente) ou alguém novo (vira paciente e lead)."""
+    entrada_id: str | None = None
+    nome: str | None = Field(default=None, max_length=200)
+    telefone: str | None = Field(default=None, max_length=30)
+    cpf_cnpj: str | None = Field(default=None, max_length=20)
+
+
+@router.post("/orcamentos/paciente", status_code=201)
+async def paciente_para_orcamento(input: PacienteOrcamento, principal: Principal = Depends(require("paciente:write"))):
+    from lib.assinatura import so_digitos
+    from models.crm import Entrada
+    from models.pessoas import Pessoa, cpf_valido, formatar_documento
+
+    doc = so_digitos(input.cpf_cnpj)
+    if doc and not (len(doc) == 11 and cpf_valido(doc)):
+        raise HTTPException(422, "CPF inválido")
+    if doc:
+        existente = await db.pessoas.find_one({"documento_digitos": doc})
+        if existente:
+            return {"paciente": _limpo(existente), "lead_criado": False, "ja_existia": True}
+    entrada = None
+    if input.entrada_id:
+        entrada = await db.entradas.find_one({"id": input.entrada_id})
+        if not entrada or (not principal.is_admin and entrada.get("corretor_id") not in (principal.pessoa_id, None)):
+            raise HTTPException(404, "Lead não encontrado")
+    nome = (input.nome or (entrada or {}).get("nome") or "").strip()
+    if len(nome) < 2:
+        raise HTTPException(422, "Informe o nome")
+    telefone = (input.telefone or (entrada or {}).get("telefone") or "").strip() or None
+    papel = "paciente" if principal.segmento in ("terapia", "odontologia") else "cliente"
+    p = Pessoa(nome=nome, telefone=telefone, email=(entrada or {}).get("email"), cpf_cnpj=formatar_documento(doc) if doc else None,
+               papeis=[papel]).model_dump()
+    p.update(telefone_digitos=so_digitos(telefone) or None, documento_digitos=doc or None, criado_por_id=principal.usuario_id)
+    await db.pessoas.insert_one(p)
+    lead_criado = False
+    if entrada:
+        await db.entradas.update_one({"id": entrada["id"]}, {"$set": {"cliente_id": p["id"], "status": "em_contato",
+                                                                      "primeiro_contato_em": entrada.get("primeiro_contato_em") or now_utc(), "updated_at": now_utc()}})
+    else:
+        # Não estava em lugar nenhum: entra em Leads para o comercial acompanhar.
+        e = Entrada(nome=nome, telefone=telefone, origem="Orçamento", interesse="outro", cliente_id=p["id"],
+                    corretor_id=principal.pessoa_id, status="em_contato", primeiro_contato_em=now_utc(),
+                    mensagem="Cadastrado ao criar um orçamento").model_dump()
+        e["atribuido_em"] = now_utc() if principal.pessoa_id else None
+        await db.entradas.insert_one(e)
+        lead_criado = True
+    return {"paciente": _limpo(p), "lead_criado": lead_criado, "ja_existia": False}
 
 
 @router.put("/{paciente_id}")
@@ -402,6 +498,9 @@ async def acao_tratamento(paciente_id: str, tratamento_id: str, input: Acao, pri
                         "tratamento_id": t["id"]}
                 await db.leads.insert_one(lead)
                 dados["negocio_id"] = lead["id"]
+                # O lead da caixa de entrada desta pessoa vira o negócio do orçamento.
+                await db.entradas.update_many({"cliente_id": paciente_id, "status": {"$in": ["novo", "em_contato"]}},
+                                              {"$set": {"status": "convertido", "negocio_id": lead["id"], "updated_at": now_utc()}})
     elif input.acao == "aprovar":
         if t["status"] in ("aprovado", "concluido"):
             raise HTTPException(409, "Plano já aprovado")

@@ -156,6 +156,7 @@ class EntradaUpdate(BaseModel):
     etiquetas: List[str] | None = None
     status: Literal["novo", "em_contato", "descartado"] | None = None
     motivo_descarte: str | None = None
+    na_fila: bool | None = None  # gestor manda o lead para a fila livre
 
 
 class ConverterEntrada(BaseModel):

@@ -1,3 +1,4 @@
+import { useSegmento } from "@/lib/segmento";
 import { parseNumber as num } from "@/lib/numbers";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -52,6 +53,7 @@ export default function TransactionModal({
   contas: PlanoConta[];
   imoveis: Imovel[];
 }) {
+  const seg = useSegmento();
   const qc = useQueryClient();
   const [form, setForm] = useState<FormState>({
     descricao: "",
@@ -215,7 +217,7 @@ export default function TransactionModal({
             </Select>
           </div>
 
-          <div className="grid gap-2">
+          {seg.imobiliaria && <div className="grid gap-2">
             <Label>Imóvel vinculado</Label>
             <Select value={form.imovel_id || SEM_IMOVEL} onValueChange={(v) => set("imovel_id", v)}>
               <SelectTrigger className="w-full min-w-0" data-testid="transacao-imovel-select">
@@ -234,7 +236,7 @@ export default function TransactionModal({
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </div>}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">

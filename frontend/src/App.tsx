@@ -30,6 +30,8 @@ import Atendimentos from "@/pages/Atendimentos";
 import AgendaOnline from "@/pages/AgendaOnline";
 import Pacientes from "@/pages/Pacientes";
 import PacienteDetalhe from "@/pages/PacienteDetalhe";
+import Orcamentos from "@/pages/Orcamentos";
+import Clube from "@/pages/Clube";
 import Veiculos from "@/pages/Veiculos";
 import Assinatura from "@/pages/Assinatura";
 import Unidades from "@/pages/Unidades";
@@ -65,6 +67,8 @@ export default function App() {
             <Route path="/agenda-online" element={<AgendaOnline />} />
             <Route path="/pacientes" element={<Pacientes />} />
             <Route path="/pacientes/:id" element={<PacienteDetalhe />} />
+            <Route path="/orcamentos" element={<Orcamentos />} />
+            <Route path="/clube" element={<Clube />} />
             <Route path="/veiculos" element={<Veiculos />} />
             <Route path="/crm" element={<Negocios />} />
             <Route path="/negocios/:id" element={<NegocioDetalhe />} />

@@ -233,7 +233,7 @@ class AgendamentoUpdate(BaseModel):
 
 class Conclusao(BaseModel):
     valor: float = Field(ge=0, le=10_000_000)
-    forma_pagamento: Literal["dinheiro", "pix", "debito", "credito", "outro", "pendente"] = "pix"
+    forma_pagamento: Literal["dinheiro", "pix", "debito", "credito", "outro", "pendente", "assinatura"] = "pix"
     observacoes: str | None = Field(default=None, max_length=1000)
 
 
@@ -466,6 +466,13 @@ async def concluir(agendamento_id: str, input: Conclusao, principal: Principal =
 async def _lancar_conclusao(a: dict, input: Conclusao, principal: Principal) -> dict:
     hoje = agora_local().date().isoformat()
     transacao_id = None
+    pelo_clube = False
+    if input.forma_pagamento == "assinatura":
+        # Assinante do clube: o atendimento entra como uso do plano, sem cobrança avulsa.
+        if not await db.clube_assinantes.find_one({"cliente_id": a["cliente_id"], "status": "ativo"}, {"id": 1}):
+            raise HTTPException(409, "Este cliente não tem assinatura ativa no clube. Escolha outra forma de pagamento.")
+        pelo_clube = True
+        input = input.model_copy(update={"valor": 0.0})
     if input.valor > 0:
         conta = await db.plano_contas.find_one({"codigo": "1.1.1"}) or await db.plano_contas.find_one({"tipo": "receita"})
         if not conta:
@@ -491,7 +498,7 @@ async def _lancar_conclusao(a: dict, input: Conclusao, principal: Principal) -> 
                     "pessoa_id": prof.get("pessoa_id"), "corretor_id": prof.get("pessoa_id"), "evento_id": None, "contrato_id": None,
                     "agendamento_id": a["id"], "vencimento": hoje, "pagamento": None, "status": "pendente", "vencido": False,
                     "cancelado_em": None, "created_at": now_utc()})
-    dados = {"status": "concluido", "valor_cobrado": round(input.valor, 2), "forma_pagamento": input.forma_pagamento,
+    dados = {"status": "concluido", "valor_cobrado": round(input.valor, 2), "forma_pagamento": input.forma_pagamento, "pelo_clube": pelo_clube,
              "transacao_id": transacao_id, "concluido_em": now_utc(), "concluido_por": principal.nome, "updated_at": now_utc()}
     if input.observacoes:
         dados["observacoes"] = input.observacoes
@@ -582,10 +589,14 @@ async def ocupacao(data: str | None = None, principal: Principal = Depends(requi
     docs = [a for a in await db.agendamentos.find({"data": dia.isoformat()}).to_list(3000) if a["status"] not in ("cancelado", "faltou")]
     profs = {p["id"]: p for p in await profissionais_ativos(so_atende=True)}
     cfg = await config()
-    faixas = (cfg.get("jornada_padrao") or {}).get(str((dia.weekday() + 1) % 7)) or []
+    chave_dia = str((dia.weekday() + 1) % 7)
+    # Funcionamento do dia: o horário de quem atende (cada um tem a sua jornada); sem jornada, o padrão da empresa.
+    faixas = [f for p in profs.values() for f in ((p.get("jornada") or cfg.get("jornada_padrao") or {}).get(chave_dia) or [])]
     abre = min((minutos(a) for a, _ in faixas), default=9 * 60)
     fecha = max((minutos(b) for _, b in faixas), default=19 * 60)
-    minutos_abertos = sum(minutos(b) - minutos(a) for a, b in faixas) or (fecha - abre)
+    for a in docs:  # atendimento marcado fora da jornada (encaixe) também conta
+        abre, fecha = min(abre, minutos(a["inicio"])), max(fecha, minutos(a["fim"]))
+    minutos_abertos = max(60, fecha - abre)
     agora_min = agora.hour * 60 + agora.minute if dia == agora.date() else None
     saida = []
     for u in unidades:
@@ -596,8 +607,8 @@ async def ocupacao(data: str | None = None, principal: Principal = Depends(requi
             return [a for a in da_unidade if minutos(a["inicio"]) <= m < minutos(a["fim"])]
         horas = []
         for h in range(abre // 60, (fecha + 59) // 60):
-            m = h * 60 + 30
-            horas.append({"hora": f"{h:02d}:00", "ocupadas": min(cadeiras, len(ocupando(m)))})
+            pico = max(len(ocupando(h * 60 + q)) for q in (0, 15, 30, 45))  # pico de cadeiras em uso dentro da hora
+            horas.append({"hora": f"{h:02d}:00", "ocupadas": min(cadeiras, pico)})
         agendado = sum(minutos(a["fim"]) - minutos(a["inicio"]) for a in da_unidade)
         em_uso = ocupando(agora_min) if agora_min is not None else []
         postos = []

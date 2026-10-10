@@ -1,3 +1,4 @@
+import { useSegmento } from "@/lib/segmento";
 import { csvCell } from "@/lib/numbers";
 import { Download } from "lucide-react";
 import {
@@ -49,6 +50,7 @@ export default function RelatoriosTab({
   resumo: ResumoFinanceiro | undefined;
   carregando: boolean;
 }) {
+  const seg = useSegmento();
   return (
     <div className="flex flex-col gap-5">
       <Card>
@@ -88,6 +90,7 @@ export default function RelatoriosTab({
         </CardContent>
       </Card>
 
+      {seg.imobiliaria && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Receita vs Despesa por Imóvel</CardTitle>
@@ -156,6 +159,7 @@ export default function RelatoriosTab({
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

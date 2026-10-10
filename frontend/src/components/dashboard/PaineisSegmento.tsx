@@ -60,7 +60,7 @@ export function PainelAtendimento() {
               {d.hoje.map((a) => (
                 <li key={a.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
                   <span className="w-12 font-semibold">{a.inicio}</span>
-                  <Link to={`/pacientes/${a.cliente_id}`} className="min-w-0 flex-1 truncate hover:underline">{a.cliente_nome} <span className="text-muted-foreground">, {a.servicos.map((s) => s.nome).join(", ")}</span></Link>
+                  <Link to={`/pacientes/${a.cliente_id}`} className="min-w-0 flex-1 truncate hover:underline">{a.cliente_nome}<span className="text-muted-foreground">, {a.servicos.map((s) => s.nome).join(", ")}</span></Link>
                   <span className="hidden truncate text-xs text-muted-foreground sm:block">{a.profissional_nome}</span>
                   <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-semibold", STATUS_AG[a.status].classe)}>{STATUS_AG[a.status].rotulo}</span>
                 </li>

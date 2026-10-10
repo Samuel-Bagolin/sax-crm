@@ -148,7 +148,7 @@ export default function MeuDia() {
               </li>
             );
           })}
-          {!ranking.length && <li className="px-4 py-8 text-center text-sm text-muted-foreground">Cadastre corretores para acompanhar o desempenho.</li>}
+          {!ranking.length && <li className="px-4 py-8 text-center text-sm text-muted-foreground">Cadastre a equipe para acompanhar o desempenho.</li>}
         </ol>
       </div>
       <AtividadeModal open={nova} onClose={() => setNova(false)} />

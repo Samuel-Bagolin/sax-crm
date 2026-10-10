@@ -489,6 +489,13 @@ function DetalheAgendamento({ agendamento: a, onClose }: { agendamento: Agendame
   const [cobrar, setCobrar] = useState(false);
   const [valor, setValor] = useState("");
   const [forma, setForma] = useState("pix");
+  const clube = useQuery({
+    queryKey: ["clube-cliente", a?.cliente_id],
+    queryFn: () => apiGet<{ plano_nome: string; servico_ids: string[]; limite_mes: number | null; usos_mes: number; restantes: number | null } | null>(`/clube/cliente/${a!.cliente_id}`),
+    enabled: !!a && seg.barbearia,
+  });
+  const cobre = !!clube.data && (clube.data.restantes === null || clube.data.restantes > 0)
+    && (!clube.data.servico_ids.length || (a?.servicos ?? []).every((s) => clube.data!.servico_ids.includes(s.id)));
   useEffect(() => {
     if (a) {
       setCobrar(false);
@@ -496,6 +503,9 @@ function DetalheAgendamento({ agendamento: a, onClose }: { agendamento: Agendame
       setForma("pix");
     }
   }, [a]);
+  useEffect(() => {
+    if (a && cobre) { setForma("assinatura"); setValor("0"); }
+  }, [a, cobre]);
   const atualizar = () => {
     qc.invalidateQueries({ queryKey: ["agendamentos"] });
     qc.invalidateQueries({ queryKey: ["atendimentos-resumo"] });
@@ -533,12 +543,19 @@ function DetalheAgendamento({ agendamento: a, onClose }: { agendamento: Agendame
             <Link to={`/pacientes/${a.cliente_id}`} className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-muted"><UserRound className="h-4 w-4" /> Ficha do {seg.termos.cliente.toLowerCase()}</Link>
             {whats && ativo && <a href={whats} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-muted"><MessageCircle className="h-4 w-4" /> Confirmar no WhatsApp</a>}
           </div>
+          {clube.data && (
+            <p className="rounded-lg border border-[#ff7a00]/40 bg-[#ff7a00]/5 p-2 text-xs">
+              Assinante do clube <b>{clube.data.plano_nome}</b>: {clube.data.usos_mes} uso(s) neste mês{clube.data.limite_mes ? ` de ${clube.data.limite_mes}` : ", ilimitado"}.
+              {!cobre && " Este atendimento não é coberto pelo plano: cobre à parte."}
+            </p>
+          )}
           {cobrar && (
             <div className="grid gap-2 rounded-lg border p-3">
               <div className="grid grid-cols-2 gap-2">
-                <div className="grid gap-1"><Label htmlFor="c-valor">Valor cobrado</Label><Input id="c-valor" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} /></div>
+                <div className="grid gap-1"><Label htmlFor="c-valor">Valor cobrado</Label><Input id="c-valor" inputMode="decimal" value={valor} disabled={forma === "assinatura"} onChange={(e) => setValor(e.target.value)} /></div>
                 <div className="grid gap-1"><Label htmlFor="c-forma">Pagamento</Label>
-                  <select id="c-forma" className="h-9 rounded-lg border bg-transparent px-2 text-sm" value={forma} onChange={(e) => setForma(e.target.value)}>
+                  <select id="c-forma" className="h-9 rounded-lg border bg-transparent px-2 text-sm" value={forma} onChange={(e) => { setForma(e.target.value); if (e.target.value === "assinatura") setValor("0"); }}>
+                    {clube.data && <option value="assinatura">Assinatura do clube</option>}
                     <option value="pix">PIX</option><option value="dinheiro">Dinheiro</option><option value="debito">Débito</option><option value="credito">Crédito</option><option value="pendente">Fica a receber</option><option value="outro">Outro</option>
                   </select>
                 </div>

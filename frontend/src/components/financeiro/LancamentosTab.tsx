@@ -1,3 +1,4 @@
+import { useSegmento } from "@/lib/segmento";
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -104,6 +105,7 @@ export default function LancamentosTab({
   onConsumirNovo: () => void;
   somenteLeitura?: boolean;
 }) {
+  const seg = useSegmento();
   const qc = useQueryClient();
   const [filtroTipo, setFiltroTipo] = useState<string>(TODOS);
   const [filtroStatus, setFiltroStatus] = useState<string>(TODOS);
@@ -228,7 +230,7 @@ export default function LancamentosTab({
             <TableRow>
               <TableHead>Descrição</TableHead>
               <TableHead>Categoria</TableHead>
-              <TableHead>Imóvel</TableHead>
+              {seg.imobiliaria && <TableHead>Imóvel</TableHead>}
               <TableHead>Vencimento</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead>Status</TableHead>
@@ -261,9 +263,11 @@ export default function LancamentosTab({
                   <TableCell>
                     <p className="text-xs">{conta ? `${conta.codigo} · ${conta.nome}` : "—"}</p>
                   </TableCell>
-                  <TableCell>
-                    <p className="max-w-44 truncate text-xs text-muted-foreground">{imovel ? imovel.titulo : "—"}</p>
-                  </TableCell>
+                  {seg.imobiliaria && (
+                    <TableCell>
+                      <p className="max-w-44 truncate text-xs text-muted-foreground">{imovel ? imovel.titulo : "Sem imóvel"}</p>
+                    </TableCell>
+                  )}
                   <TableCell>
                     <p className="text-xs">{dataBR(t.vencimento)}</p>
                     {t.pagamento && <p className="text-[11px] text-muted-foreground">pago em {dataBR(t.pagamento)}</p>}

@@ -68,7 +68,7 @@ export default function AutomacoesConfig() {
           <Zap className="h-4 w-4 text-sax" />
           <div className="flex-1">
             <h3 className="text-sm font-semibold">Automações de follow-up</h3>
-            <p className="text-xs text-muted-foreground">Cada regra cria uma atividade para o responsável. Nada é enviado ao cliente sem o corretor.</p>
+            <p className="text-xs text-muted-foreground">Cada regra cria uma atividade para o responsável. Nada é enviado ao cliente sem o responsável.</p>
           </div>
           <Button size="sm" onClick={() => setEditando(novaRegra())}>
             <Plus className="h-3.5 w-3.5" /> Nova regra
@@ -226,7 +226,7 @@ export default function AutomacoesConfig() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="au-notas">Roteiro para o corretor (opcional)</Label>
+                <Label htmlFor="au-notas">Roteiro para o responsável (opcional)</Label>
                 <Textarea id="au-notas" rows={2} value={editando.notas ?? ""} onChange={(e) => setEditando({ ...editando, notas: e.target.value || null })} placeholder="O que falar, que documento pedir…" />
               </div>
             </div>

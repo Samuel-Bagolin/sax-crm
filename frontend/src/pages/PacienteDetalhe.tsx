@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, Check, FileText, Lock, MessageCircle, Printer, X } from "lucide-react";
 import { apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
@@ -41,7 +41,8 @@ export default function PacienteDetalhe() {
   const q = useQuery({ queryKey: ["ficha", id], queryFn: () => apiGet<FichaPaciente>(`/pacientes/${id}`) });
   const [rascunho, setRascunho] = useState<ItemTratamento[]>([]);
   const [criando, setCriando] = useState<"odonto" | "facial" | null>(null);
-  const [aba, setAba] = useState("resumo");
+  const [params] = useSearchParams();
+  const [aba, setAba] = useState(params.get("aba") ?? "resumo");
 
   if (q.isLoading) return <div className="h-64 animate-pulse rounded-xl bg-muted" />;
   if (!q.data) return <p className="rounded-xl border p-6">Cadastro não encontrado.</p>;
@@ -176,7 +177,7 @@ function Kpi({ rotulo, valor, detalhe }: { rotulo: string; valor: string; detalh
   );
 }
 
-function NovoOrcamento({ tipo, pacienteId, itens, onClose, onCriado }: { tipo: "odonto" | "facial" | null; pacienteId: string; itens: ItemTratamento[]; onClose: () => void; onCriado: () => void }) {
+export function NovoOrcamento({ tipo, pacienteId, itens, onClose, onCriado }: { tipo: "odonto" | "facial" | null; pacienteId: string; itens: ItemTratamento[]; onClose: () => void; onCriado: () => void }) {
   const qc = useQueryClient();
   const [f, setF] = useState({ titulo: "", desconto: "", parcelas: "1", primeira_parcela: "", observacoes: "" });
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Car, ImagePlus, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Car, FileText, ImagePlus, Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { apiGet, apiPost, apiPut, apiDelete, detalheErro } from "@/lib/api";
 import { brl, brlCompacto } from "@/lib/format";
 import { useAuth } from "@/lib/useAuth";
@@ -12,7 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import SiteStatusPicker from "@/components/site/SiteStatusPicker";
-import type { SiteStatus } from "@/lib/types";
+import type { Lead, Pessoa, SiteStatus } from "@/lib/types";
+import { useConfig } from "@/lib/useConfig";
+import Combo from "@/components/shared/Combo";
 import { cn } from "@/lib/utils";
 
 type StatusV = "preparacao" | "disponivel" | "reservado" | "vendido";
@@ -52,6 +54,8 @@ interface Veiculo {
   ipva_pago: boolean;
   garantia: string | null;
   valor_vendido?: number;
+  comprador_id?: string | null;
+  forma_pagamento?: string | null;
   vendido_em?: string;
   fotos?: { id: string; url: string }[];
 }
@@ -84,6 +88,8 @@ export default function Veiculos() {
   const [busca, setBusca] = useState("");
   const [edit, setEdit] = useState<Veiculo | "novo" | null>(null);
   const [vender, setVender] = useState<Veiculo | null>(null);
+  const { config } = useConfig();
+  const pessoasTodas = useQuery({ queryKey: ["pessoas"], queryFn: () => apiGet<Pessoa[]>("/pessoas") });
   const [aba, setAba] = useState("estoque");
   const filtrada = useMemo(() => {
     const t = busca.toLowerCase().trim();
@@ -129,9 +135,14 @@ export default function Veiculos() {
                       <p className="text-[11px] text-muted-foreground">{v.codigo}, {v.dias_estoque} dia(s) {v.status === "vendido" ? "até a venda" : "em estoque"}</p>
                     </div>
                   </button>
-                  {v.status !== "vendido" && (
+                  {v.status !== "vendido" ? (
                     <div className="flex border-t">
                       <button type="button" onClick={() => setVender(v)} className="flex-1 py-2 text-sm font-semibold text-primary hover:bg-accent/50" data-testid={`vender-${v.codigo}`}>Registrar venda</button>
+                    </div>
+                  ) : (
+                    <div className="flex border-t">
+                      <button type="button" onClick={() => imprimirContratoVenda(v, (pessoasTodas.data ?? []).find((p) => p.id === v.comprador_id) ?? null, config.nome_software, v.valor_vendido ?? 0, v.forma_pagamento ?? "a_vista")}
+                        className="flex-1 py-2 text-sm font-medium text-muted-foreground hover:bg-accent/50">Contrato de compra e venda</button>
                     </div>
                   )}
                 </li>
@@ -282,27 +293,101 @@ function VeiculoDialog({ veiculo, onClose, onSalvo }: { veiculo: Veiculo | "novo
 }
 
 function VendaDialog({ veiculo, onClose, onSalvo }: { veiculo: Veiculo | null; onClose: () => void; onSalvo: () => void }) {
+  const { config } = useConfig();
   const [valor, setValor] = useState("");
   const [forma, setForma] = useState("financiamento");
-  useEffect(() => { if (veiculo) setValor(String(veiculo.preco_venda ?? "")); }, [veiculo]);
+  const [cliente, setCliente] = useState<string | null>(null);
+  const [negocio, setNegocio] = useState<string | null>(null);
+  const [vendido, setVendido] = useState(false);
+  const pessoas = useQuery({ queryKey: ["pessoas"], queryFn: () => apiGet<Pessoa[]>("/pessoas"), enabled: !!veiculo });
+  const negocios = useQuery({ queryKey: ["leads", "abertos"], queryFn: () => apiGet<Lead[]>("/leads"), enabled: !!veiculo });
+  const abertos = (negocios.data ?? []).filter((n) => n.status === "aberto");
+  useEffect(() => {
+    if (!veiculo) return;
+    setValor(String(veiculo.preco_venda ?? ""));
+    setVendido(false);
+    setForma("financiamento");
+    const doCarro = abertos.find((n) => n.veiculo_id === veiculo.id);
+    setNegocio(doCarro?.id ?? null);
+    setCliente(doCarro?.cliente_id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [veiculo, negocios.data]);
+  const valorNum = Number(valor.replace(/\./g, "").replace(",", "."));
   const vender = useMutation({
-    mutationFn: () => apiPost(`/veiculos/${veiculo!.id}/vender`, { valor: Number(valor.replace(/\./g, "").replace(",", ".")), forma_pagamento: forma }),
-    onSuccess: () => { onSalvo(); toast.success("Venda registrada e lançada no Financeiro"); onClose(); },
+    mutationFn: () => apiPost(`/veiculos/${veiculo!.id}/vender`, { valor: valorNum, forma_pagamento: forma, cliente_id: cliente, negocio_id: negocio }),
+    onSuccess: () => { onSalvo(); toast.success(negocio ? "Venda registrada, negócio ganho e lançado no Financeiro" : "Venda registrada e lançada no Financeiro"); setVendido(true); },
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível registrar"),
   });
+  const comprador = (pessoas.data ?? []).find((p) => p.id === cliente) ?? null;
   return (
     <Dialog open={!!veiculo} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader><DialogTitle>Registrar venda</DialogTitle><DialogDescription>{veiculo?.titulo}</DialogDescription></DialogHeader>
-        <div className="grid gap-3">
-          <div className="grid gap-1.5"><Label htmlFor="vd-valor">Valor da venda (R$)</Label><Input id="vd-valor" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} data-testid="venda-valor" /></div>
-          <div className="grid gap-1.5"><Label htmlFor="vd-forma">Pagamento</Label>
-            <select id="vd-forma" className="h-9 rounded-lg border bg-transparent px-2 text-sm" value={forma} onChange={(e) => setForma(e.target.value)}>
-              <option value="financiamento">Financiamento</option><option value="a_vista">À vista</option><option value="troca_mais_volta">Troca com volta</option><option value="consorcio">Consórcio</option>
-            </select></div>
-        </div>
-        <DialogFooter><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={() => vender.mutate()} disabled={!Number(valor.replace(",", ".")) || vender.isPending} data-testid="venda-confirmar">Confirmar venda</Button></DialogFooter>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>{vendido ? "Venda registrada" : "Registrar venda"}</DialogTitle><DialogDescription>{veiculo?.titulo}</DialogDescription></DialogHeader>
+        {vendido ? (
+          <div className="grid gap-3 text-sm">
+            <p>Gere o contrato de compra e venda com os dados do veículo e do comprador para imprimir e assinar.</p>
+            <DialogFooter>
+              <Button variant="outline" onClick={onClose}>Fechar</Button>
+              <Button onClick={() => veiculo && imprimirContratoVenda(veiculo, comprador, config.nome_software, valorNum, forma)} data-testid="venda-contrato"><FileText className="h-4 w-4" /> Contrato de compra e venda</Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-3">
+              <div className="grid gap-1.5"><Label>Negócio do CRM</Label>
+                <Combo opcoes={abertos.map((n) => ({ valor: n.id, rotulo: n.nome, detalhe: n.veiculo_id === veiculo?.id ? "deste veículo" : null }))} valor={negocio}
+                  onChange={(v) => { setNegocio(v); const n = abertos.find((x) => x.id === v); if (n?.cliente_id) setCliente(n.cliente_id); }} placeholder="Opcional: marca o negócio como ganho" />
+              </div>
+              <div className="grid gap-1.5"><Label>Comprador</Label>
+                <Combo opcoes={(pessoas.data ?? []).map((p) => ({ valor: p.id, rotulo: p.nome, detalhe: p.telefone || p.cpf_cnpj }))} valor={cliente} onChange={setCliente} placeholder="Buscar cliente" testid="venda-cliente" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5"><Label htmlFor="vd-valor">Valor da venda (R$)</Label><Input id="vd-valor" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} data-testid="venda-valor" /></div>
+                <div className="grid gap-1.5"><Label htmlFor="vd-forma">Pagamento</Label>
+                  <select id="vd-forma" className="h-9 rounded-lg border bg-transparent px-2 text-sm" value={forma} onChange={(e) => setForma(e.target.value)}>
+                    <option value="financiamento">Financiamento</option><option value="a_vista">À vista</option><option value="troca_mais_volta">Troca com volta</option><option value="consorcio">Consórcio</option>
+                  </select></div>
+              </div>
+            </div>
+            <DialogFooter><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={() => vender.mutate()} disabled={!valorNum || vender.isPending} data-testid="venda-confirmar">Confirmar venda</Button></DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
+}
+
+const FORMA_VENDA: Record<string, string> = { financiamento: "financiamento bancário", a_vista: "à vista", troca_mais_volta: "veículo na troca mais diferença em dinheiro", consorcio: "carta de consórcio" };
+
+/** Contrato de compra e venda de veículo, pronto para imprimir e assinar. Campos em branco ficam com linha para preencher à mão. */
+function imprimirContratoVenda(v: Veiculo, comprador: Pessoa | null, loja: string, valor: number, forma: string) {
+  const w = window.open("", "_blank", "width=820,height=960");
+  if (!w) return;
+  const linha = (t?: string | null) => (t && t.trim() ? t : "______________________________");
+  const hoje = new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+  const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Contrato de compra e venda ${esc(v.codigo)}</title><style>
+    body{font-family:Georgia,serif;color:#1d1530;max-width:720px;margin:40px auto;padding:0 24px;line-height:1.6;font-size:14px}h1{font-size:20px;text-align:center;margin-bottom:24px}
+    h2{font-size:14px;margin:20px 0 6px;text-transform:uppercase;letter-spacing:.06em}table{width:100%;border-collapse:collapse}td{border:1px solid #d8d3e3;padding:6px 8px}td:first-child{width:38%;color:#5b5170}
+    .ass{display:flex;gap:40px;margin-top:64px}.ass div{flex:1;border-top:1px solid #1d1530;padding-top:6px;text-align:center;font-size:12px}@media print{button{display:none}}</style></head><body>
+    <h1>Contrato particular de compra e venda de veículo</h1>
+    <h2>Vendedor</h2><p>${esc(loja)}, doravante VENDEDOR.</p>
+    <h2>Comprador</h2><p>${esc(linha(comprador?.nome))}, CPF/CNPJ ${esc(linha(comprador?.cpf_cnpj))}, telefone ${esc(linha(comprador?.telefone))}, doravante COMPRADOR.</p>
+    <h2>Veículo</h2><table>
+      <tr><td>Marca / modelo / versão</td><td>${esc([v.marca, v.modelo, v.versao].filter(Boolean).join(" "))}</td></tr>
+      <tr><td>Ano fabricação / modelo</td><td>${v.ano_fabricacao}/${v.ano_modelo}</td></tr>
+      <tr><td>Cor</td><td>${esc(linha(v.cor))}</td></tr><tr><td>Placa</td><td>${esc(linha(v.placa))}</td></tr>
+      <tr><td>Quilometragem</td><td>${v.km.toLocaleString("pt-BR")} km</td></tr><tr><td>Chassi / Renavam</td><td>${linha(null)}</td></tr>
+      <tr><td>Código interno</td><td>${esc(v.codigo)}</td></tr></table>
+    <h2>Preço e pagamento</h2><p>O preço certo e ajustado é de <b>${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b>, pago por ${esc(FORMA_VENDA[forma] ?? forma)}.</p>
+    <h2>Condições</h2><p>1. O COMPRADOR declara ter examinado o veículo e o recebe no estado em que se encontra.<br>
+    2. O VENDEDOR responde por débitos, multas e impostos do veículo até a data da entrega; a partir dela, a responsabilidade passa ao COMPRADOR.<br>
+    3. As partes se comprometem a assinar a transferência no órgão de trânsito no prazo legal.<br>
+    4. Garantia: ${esc(linha(v.garantia ?? null))}.</p>
+    <p>${esc(linha(null))}, ${hoje}.</p>
+    <div class="ass"><div>VENDEDOR<br>${esc(loja)}</div><div>COMPRADOR<br>${esc(linha(comprador?.nome))}</div></div>
+    <div class="ass"><div>Testemunha 1</div><div>Testemunha 2</div></div>
+    <p style="margin-top:32px;font-size:11px;color:#6b5f86">Modelo de referência. Revise as cláusulas com o seu contador ou advogado antes de usar.</p>
+    <button onclick="print()" style="margin-top:16px;padding:8px 16px">Imprimir</button></body></html>`);
+  w.document.close();
 }

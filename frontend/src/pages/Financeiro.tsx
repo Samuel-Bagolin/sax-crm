@@ -59,8 +59,7 @@ export default function Financeiro() {
         >
           <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            O fluxo de caixa da imobiliária, o plano de contas e o resultado por imóvel são
-            exclusivos do gestor. Abaixo estão apenas as comissões dos seus negócios.
+            O fluxo de caixa da empresa e o plano de contas são exclusivos do gestor. Abaixo estão apenas as suas comissões.
           </p>
         </div>
 

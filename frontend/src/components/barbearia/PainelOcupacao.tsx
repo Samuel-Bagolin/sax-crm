@@ -103,12 +103,12 @@ export default function PainelOcupacao() {
           </div>
           <div>
             <p className="mb-1.5 text-sm font-medium">Hora a hora</p>
-            <div className="flex h-24 items-end gap-[3px]" aria-label="Cadeiras ocupadas por hora">
+            <div className="flex items-end gap-[3px]" aria-label="Cadeiras ocupadas por hora">
               {u.horas.map((h) => {
                 const agoraAqui = d.agora?.slice(0, 2) === h.hora.slice(0, 2);
                 return (
                   <div key={h.hora} className="flex flex-1 flex-col items-center gap-1" title={`${h.hora}: ${h.ocupadas} de ${u.cadeiras} ocupadas`}>
-                    <div className="flex w-full flex-1 items-end rounded-sm bg-muted">
+                    <div className="flex h-20 w-full items-end rounded-sm bg-muted">
                       <div className={cn("w-full rounded-sm", agoraAqui ? "bg-[#4a03a2]" : "bg-[#ff7a00]")} style={{ height: `${(h.ocupadas / max) * 100}%` }} />
                     </div>
                     <span className="text-[9px] text-muted-foreground">{h.hora.slice(0, 2)}</span>

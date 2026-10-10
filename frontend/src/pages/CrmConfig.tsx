@@ -331,8 +331,7 @@ export default function CrmConfig() {
     { v: "listas", rotulo: "Origens, motivos e etiquetas", icone: ListChecks },
     { v: "distribuicao", rotulo: "Distribuição de leads", icone: Shuffle },
     ...(tem("automacoes") ? [{ v: "automacoes" as Aba, rotulo: "Automações e SLA", icone: Zap }] : []),
-    { v: "portais", rotulo: "Portais", icone: Globe },
-    { v: "modelos", rotulo: "Modelos de contrato", icone: FileText },
+    ...(seg.imobiliaria ? [{ v: "portais" as Aba, rotulo: "Portais", icone: Globe }, { v: "modelos" as Aba, rotulo: "Modelos de contrato", icone: FileText }] : []),
     { v: "plano", rotulo: "Plano", icone: BadgeCheck },
   ];
 

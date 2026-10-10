@@ -554,11 +554,12 @@ export default function Leads() {
                   <Label htmlFor="ld-atrib">Responsável</Label>
                   <select
                     id="ld-atrib"
-                    value={atual.corretor_id ?? ""}
-                    onChange={(e) => atualizar.mutate({ id: atual.id, corpo: { corretor_id: e.target.value || null } })}
+                    value={atual.na_fila ? "__fila__" : atual.corretor_id ?? ""}
+                    onChange={(e) => atualizar.mutate({ id: atual.id, corpo: e.target.value === "__fila__" ? { na_fila: true } : { corretor_id: e.target.value || null } })}
                     className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30"
                   >
                     <option value="">Triagem do gestor</option>
+                    {atual.status === "novo" && <option value="__fila__">Fila livre (qualquer {seg.termos.profissional.toLowerCase()} pega)</option>}
                     {equipe.filter((m) => m.pessoa_id).map((m) => (
                       <option key={m.usuario_id} value={m.pessoa_id!}>
                         {m.nome}
