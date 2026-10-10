@@ -72,11 +72,16 @@ async def config_publica(
             definir_empresa(doc["db_name"])
     c = await carregar()
     public = c.model_dump()
+    company = None
     if principal and principal.empresa_id:
         company = await controle.empresas.find_one({"id": principal.empresa_id})
         entitled = (company or {}).get("modulos")
         if entitled: public["modulos_ativos"] = [m for m in c.modulos_ativos if m in entitled]
-    return ConfiguracaoPublica(**public, tem_logo=bool(c.logo_base64))
+    elif empresa_atual_db():
+        company = await controle.empresas.find_one({"db_name": empresa_atual_db()}, {"segmento": 1})
+    from lib.segmentos import info, segmento_de
+
+    return ConfiguracaoPublica(**public, tem_logo=bool(c.logo_base64), segmento=info(segmento_de(company)))
 
 
 @router.get("/logo")

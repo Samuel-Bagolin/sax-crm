@@ -43,9 +43,12 @@ def estagio_legado(funil: dict | None, etapa_id: str | None, status: str) -> str
     return _LEGADO_POR_POSICAO[min(pos, len(_LEGADO_POR_POSICAO) - 1)]
 
 
-def _funis_padrao() -> list[dict]:
+def _funis_padrao(segmento: str = "imobiliaria") -> list[dict]:
+    from lib.segmentos import SEGMENTOS
+
+    modelo = SEGMENTOS[segmento]["funis"] if segmento in SEGMENTOS else FUNIS_PADRAO
     funis = []
-    for ordem, (nome, padrao, etapas) in enumerate(FUNIS_PADRAO):
+    for ordem, (nome, padrao, etapas) in enumerate(modelo):
         funis.append(Funil(
             nome=nome, ordem=ordem, padrao=padrao,
             etapas=[Etapa(nome=n, probabilidade=p, dias_parado=d) for n, p, d in etapas],
@@ -53,15 +56,19 @@ def _funis_padrao() -> list[dict]:
     return funis
 
 
-async def garantir_crm(banco=None) -> None:
-    """Idempotente: funis padrão, configuração do CRM e migração dos leads antigos."""
+async def garantir_crm(banco=None, segmento: str | None = None) -> None:
+    """Idempotente: funis padrão do segmento, configuração do CRM e migração dos leads antigos."""
+    from lib.segmentos import SEGMENTOS
+
     banco = banco if banco is not None else db
+    cfg = await banco.configuracoes.find_one({"id": "singleton"}, {"crm": 1, "segmento": 1})
+    segmento = segmento or (cfg or {}).get("segmento") or "imobiliaria"
+    seg = SEGMENTOS.get(segmento) or SEGMENTOS["imobiliaria"]
     if await banco.funis.count_documents({}) == 0:
-        await banco.funis.insert_many(_funis_padrao())
-    cfg = await banco.configuracoes.find_one({"id": "singleton"}, {"crm": 1})
+        await banco.funis.insert_many(_funis_padrao(segmento))
     if cfg is not None and not cfg.get("crm"):
         await banco.configuracoes.update_one({"id": "singleton"}, {"$set": {"crm": CrmConfig(
-            origens=ORIGENS_PADRAO, motivos_perda=MOTIVOS_PERDA_PADRAO, etiquetas=ETIQUETAS_PADRAO,
+            origens=seg["origens"], motivos_perda=seg["motivos_perda"], etiquetas=seg["etiquetas"],
         ).model_dump()}})
 
     from lib.automacoes import garantir_padrao

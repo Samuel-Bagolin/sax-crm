@@ -12,6 +12,11 @@ import {
   Inbox,
   KeyRound,
   Globe,
+  Car,
+  Contact,
+  CreditCard,
+  Link2,
+  Store,
   LayoutDashboard,
   LogOut,
   MessageCircle,
@@ -46,7 +51,8 @@ import MarcaSax from "@/components/shared/MarcaSax";
 import { useAuth } from "@/lib/useAuth";
 import { useConfig } from "@/lib/useConfig";
 import { isoLocal } from "@/lib/crm";
-import type { Atividade, Entrada } from "@/lib/types";
+import type { Atividade, Entrada, SegmentoChave, TermosSegmento } from "@/lib/types";
+import { SERVICOS, useSegmento } from "@/lib/segmento";
 import { cn } from "@/lib/utils";
 import { ehPadrao, variaveisMenu } from "@/lib/coresMenu";
 
@@ -59,6 +65,15 @@ interface ItemNav {
   curto?: string;
   nivel: Nivel;
   contador?: "leads" | "atividades" | "chat";
+  /** Só aparece nestes segmentos. Vazio = todos. */
+  segmentos?: SegmentoChave[];
+}
+
+const VENDAS: SegmentoChave[] = ["imobiliaria", "veiculos"];
+
+/** Troca {clientes}, {profissionais} etc. pelo vocabulário do segmento. */
+function comTermos(texto: string, t: TermosSegmento): string {
+  return texto.replace(/\{(\w+)\}/g, (_, k: keyof TermosSegmento) => t[k] ?? k);
 }
 
 const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
@@ -67,16 +82,31 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
     itens: [{ to: "/", modulo: "dashboard", icon: LayoutDashboard, curto: "Início", nivel: "todos" }],
   },
   {
+    titulo: "Atendimento",
+    itens: [
+      { to: "/atendimentos", modulo: "atendimentos", icon: CalendarDays, rotulo: "Agenda", nivel: "todos", segmentos: SERVICOS },
+      { to: "/pacientes", modulo: "pacientes", icon: Contact, rotulo: "{clientes}", nivel: "todos", segmentos: SERVICOS },
+      { to: "/agenda-online", modulo: "atendimentos", icon: Link2, rotulo: "Serviços e link", curto: "Link", nivel: "todos", segmentos: SERVICOS },
+      { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: ["odontologia", "estetica"] },
+      { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Orçamentos", nivel: "todos", segmentos: ["odontologia", "estetica"] },
+    ],
+  },
+  {
     titulo: "Vendas",
     itens: [
-      { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads" },
-      { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Negócios", nivel: "todos" },
-      { to: "/agenda", modulo: "agenda", icon: CalendarDays, nivel: "todos", contador: "atividades" },
-      { to: "/imoveis", modulo: "imoveis", icon: Building2, nivel: "todos" },
-      { to: "/proprietarios", modulo: "imoveis", icon: KeyRound, rotulo: "Proprietários", curto: "Donos", nivel: "todos" },
-      { to: "/meu-site", modulo: "imoveis", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos" },
-      { to: "/chat", modulo: "chat", icon: MessageCircle, rotulo: "Chat da equipe", curto: "Chat", nivel: "todos", contador: "chat" },
+      { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: VENDAS },
+      { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Negócios", nivel: "todos", segmentos: VENDAS },
+      { to: "/agenda", modulo: "agenda", icon: CalendarDays, nivel: "todos", contador: "atividades", segmentos: VENDAS },
+      { to: "/imoveis", modulo: "imoveis", icon: Building2, nivel: "todos", segmentos: ["imobiliaria"] },
+      { to: "/veiculos", modulo: "veiculos", icon: Car, rotulo: "Estoque", nivel: "todos", segmentos: ["veiculos"] },
+      { to: "/proprietarios", modulo: "imoveis", icon: KeyRound, rotulo: "Proprietários", curto: "Donos", nivel: "todos", segmentos: ["imobiliaria"] },
+      { to: "/meu-site", modulo: "imoveis", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: ["imobiliaria"] },
+      { to: "/meu-site", modulo: "veiculos", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: ["veiculos"] },
     ],
+  },
+  {
+    titulo: "Equipe",
+    itens: [{ to: "/chat", modulo: "chat", icon: MessageCircle, rotulo: "Chat da equipe", curto: "Chat", nivel: "todos", contador: "chat" }],
   },
   {
     titulo: "Operação",
@@ -89,8 +119,10 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
   {
     titulo: "Gestão",
     itens: [
-      { to: "/usuarios", modulo: "usuarios", icon: Users, curto: "Equipe", nivel: "admin" },
+      { to: "/usuarios", modulo: "usuarios", icon: Users, rotulo: "{profissionais}", curto: "Equipe", nivel: "admin" },
+      { to: "/unidades", modulo: "usuarios", icon: Store, rotulo: "{unidades}", nivel: "admin" },
       { to: "/crm/configurar", modulo: "crm", icon: SlidersHorizontal, rotulo: "Configurar CRM", curto: "Ajustes", nivel: "admin" },
+      { to: "/assinatura", modulo: "usuarios", icon: CreditCard, rotulo: "Assinatura", curto: "Plano", nivel: "admin" },
       { to: "/configuracoes", modulo: "configuracoes", icon: Settings, rotulo: "Configurador do sistema", curto: "Sistema", nivel: "sysadmin" },
       { to: "/empresas", modulo: "empresas", icon: Building, rotulo: "Empresas", nivel: "sysadmin" },
     ],
@@ -108,6 +140,10 @@ const TITULOS: Record<string, string> = {
   "/chat": "Chat da equipe",
   "/proprietarios": "Proprietários",
   "/meu-site": "Meu site",
+  "/atendimentos": "Agenda",
+  "/agenda-online": "Serviços e link de agendamento",
+  "/veiculos": "Estoque de veículos",
+  "/assinatura": "Assinatura",
 };
 const MODULO_POR_ROTA: Record<string, string> = {
   "/": "dashboard",
@@ -148,8 +184,11 @@ function Navegacao({
 }) {
   const { isAdmin, isSysadmin, noControle } = useAuth();
   const { moduloAtivo, titulo } = useConfig();
+  const seg = useSegmento();
   const visivel = (item: ItemNav) => {
     if (noControle) return item.modulo === "empresas";
+    if (item.segmentos && !item.segmentos.includes(seg.chave)) return false;
+    if (item.to === "/unidades" && seg.imobiliaria) return false;
     if (item.nivel === "sysadmin") return isSysadmin;
     if (item.nivel === "admin" && !isAdmin) return false;
     if (item.modulo === "configuracoes" || item.modulo === "empresas" || item.modulo === "chat") return true;
@@ -164,12 +203,12 @@ function Navegacao({
           <div key={grupo.titulo ?? "inicio"} className={cn("flex flex-col", compacto ? "gap-1" : "gap-0.5", compacto && gi > 0 && "border-t border-sidebar-border pt-1")}>
             {grupo.titulo && !compacto && <p className="px-3 pb-1 text-[11px] font-medium text-sidebar-foreground/45">{grupo.titulo}</p>}
             {itens.map((item) => {
-              const rotulo = item.rotulo ?? titulo(item.modulo);
+              const rotulo = comTermos(item.rotulo ?? titulo(item.modulo), seg.termos);
               const curto = item.curto ?? rotulo;
               const total = item.contador ? contadores[item.contador] ?? 0 : 0;
               return (
                 <NavLink
-                  key={item.to}
+                  key={item.to + item.modulo}
                   to={item.to}
                   end={item.to === "/" || item.to === "/crm"}
                   onClick={aoNavegar}

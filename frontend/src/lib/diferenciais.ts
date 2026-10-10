@@ -4,7 +4,7 @@ import type { ImovelTipo } from "@/lib/types";
 
 // ---------------------------------------------------------------- plano
 
-export type Recurso = "match" | "automacoes" | "propostas" | "portais" | "proprietario" | "google" | "assinatura" | "chat" | "site";
+export type Recurso = "match" | "automacoes" | "propostas" | "portais" | "proprietario" | "google" | "assinatura" | "chat" | "site" | "agenda_online" | "prontuario" | "odontograma" | "mapa_facial";
 
 export interface PlanoAtual {
   chave: string;

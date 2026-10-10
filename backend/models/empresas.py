@@ -20,6 +20,7 @@ class Empresa(BaseModel):
     slug: str  # identificador técnico; compõe o nome do banco
     db_name: str
     cnpj: str | None = None
+    segmento: str = "imobiliaria"  # lib/segmentos.py
     plano: str = "essencial"
     plano_aplicado: bool = False  # False = empresa anterior aos planos (sem limites)
     limites_personalizados: dict | None = None  # {"usuarios": int|None, "imoveis": int|None, "recursos_extras": [...]}
@@ -27,6 +28,9 @@ class Empresa(BaseModel):
     modulos: List[str] = Field(default_factory=list)  # vazio = herda a configuração da empresa
     site_api_key: str | None = None  # espelhado da config da empresa para o webhook do site
     observacoes: str | None = None
+    # Assinatura da plataforma (cadastro público): gateway, situação, cartão (só final e bandeira).
+    assinatura: dict | None = None
+    origem: str = "painel"  # painel (criada pelo administrador de sistema) | cadastro (autoatendimento)
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -35,6 +39,7 @@ class EmpresaCreate(BaseModel):
     nome: str = Field(min_length=2)
     slug: str | None = None
     cnpj: str | None = None
+    segmento: str = "imobiliaria"
     plano: str = "essencial"
     # Primeiro gestor da empresa (criado no banco dela)
     admin_nome: str = Field(min_length=2)
@@ -84,6 +89,9 @@ class EmpresaResumo(Empresa):
     """Empresa + contadores lidos do banco dela (painel do Administrador de Sistema)."""
 
     plano_nome: str | None = None
+    segmento_nome: str | None = None
+    categoria: str | None = None
+    categoria_nome: str | None = None
     plano_preco: float | None = None
     limite_usuarios: int | None = None
     limite_imoveis: int | None = None

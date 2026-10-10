@@ -190,6 +190,28 @@ _CACHE: dict[str, tuple[float, dict]] = {}
 CACHE_SEGUNDOS = 60
 
 
+async def _eh_veiculos() -> bool:
+    """O site mostra o estoque do segmento: imóveis (imobiliária) ou veículos (loja de veículos)."""
+    nome = empresa_atual_db()
+    e = await controle.empresas.find_one({"db_name": nome}, {"segmento": 1}) if nome else None
+    return (e or {}).get("segmento") == "veiculos"
+
+
+_CAMPOS_VEICULO = ("id", "codigo", "marca", "modelo", "versao", "ano_fabricacao", "ano_modelo", "km", "cor", "cambio", "combustivel",
+                   "categoria", "portas", "opcionais", "preco_venda", "foto_url", "site_status", "site_destaque", "created_at",
+                   "aceita_troca", "unico_dono", "ipva_pago", "garantia", "status", "unidade_id")
+
+
+def _veiculo_card(d: dict) -> dict:
+    from routers.veiculos import titulo
+
+    out = {k: d.get(k) for k in _CAMPOS_VEICULO if k not in ("site_status", "site_destaque", "created_at", "status")}
+    out.update(titulo=titulo(d), tipo=d.get("categoria"), finalidade="venda", valor_venda=d.get("preco_venda"),
+               reservado=d.get("site_status") == "reservado" or d.get("status") == "reservado", destaque=bool(d.get("site_destaque")),
+               cidade="", bairro=None)
+    return out
+
+
 def limpar_cache() -> None:
     _CACHE.clear()
 
@@ -203,7 +225,7 @@ def _exigir_editor(principal: Principal) -> None:
 
 
 @router.get("", response_model=PainelSite)
-async def painel(principal: Principal = Depends(require("imovel:read"))):
+async def painel(principal: Principal = Depends(require("unidade:read"))):
     config, configurado = await carregar_config()
     met = await _metricas()
     return PainelSite(
@@ -216,7 +238,7 @@ async def painel(principal: Principal = Depends(require("imovel:read"))):
 
 
 @router.put("", response_model=PainelSite)
-async def salvar(input: SiteConfigInput, principal: Principal = Depends(require("imovel:read"))):
+async def salvar(input: SiteConfigInput, principal: Principal = Depends(require("unidade:read"))):
     _exigir_editor(principal)
     await exigir_recurso("site")
     slug = input.slug.strip().lower()
@@ -246,7 +268,7 @@ async def salvar(input: SiteConfigInput, principal: Principal = Depends(require(
 
 
 @router.put("/midia/{tipo}", response_model=PainelSite)
-async def enviar_midia(tipo: Literal["logo", "capa"], input: MidiaInput, principal: Principal = Depends(require("imovel:read"))):
+async def enviar_midia(tipo: Literal["logo", "capa"], input: MidiaInput, principal: Principal = Depends(require("unidade:read"))):
     _exigir_editor(principal)
     await exigir_recurso("site")
     try:
@@ -269,7 +291,7 @@ async def enviar_midia(tipo: Literal["logo", "capa"], input: MidiaInput, princip
 
 
 @router.delete("/midia/{tipo}", response_model=PainelSite)
-async def remover_midia(tipo: Literal["logo", "capa"], principal: Principal = Depends(require("imovel:read"))):
+async def remover_midia(tipo: Literal["logo", "capa"], principal: Principal = Depends(require("unidade:read"))):
     _exigir_editor(principal)
     await db.site_midia.delete_one({"id": tipo})
     await db.site_imobiliaria.update_one({"id": DOC_ID}, {"$set": {f"tem_{tipo}": False}, "$inc": {"midia_v": 1}})
@@ -278,10 +300,20 @@ async def remover_midia(tipo: Literal["logo", "capa"], principal: Principal = De
 
 
 @router.get("/imoveis", response_model=List[ImovelNoSite])
-async def imoveis(principal: Principal = Depends(require("imovel:read"))):
+async def imoveis(principal: Principal = Depends(require("unidade:read"))):
     met = await _metricas()
     campos = {k: 1 for k in ImovelNoSite.model_fields if k not in ("visualizacoes", "cliques_whatsapp", "contatos")}
     saida = []
+    if await _eh_veiculos():
+        from routers.veiculos import titulo
+
+        async for d in db.veiculos.find({}).sort("created_at", -1):
+            m = met.get(d["id"], {})
+            saida.append(ImovelNoSite(id=d["id"], codigo=d.get("codigo", ""), titulo=titulo(d), tipo=d.get("categoria") or "outro",
+                                      finalidade="venda", status=d.get("status") or "disponivel", cidade="", valor_venda=d.get("preco_venda"),
+                                      foto_url=d.get("foto_url"), site_status=d.get("site_status") or "inativo", site_destaque=bool(d.get("site_destaque")),
+                                      visualizacoes=m.get("visualizacoes", 0), cliques_whatsapp=m.get("whatsapp", 0), contatos=m.get("contatos", 0)))
+        return saida
     async for d in db.imoveis.find({}, campos).sort("created_at", -1):
         m = met.get(d["id"], {})
         saida.append(ImovelNoSite(**{k: v for k, v in d.items() if k in ImovelNoSite.model_fields},
@@ -290,7 +322,7 @@ async def imoveis(principal: Principal = Depends(require("imovel:read"))):
 
 
 @router.put("/imoveis", status_code=204)
-async def alterar_imoveis(input: AlterarImoveis, principal: Principal = Depends(require("imovel:update"))):
+async def alterar_imoveis(input: AlterarImoveis, principal: Principal = Depends(require("unidade:read"))):
     _exigir_editor(principal)
     dados: dict = {}
     if input.site_status is not None:
@@ -302,7 +334,7 @@ async def alterar_imoveis(input: AlterarImoveis, principal: Principal = Depends(
     if dados.get("site_status") in ("ativo", "reservado"):
         await exigir_recurso("site")
     dados["updated_at"] = now_utc()
-    await db.imoveis.update_many({"id": {"$in": input.ids}}, {"$set": dados})
+    await (db.veiculos if await _eh_veiculos() else db.imoveis).update_many({"id": {"$in": input.ids}}, {"$set": dados})
     limpar_cache()
     return Response(status_code=204)
 
@@ -335,6 +367,7 @@ _CAMPOS_CARD = ("id", "codigo", "titulo", "tipo", "finalidade", "bairro", "cidad
                 "vagas", "area_util", "area_total", "valor_venda", "valor_aluguel", "condominio", "iptu", "foto_url",
                 "site_status", "site_destaque", "created_at")
 _FILTRO_SITE = {"site_status": {"$in": ["ativo", "reservado"]}, "status": {"$nin": ["vendido", "alugado"]}}
+_FILTRO_VEICULO = {"site_status": {"$in": ["ativo", "reservado"]}, "status": {"$in": ["disponivel", "reservado"]}}
 
 
 def _card(d: dict) -> dict:
@@ -359,9 +392,14 @@ async def pagina(slug: str):
     if cache and time.monotonic() - cache[0] < CACHE_SEGUNDOS:
         return cache[1]
     config = await _site_ativo(slug)
-    docs = await db.imoveis.find(_FILTRO_SITE, {k: 1 for k in _CAMPOS_CARD}).sort("created_at", -1).to_list(1000)
+    veiculos = await _eh_veiculos()
+    if veiculos:
+        docs = await db.veiculos.find(_FILTRO_VEICULO, {k: 1 for k in _CAMPOS_VEICULO}).sort("created_at", -1).to_list(1000)
+    else:
+        docs = await db.imoveis.find(_FILTRO_SITE, {k: 1 for k in _CAMPOS_CARD}).sort("created_at", -1).to_list(1000)
     docs.sort(key=lambda d: (not d.get("site_destaque"), d.get("site_status") == "reservado"))
-    dados = {"marca": _marca(config, slug), "imoveis": [_card(d) for d in docs]}
+    dados = {"marca": {**_marca(config, slug), "segmento": "veiculos" if veiculos else "imobiliaria"},
+             "imoveis": [_veiculo_card(d) if veiculos else _card(d) for d in docs]}
     _CACHE[slug] = (time.monotonic(), dados)
     return dados
 
@@ -369,15 +407,19 @@ async def pagina(slug: str):
 @publico_router.get("/{slug}/imovel/{codigo}")
 async def imovel_publico(slug: str, codigo: str):
     config = await _site_ativo(slug)
-    d = await db.imoveis.find_one({**_FILTRO_SITE, "$or": [{"codigo": codigo.upper()}, {"id": codigo}]})
+    veiculos = await _eh_veiculos()
+    colecao, filtro = (db.veiculos, _FILTRO_VEICULO) if veiculos else (db.imoveis, _FILTRO_SITE)
+    d = await colecao.find_one({**filtro, "$or": [{"codigo": codigo.upper()}, {"id": codigo}]})
     if not d:
-        raise HTTPException(404, "Imóvel indisponível")
+        raise HTTPException(404, "Item indisponível")
     from routers.fotos_imovel import listar, url_publica
 
     fotos = [url_publica(f["id"]) for f in await listar(d["id"])]
     if not fotos and d.get("foto_url"):
         fotos = [d["foto_url"]]
-    return {"marca": _marca(config, slug.lower()), "imovel": {**_card(d), "descricao": d.get("descricao"), "fotos": fotos}}
+    card = _veiculo_card(d) if veiculos else _card(d)
+    return {"marca": {**_marca(config, slug.lower()), "segmento": "veiculos" if veiculos else "imobiliaria"},
+            "imovel": {**card, "descricao": d.get("descricao"), "fotos": fotos}}
 
 
 @publico_router.get("/{slug}/midia/{tipo}")
@@ -415,8 +457,14 @@ async def contato(slug: str, input: ContatoSite, request: Request):
     if len(recentes) >= 5:
         raise HTTPException(429, "Muitas mensagens seguidas. Tente de novo em alguns minutos ou chame no WhatsApp.")
     _CONTATOS[chave] = [*recentes, agora]
-    imovel = await db.imoveis.find_one({**_FILTRO_SITE, "id": input.imovel_id}, {"id": 1, "codigo": 1, "titulo": 1, "finalidade": 1,
-                                                                                    "valor_venda": 1, "valor_aluguel": 1}) if input.imovel_id else None
+    veiculos = await _eh_veiculos()
+    imovel = None
+    if input.imovel_id and veiculos:
+        v = await db.veiculos.find_one({**_FILTRO_VEICULO, "id": input.imovel_id})
+        imovel = {**_veiculo_card(v), "veiculo": True} if v else None
+    elif input.imovel_id:
+        imovel = await db.imoveis.find_one({**_FILTRO_SITE, "id": input.imovel_id}, {"id": 1, "codigo": 1, "titulo": 1, "finalidade": 1,
+                                                                                     "valor_venda": 1, "valor_aluguel": 1})
     from lib.automacoes import lead_novo
     from lib.crm import carregar_crm_config
     from models.crm import Entrada
@@ -425,12 +473,13 @@ async def contato(slug: str, input: ContatoSite, request: Request):
     corretor_id = await _proximo_rodizio() if (await carregar_crm_config()).distribuicao == "rodizio" else None
     partes = [(input.mensagem or "").strip()]
     if imovel:
-        partes.append(f"Interesse no imóvel {imovel.get('codigo')}: {imovel.get('titulo')}")
+        partes.append(f"Interesse no {'veículo' if veiculos else 'imóvel'} {imovel.get('codigo')}: {imovel.get('titulo')}")
     fin = (imovel or {}).get("finalidade")
     entrada = Entrada(
         nome=input.nome.strip(), telefone=input.telefone.strip(), email=(input.email or "").strip().lower() or None,
         origem="Site", interesse="locacao" if fin == "locacao" else "compra",
-        mensagem="\n".join(p for p in partes if p)[:2000] or None, imovel_id=(imovel or {}).get("id"), corretor_id=corretor_id,
+        mensagem="\n".join(p for p in partes if p)[:2000] or None, corretor_id=corretor_id,
+        imovel_id=None if veiculos else (imovel or {}).get("id"), veiculo_id=(imovel or {}).get("id") if veiculos else None,
         valor_estimado=((imovel or {}).get("valor_aluguel") if fin == "locacao" else (imovel or {}).get("valor_venda")),
     )
     await db.entradas.insert_one(entrada.model_dump())
@@ -449,7 +498,9 @@ async def evento(slug: str, input: EventoSite, request: Request):
     if len(_EVENTOS) > 50_000:
         _EVENTOS.clear()
     _EVENTOS[chave] = agora
-    if input.imovel_id and not await db.imoveis.find_one({**_FILTRO_SITE, "id": input.imovel_id}, {"id": 1}):
+    veiculos = await _eh_veiculos()
+    colecao, filtro = (db.veiculos, _FILTRO_VEICULO) if veiculos else (db.imoveis, _FILTRO_SITE)
+    if input.imovel_id and not await colecao.find_one({**filtro, "id": input.imovel_id}, {"id": 1}):
         return Response(status_code=204)
     campo = "visualizacoes" if input.tipo == "visualizacao" else "whatsapp"
     await db.site_metricas.update_one({"id": input.imovel_id or "_site"}, {"$inc": {campo: 1}}, upsert=True)

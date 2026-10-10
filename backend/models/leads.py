@@ -26,6 +26,7 @@ class Lead(BaseModel):
     nome: str = Field(min_length=1, max_length=1000)
     cliente_id: str | None = None
     imovel_id: str | None = None
+    veiculo_id: str | None = None
     corretor_id: str | None = None
     origem: str = "Indicação / Carteira"
     estagio: Estagio = "novo"  # legado — derivado de etapa/status
@@ -50,6 +51,7 @@ class LeadCreate(BaseModel):
     nome: str = Field(min_length=1, max_length=1000)
     cliente_id: str | None = None
     imovel_id: str | None = None
+    veiculo_id: str | None = None
     corretor_id: str | None = None
     origem: str = "Indicação / Carteira"
     estagio: Estagio | None = None
@@ -65,6 +67,7 @@ class LeadUpdate(BaseModel):
     nome: str | None = None
     cliente_id: str | None = None
     imovel_id: str | None = None
+    veiculo_id: str | None = None
     corretor_id: str | None = None
     origem: str | None = None
     estagio: Estagio | None = None

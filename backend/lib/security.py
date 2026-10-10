@@ -11,7 +11,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         publico_assinatura = path.startswith("/api/assinatura/") or (
             path.startswith("/api/publico/") and not path.startswith("/api/publico/foto/") and not path.endswith("/vrsync.xml")
             # Site da imobiliária: leitura em cache e aberta ao público; só o envio (contato/evento) conta no limite.
-            and not (path.startswith("/api/publico/site/") and request.method == "GET"))
+            and not ((path.startswith("/api/publico/site/") or path.startswith("/api/publico/agenda/")) and request.method == "GET"))
         if (request.method == "POST" and path in {"/api/auth/login", "/api/auth/recuperar", "/api/auth/ativar", "/api/site/leads"}) or publico_assinatura:
             # Trust only the socket peer, not attacker-provided forwarding headers.
             # Deployments may apply a finer client-IP limit at their trusted ingress.

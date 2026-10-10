@@ -106,6 +106,7 @@ class Entrada(BaseModel):
     interesse: Literal["compra", "locacao", "venda", "outro"] = "compra"
     mensagem: str | None = None
     imovel_id: str | None = None
+    veiculo_id: str | None = None
     cliente_id: str | None = None
     corretor_id: str | None = None
     valor_estimado: Nonnegative | None = None

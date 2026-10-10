@@ -301,6 +301,48 @@ export interface ConfiguracaoPublica {
   cor_menu_destaque: string;
   imagem_fundo_login: string | null;
   tem_logo: boolean;
+  segmento?: SegmentoInfo | null;
+}
+
+export type SegmentoChave = "imobiliaria" | "veiculos" | "odontologia" | "terapia" | "barbearia" | "estetica";
+
+export interface TermosSegmento {
+  cliente: string;
+  clientes: string;
+  profissional: string;
+  profissionais: string;
+  item: string;
+  itens: string;
+  unidade: string;
+  unidades: string;
+  atendimento: string;
+  atendimentos: string;
+}
+
+export interface SegmentoInfo {
+  chave: SegmentoChave;
+  nome: string;
+  categoria: "vendas" | "saude" | "beleza";
+  categoria_nome: string;
+  descricao: string;
+  modulos: string[];
+  termos: TermosSegmento;
+  agenda_online: boolean;
+  prontuario: boolean;
+}
+
+export interface AssinaturaResumo {
+  status: "ativa" | "atrasada" | "cancelada" | null;
+  demo: boolean;
+  periodicidade: "mensal" | "anual" | null;
+  valor: number | null;
+  cartao_final: string | null;
+  cartao_bandeira: string | null;
+  proximo_vencimento: string | null;
+  atraso_desde: string | null;
+  acesso_ate: string | null;
+  bloqueio: string | null;
+  carencia_dias: number;
 }
 
 export interface ConfigLog {
@@ -342,6 +384,9 @@ export interface Principal {
   telefone: string | null;
   trocar_senha?: boolean;
   gerencia_site?: boolean;
+  segmento?: SegmentoChave;
+  assinatura?: AssinaturaResumo | null;
+  bloqueio?: string | null;
 }
 
 export interface UsuarioPublico {

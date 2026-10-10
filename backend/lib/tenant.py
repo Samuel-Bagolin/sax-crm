@@ -32,7 +32,7 @@ PLANO_PADRAO = [
 ]
 
 
-async def provisionar_empresa(*, nome: str, db_name: str, admin: dict) -> str:
+async def provisionar_empresa(*, nome: str, db_name: str, admin: dict, segmento: str = "imobiliaria") -> str:
     """Cria o banco da empresa com índices, plano de contas, configuração e o primeiro gestor.
 
     Devolve a chave de API do site gerada para a empresa.
@@ -40,10 +40,13 @@ async def provisionar_empresa(*, nome: str, db_name: str, admin: dict) -> str:
     banco = client[db_name]
     await ensure_indexes_empresa(db_name)
 
+    from lib.segmentos import SEGMENTOS, plano_contas, titulos_modulos
+
+    segmento = segmento if segmento in SEGMENTOS else "imobiliaria"
     if await banco.plano_contas.count_documents({}) == 0:
         ids: dict[str, str] = {}
         docs = []
-        for codigo, nome_conta, tipo, pai in PLANO_PADRAO:
+        for codigo, nome_conta, tipo, pai in (plano_contas(segmento) or PLANO_PADRAO):
             cid = new_id()
             ids[codigo] = cid
             docs.append(
@@ -66,16 +69,9 @@ async def provisionar_empresa(*, nome: str, db_name: str, admin: dict) -> str:
                 "id": "singleton",
                 "nome_software": nome,
                 "slogan": "",
-                "modulos_ativos": ["dashboard", "imoveis", "crm", "agenda", "contratos", "financeiro", "usuarios"],
-                "titulos_modulos": {
-                    "dashboard": "Visão Geral",
-                    "imoveis": "Imóveis",
-                    "crm": "CRM & Funil",
-                    "agenda": "Agenda",
-                    "contratos": "Contratos",
-                    "financeiro": "Financeiro",
-                    "usuarios": "Consultores",
-                },
+                "segmento": segmento,
+                "modulos_ativos": list(SEGMENTOS[segmento]["modulos"]),
+                "titulos_modulos": titulos_modulos(segmento),
                 "cor_painel": "#ffffff",
                 "cor_fonte": "#1c1c1c",
                 "cor_primaria": "#4a03a2",
@@ -100,7 +96,20 @@ async def provisionar_empresa(*, nome: str, db_name: str, admin: dict) -> str:
 
     from lib.crm import garantir_crm
 
-    await garantir_crm(banco)
+    await garantir_crm(banco, segmento)
+
+    from lib.segmentos import SERVICOS_PADRAO
+
+    if SERVICOS_PADRAO.get(segmento) and await banco.servicos.count_documents({}) == 0:
+        await banco.servicos.insert_many([{
+            "id": new_id(), "descricao": None, "online": s.get("preco", 0) >= 0, "ativo": True, "profissionais": [],
+            "retorno_dias": None, "unidade": None, **s, "valor_exemplo": True, "created_at": now_utc()} for s in SERVICOS_PADRAO[segmento]])
+
+    if await banco.unidades.count_documents({}) == 0:
+        await banco.unidades.insert_one({
+            "id": new_id(), "nome": nome, "principal": True, "ativa": True, "endereco": None, "telefone": None,
+            "whatsapp": None, "slug": None, "created_at": now_utc(),
+        })
 
     if not await banco.usuarios.find_one({"email": admin["email"]}):
         await banco.usuarios.insert_one(admin)

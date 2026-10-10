@@ -188,11 +188,15 @@ async def _resumo(d: dict, **extra) -> EmpresaResumo:
 
     await carregar_catalogo()
 
+    from lib.segmentos import info, segmento_de
+
     e = to_empresa(d)
     plano = plano_de(d)
     banco = client[e.db_name]
+    seg = info(segmento_de(d))
     return EmpresaResumo(
         **e.model_dump(), **await contadores(e.db_name), **extra,
+        segmento_nome=seg["nome"], categoria=seg["categoria"], categoria_nome=seg["categoria_nome"],
         comercial=d.get("comercial"), valores=(valores := valores_comerciais(d)),
         plano_nome=plano["nome"], plano_preco=(valores["equivalente_mensal"] if valores else plano["preco"]), limite_usuarios=plano["usuarios"], limite_imoveis=plano["imoveis"],
         usuarios_ativos=await banco.usuarios.count_documents({"ativo": {"$ne": False}, "papel": {"$ne": "sysadmin"}}),
@@ -221,10 +225,14 @@ async def create_empresa(input: EmpresaCreate, principal: Principal = Depends(re
 
     await carregar_catalogo()
 
-    if input.plano not in PLANOS:
-        raise HTTPException(422, "Plano inválido")
+    from lib.segmentos import SEGMENTOS
+
+    if input.segmento not in SEGMENTOS:
+        raise HTTPException(422, "Segmento inválido")
+    if input.plano not in PLANOS or (PLANOS[input.plano].get("segmento") or "imobiliaria") != input.segmento:
+        raise HTTPException(422, "Escolha um plano do segmento da empresa")
     empresa = Empresa(nome=input.nome.strip(), slug=slug, db_name=db_name, cnpj=input.cnpj, plano=input.plano,
-                      plano_aplicado=True, modulos=list(PLANOS[input.plano]["modulos"]))
+                      segmento=input.segmento, plano_aplicado=True, modulos=list(PLANOS[input.plano]["modulos"]))
 
     gestor = Usuario(
         nome=input.admin_nome.strip(), email=email, senha_hash=hash_senha(senha), papel="admin"
@@ -232,7 +240,7 @@ async def create_empresa(input: EmpresaCreate, principal: Principal = Depends(re
 
     await indexar_usuario(email, empresa.id, db_name)
     gestor["activation_required"] = not bool(input.admin_senha)
-    api_key = await provisionar_empresa(nome=input.nome.strip(), db_name=db_name, admin=gestor)
+    api_key = await provisionar_empresa(nome=input.nome.strip(), db_name=db_name, admin=gestor, segmento=input.segmento)
     empresa.site_api_key = api_key
     await controle.empresas.insert_one(empresa.model_dump())
     await indexar_usuario(email, empresa.id, db_name)
@@ -381,6 +389,10 @@ async def update_empresa(
             data["plano_aplicado"] = False
             data.setdefault("modulos", [])
         elif data["plano"] in PLANOS:
+            from lib.segmentos import segmento_de
+
+            if (PLANOS[data["plano"]].get("segmento") or "imobiliaria") != segmento_de(doc):
+                raise HTTPException(422, "Este plano é de outro segmento. Escolha um plano do segmento da empresa.")
             data["plano_aplicado"] = True
             if "modulos" not in data and (data["plano"] != doc.get("plano") or not doc.get("plano_aplicado")):
                 data["modulos"] = list(PLANOS[data["plano"]]["modulos"])

@@ -15,7 +15,7 @@ from models.common import new_id, now_utc
 CONFIG_ID = "singleton"
 
 # Módulos que podem ser ligados/desligados pelo Administrador de Sistema.
-MODULOS = ["dashboard", "imoveis", "crm", "agenda", "contratos", "financeiro", "usuarios"]
+MODULOS = ["dashboard", "imoveis", "veiculos", "atendimentos", "pacientes", "crm", "agenda", "contratos", "financeiro", "usuarios"]
 
 TITULOS_PADRAO: dict[str, str] = {
     "dashboard": "Visão Geral",
@@ -25,6 +25,9 @@ TITULOS_PADRAO: dict[str, str] = {
     "contratos": "Contratos",
     "financeiro": "Financeiro",
     "usuarios": "Consultores",
+    "veiculos": "Veículos",
+    "atendimentos": "Agenda",
+    "pacientes": "Clientes",
 }
 
 
@@ -94,6 +97,7 @@ class ConfiguracaoPublica(BaseModel):
     cor_menu_destaque: str = "#ff7a00"
     imagem_fundo_login: str | None = None
     tem_logo: bool = False
+    segmento: dict | None = None  # lib/segmentos.info(): nome, categoria, termos, módulos
 
 
 class LogoInput(BaseModel):

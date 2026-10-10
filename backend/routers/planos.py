@@ -30,13 +30,15 @@ class PlanoCatalogo(BaseModel):
     resumo: str
     ativo: bool = True
     ordem: int = 50
+    segmento: str | None = "imobiliaria"
+    unidades: int | None = None
 
 
 class Adicional(BaseModel):
     chave: str
     nome: str
     descricao: str = ""
-    tipo: Literal["recurso", "usuarios", "imoveis", "servico"]
+    tipo: Literal["recurso", "usuarios", "imoveis", "unidades", "servico"]
     recurso: str | None = None
     quantidade_por_unidade: int = 1
     preco_mensal: float = 0
@@ -55,6 +57,7 @@ class Catalogo(BaseModel):
     recursos: Dict[str, str]
     modulos: Dict[str, str] = {}
     tipos_adicional: Dict[str, str] = {}
+    segmentos: List[dict] = []
 
 
 class PlanoIn(BaseModel):
@@ -65,10 +68,21 @@ class PlanoIn(BaseModel):
     implantacao: Optional[float] = Dinheiro
     usuarios: Optional[int] = Field(default=None, ge=1, le=100_000)
     imoveis: Optional[int] = Field(default=None, ge=1, le=10_000_000)
+    unidades: Optional[int] = Field(default=None, ge=1, le=10_000)
+    segmento: str = "imobiliaria"
     modulos: List[str] = Field(default_factory=list)
     recursos: List[str] = Field(default_factory=list)
     ativo: bool = True
     ordem: int = Field(default=50, ge=0, le=999)
+
+    @field_validator("segmento")
+    @classmethod
+    def _segmento(cls, v: str) -> str:
+        from lib.segmentos import SEGMENTOS
+
+        if v not in SEGMENTOS:
+            raise ValueError("Segmento inválido")
+        return v
 
     @field_validator("modulos")
     @classmethod
@@ -88,7 +102,7 @@ class PlanoIn(BaseModel):
 class AdicionalIn(BaseModel):
     nome: str = Field(min_length=2, max_length=80)
     descricao: str = Field(default="", max_length=300)
-    tipo: Literal["recurso", "usuarios", "imoveis", "servico"]
+    tipo: Literal["recurso", "usuarios", "imoveis", "unidades", "servico"]
     recurso: Optional[str] = None
     quantidade_por_unidade: int = Field(default=1, ge=1, le=100_000)
     preco_mensal: float = Field(ge=0, le=10_000_000)
@@ -108,11 +122,17 @@ def _plano_saida(chave: str, p: dict) -> PlanoCatalogo:
 
 
 @router.get("/planos", response_model=Catalogo)
-async def catalogo(todos: bool = Query(False), principal: Principal = Depends(principal_atual)):
+async def catalogo(todos: bool = Query(False), segmento: str | None = None, principal: Principal = Depends(principal_atual)):
+    from lib.segmentos import catalogo_publico
+
     await carregar_catalogo()
     mostrar_inativos = todos and principal.is_sysadmin
+    if not principal.is_sysadmin:
+        segmento = principal.segmento  # cada empresa só vê os planos do próprio segmento
     return Catalogo(
-        planos=[_plano_saida(k, v) for k, v in PLANOS.items() if mostrar_inativos or v.get("ativo", True)],
+        segmentos=catalogo_publico(),
+        planos=[_plano_saida(k, v) for k, v in PLANOS.items() if (mostrar_inativos or v.get("ativo", True))
+                and (not segmento or (v.get("segmento") or "imobiliaria") == segmento)],
         adicionais=[Adicional(**v) for v in ADICIONAIS.values() if mostrar_inativos or v.get("ativo", True)],
         recursos=RECURSOS,
         modulos={m: TITULOS_PADRAO.get(m, m) for m in MODULOS},
@@ -133,9 +153,9 @@ async def meu_plano(principal: Principal = Depends(principal_atual)):
 @router.post("/planos", response_model=PlanoCatalogo, status_code=201)
 async def criar_plano(input: PlanoIn, principal: Principal = Depends(require("empresa:manage"))):
     await carregar_catalogo(forcar=True)
-    chave = _chave(input.nome)
+    chave = _chave(input.nome) if input.segmento == "imobiliaria" else f"{input.segmento}_{_chave(input.nome)}"
     if chave in PLANOS or chave == "legado":
-        raise HTTPException(409, "Já existe um plano com esse nome")
+        raise HTTPException(409, "Já existe um plano com esse nome neste segmento")
     doc = {"_id": chave, "chave": chave, **input.model_dump()}
     await controle.planos_catalogo.insert_one(doc)
     await carregar_catalogo(forcar=True)
@@ -147,8 +167,11 @@ async def editar_plano(chave: str, input: PlanoIn, principal: Principal = Depend
     await carregar_catalogo(forcar=True)
     if chave not in PLANOS:
         raise HTTPException(404, "Plano não encontrado")
-    if not input.ativo and not [p for k, p in PLANOS.items() if k != chave and p.get("ativo", True)]:
-        raise HTTPException(422, "Mantenha pelo menos um plano ativo")
+    if (PLANOS[chave].get("segmento") or "imobiliaria") != input.segmento:
+        raise HTTPException(422, "O segmento de um plano não muda. Crie um plano novo no outro segmento.")
+    if not input.ativo and not [p for k, p in PLANOS.items() if k != chave and p.get("ativo", True)
+                                and (p.get("segmento") or "imobiliaria") == input.segmento]:
+        raise HTTPException(422, "Mantenha pelo menos um plano ativo no segmento")
     await controle.planos_catalogo.update_one({"_id": chave}, {"$set": input.model_dump()})
     await carregar_catalogo(forcar=True)
     return _plano_saida(chave, PLANOS[chave])
@@ -174,7 +197,7 @@ def _validar_adicional(input: AdicionalIn) -> dict:
             raise HTTPException(422, "Escolha a funcionalidade que o adicional libera")
     else:
         data["recurso"] = None
-    if input.tipo not in ("usuarios", "imoveis"):
+    if input.tipo not in ("usuarios", "imoveis", "unidades"):
         data["quantidade_por_unidade"] = 1
     return data
 

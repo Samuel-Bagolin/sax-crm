@@ -90,6 +90,9 @@ class Principal(BaseModel):
     telefone: str | None = None
     trocar_senha: bool = False  # senha inicial fraca: só pode trocar a senha até resolver
     gerencia_site: bool = False  # gestor liberou este usuário para editar o site da imobiliária
+    segmento: str = "imobiliaria"  # lib/segmentos.py
+    assinatura: dict | None = None  # resumo da assinatura da plataforma (cadastro público)
+    bloqueio: str | None = None  # motivo do bloqueio por cobrança; None = acesso liberado
 
     @property
     def is_admin(self) -> bool:
@@ -112,10 +115,18 @@ _PERMS_CRM_GESTOR = {
     "funil:read", "funil:write", "atividade:read", "atividade:write",
     "entrada:read", "entrada:write", "entrada:delete", "assinatura:manage",
     "modelo:read", "modelo:write", "equipe:read", "portal:manage", "proprietario:link",
+    # segmentos de serviço, saúde e veículos
+    "unidade:read", "unidade:manage", "servico:read", "servico:write", "agendamento:read", "agendamento:write",
+    "paciente:read", "paciente:write", "paciente:delete", "prontuario:read", "prontuario:write",
+    "tratamento:read", "tratamento:write", "veiculo:read", "veiculo:create", "veiculo:update", "veiculo:delete",
+    "assinatura_plataforma:manage",
 }
 _PERMS_CRM_CORRETOR = {
     "funil:read", "atividade:read", "atividade:write", "entrada:read", "entrada:write",
     "assinatura:manage", "modelo:read", "equipe:read", "proprietario:link",
+    "unidade:read", "servico:read", "agendamento:read", "agendamento:write",
+    "paciente:read", "paciente:write", "prontuario:read", "prontuario:write",
+    "tratamento:read", "tratamento:write", "veiculo:read", "veiculo:create", "veiculo:update",
 }
 
 _PERMS_ADMIN = _PERMS_CRM_GESTOR | {
@@ -219,6 +230,7 @@ async def _principal_do_request(request: Request) -> Principal | None:
     # A empresa vem do TOKEN (nunca do corpo/query) e define o banco deste request.
     empresa_id = payload.get("emp")
     empresa_nome = None
+    empresa = None
     sysadmin_global = await controle.usuarios.find_one({"id": usuario_id, "papel": "sysadmin"})
     if empresa_id:
         empresa = await controle.empresas.find_one({"id": empresa_id})
@@ -247,7 +259,19 @@ async def _principal_do_request(request: Request) -> Principal | None:
         telefone=doc.get("telefone"),
         trocar_senha=bool(doc.get("trocar_senha")),
         gerencia_site=bool(doc.get("gerencia_site")),
+        **_dados_empresa(empresa, sysadmin=bool(sysadmin_global)),
     )
+
+
+def _dados_empresa(empresa: dict | None, sysadmin: bool) -> dict:
+    if not empresa:
+        return {}
+    from lib.assinatura import bloqueio, resumo_publico
+    from lib.segmentos import segmento_de
+
+    ass = empresa.get("assinatura")
+    return {"segmento": segmento_de(empresa), "assinatura": resumo_publico(ass),
+            "bloqueio": None if sysadmin else bloqueio(ass)}
 
 
 async def principal_atual(request: Request) -> Principal:
@@ -257,10 +281,14 @@ async def principal_atual(request: Request) -> Principal:
         raise HTTPException(status_code=401, detail="Sessão expirada ou inexistente")
     if principal.trocar_senha and request.url.path not in _LIBERADO_SEM_TROCA:
         raise HTTPException(status_code=403, detail="Troque a senha inicial para continuar")
+    if principal.bloqueio and request.url.path not in _LIBERADO_SEM_TROCA and not request.url.path.startswith(_LIBERADO_BLOQUEIO):
+        raise HTTPException(status_code=402, detail=principal.bloqueio)
     return principal
 
 
 _LIBERADO_SEM_TROCA = {"/api/auth/me", "/api/auth/senha", "/api/auth/logout"}
+# Com a cobrança bloqueada, o gestor ainda vê a assinatura e troca o cartão.
+_LIBERADO_BLOQUEIO = ("/api/assinatura", "/api/configuracoes/publica", "/api/plano")
 
 
 async def principal_opcional(request: Request) -> Principal | None:
@@ -289,7 +317,9 @@ def pode_conceder(principal: Principal, papel_alvo: str) -> bool:
     return principal.papel == "admin" and papel_alvo in {"admin", "corretor"}
 
 
-MODULE_ACTION = {"imovel": "imoveis", "lead": "crm", "plano": "financeiro", "transacao": "financeiro", "financeiro": "financeiro", "contrato": "contratos", "visita": "agenda", "usuario": "usuarios", "relatorio": "financeiro", "funil": "crm", "atividade": "crm", "entrada": "crm", "assinatura": "contratos", "modelo": "contratos", "portal": "imoveis", "proprietario": "imoveis"}
+MODULE_ACTION = {"imovel": "imoveis", "lead": "crm", "plano": "financeiro", "transacao": "financeiro", "financeiro": "financeiro", "contrato": "contratos", "visita": "agenda", "usuario": "usuarios", "relatorio": "financeiro", "funil": "crm", "atividade": "crm", "entrada": "crm", "assinatura": "contratos", "modelo": "contratos", "portal": "imoveis", "proprietario": "imoveis",
+                 "veiculo": "veiculos", "servico": "atendimentos", "agendamento": "atendimentos",
+                 "paciente": "pacientes", "prontuario": "pacientes", "tratamento": "pacientes"}
 
 async def require_module(principal: Principal, action: str):
     module = MODULE_ACTION.get(action.split(":")[0])
