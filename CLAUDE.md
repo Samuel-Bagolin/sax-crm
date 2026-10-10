@@ -58,7 +58,9 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
 4. **Banco.** O código usa a API do Motor/MongoDB. Em produção ela roda sobre o Firestore por um
    adaptador (`lib/firestore_mongo.py`): documento até 1 MiB (campos grandes são divididos sozinhos),
    cada documento lido é cobrado, então evite varrer coleções inteiras em rotas chamadas a toda hora.
-   Agregações (`aggregate`) não existem no adaptador: calcule em Python.
+   Agregações (`aggregate`) não existem no adaptador: calcule em Python. O Firestore recusa lista dentro
+   de lista (ex.: jornada `[["09:00","18:00"]]`); o adaptador guarda a lista interna como mapa e devolve
+   como lista. O simulador dos testes (`tests/fake_firestore.py`) recusa igual ao Firestore real.
 5. **Dinheiro e datas.** Valores em reais com 2 casas: use `percentage` e `split_money` de `lib/integrity.py` (nunca float solto em
    parcelas). Datas de vencimento são texto `AAAA-MM-DD`.
 6. **Segmento.** O segmento vem da empresa (`lib/segmentos.py`, `principal.segmento`). Ele define
@@ -73,6 +75,8 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    Barbearia: clube de assinantes em `routers/clube.py` (mensalidade com id fixo por mês, não duplica).
 7. **Dinheiro lançado uma vez só.** Concluir atendimento, aprovar tratamento e vender veículo mudam o
    status com `update_one` condicional e só lançam no Financeiro se `modified_count == 1`.
+   Contrato da loja de veículos (`veiculo_id` no lugar de `imovel_id`) registra a venda por
+   `registrar_venda` em `routers/veiculos.py`; cancelado antes de receber, o carro volta ao estoque.
 8. **Cartão e Asaas.** Número e CVV só passam pela memória a caminho do Asaas (`lib/asaas.py`): nunca
    gravar, logar ou devolver em erro. Guardamos final, bandeira e token. A chave do Asaas fica na tela
    Empresas > Pagamentos ou em `ASAAS_API_KEY`. O webhook (`/api/webhooks/asaas`) confere o token,

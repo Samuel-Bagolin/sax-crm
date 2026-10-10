@@ -37,6 +37,7 @@ export const PAPEL_SIGNATARIO: Record<PapelSignatario, string> = {
   fiador: "Fiador(a)",
   testemunha: "Testemunha",
   imobiliaria: "Imobiliária",
+  loja: "Loja",
   corretor: "Corretor(a)",
   outro: "Outro",
 };

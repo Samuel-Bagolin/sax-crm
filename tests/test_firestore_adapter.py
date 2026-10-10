@@ -40,6 +40,20 @@ def test_valores_ida_e_volta():
     assert fm._decodificar({"timestampValue": "2026-10-08T12:30:15.123456789Z"}) == agora
 
 
+def test_lista_dentro_de_lista(cliente):
+    """O Firestore recusa lista dentro de lista; a jornada da agenda é assim e dava erro 500 na primeira gravação."""
+    jornada = {"1": [["08:00", "12:00"], ["13:00", "18:00"]], "6": []}
+
+    async def caso():
+        col = cliente["banco1"]["usuarios"]
+        await col.insert_one({"id": "u1", "nome": "Ana", "jornada": jornada, "matriz": [[1, [2, 3]], []]})
+        d = await col.find_one({"id": "u1"})
+        assert d["jornada"] == jornada and d["matriz"] == [[1, [2, 3]], []]
+        await col.update_one({"id": "u1"}, {"$set": {"jornada.2": [["09:00", "10:00"]]}})
+        assert (await col.find_one({"id": "u1"}))["jornada"]["2"] == [["09:00", "10:00"]]
+    rodar(caso())
+
+
 def test_id_do_documento():
     assert fm.doc_id({"_id": "dm:a:b"}) == "dm:a:b"
     assert fm.doc_id({"id": "x/y"}) == "x%2Fy"

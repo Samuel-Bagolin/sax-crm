@@ -1,3 +1,4 @@
+import { useConfig } from "@/lib/useConfig";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -88,6 +89,7 @@ function Linha({ rotulo, children }: { rotulo: string; children: React.ReactNode
 }
 
 export default function NegocioDetalhe() {
+  const { moduloAtivo } = useConfig();
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -254,7 +256,7 @@ export default function NegocioDetalhe() {
                 >
                   {n.status === "ganho" ? "Ganho" : "Perdido"} em {dataHoraBR(n.closed_at)}
                 </span>
-                {n.status === "ganho" &&
+                {n.status === "ganho" && moduloAtivo("contratos") &&
                   (resumo.contrato_id ? (
                     <Button size="sm" onClick={() => navigate(`/contratos?id=${resumo.contrato_id}`)}>
                       <FileSignature className="h-3.5 w-3.5" /> Ver contrato

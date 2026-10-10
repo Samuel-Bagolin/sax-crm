@@ -92,7 +92,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
       { to: "/imoveis", modulo: "imoveis", icon: Building2, nivel: "todos", segmentos: ["imobiliaria"] },
       { to: "/veiculos", modulo: "veiculos", icon: Car, rotulo: "Estoque", nivel: "todos", segmentos: ["veiculos"] },
       { to: "/proprietarios", modulo: "imoveis", icon: KeyRound, rotulo: "Proprietários", curto: "Donos", nivel: "todos", segmentos: ["imobiliaria"] },
-      { to: "/contratos", modulo: "contratos", icon: FileSignature, nivel: "todos", segmentos: ["imobiliaria"] },
+      { to: "/contratos", modulo: "contratos", icon: FileSignature, nivel: "todos", segmentos: ["imobiliaria", "veiculos"] },
       { to: "/meu-site", modulo: "imoveis", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: ["imobiliaria"] },
       { to: "/meu-site", modulo: "veiculos", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: ["veiculos"] },
     ],

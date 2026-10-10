@@ -166,10 +166,14 @@ async def get_contrato(contrato_id: str, principal: Principal = Depends(require(
         p = await db.pessoas.find_one({"id": pid})
         return p["nome"] if p else None
 
-    imovel = await db.imoveis.find_one({"id": doc["imovel_id"]})
+    imovel = await db.imoveis.find_one({"id": doc["imovel_id"]}) if doc.get("imovel_id") else None
+    veiculo = await db.veiculos.find_one({"id": doc["veiculo_id"]}) if doc.get("veiculo_id") else None
+    if veiculo:
+        from routers.veiculos import titulo as titulo_veiculo
     return ContratoDetalhe(
         **to_contrato(doc).model_dump(),
         imovel_titulo=imovel["titulo"] if imovel else None,
+        veiculo_titulo=f"{veiculo.get('codigo') or ''} {titulo_veiculo(veiculo)}".strip() if veiculo else None,
         cliente_nome=await nome(doc.get("cliente_id")),
         proprietario_nome=await nome(doc.get("proprietario_id")),
         corretor_nome=await nome(doc.get("corretor_id")),
@@ -187,14 +191,34 @@ async def create_contrato(input: ContratoCreate, principal: Principal = Depends(
             partialFilterExpression={"lead_id": {"$type": "string"}, "status": "ativo"})
     except PyMongoError:
         raise HTTPException(409, "Não foi possível garantir unicidade dos contratos; concilie os registros antigos antes de criar outro")
-    imovel = await db.imoveis.find_one({"id": input.imovel_id})
-    if not imovel:
-        raise HTTPException(status_code=404, detail="Imóvel não encontrado")
+    loja = principal.segmento == "veiculos"
+    imovel = veiculo = None
+    if loja:
+        if not input.veiculo_id:
+            raise HTTPException(422, "Selecione o veículo do contrato")
+        if input.tipo != "venda":
+            raise HTTPException(422, "Na loja de veículos o contrato é de compra e venda")
+        veiculo = await db.veiculos.find_one({"id": input.veiculo_id})
+        if not veiculo:
+            raise HTTPException(status_code=404, detail="Veículo não encontrado")
+        ativo = await db.contratos.find_one({"veiculo_id": input.veiculo_id, "status": "ativo"}, {"numero": 1, "request_id": 1})
+        if ativo and not (input.request_id and ativo.get("request_id") == input.request_id):
+            raise HTTPException(409, f"Este veículo já tem o contrato {ativo.get('numero')} ativo. Abra o contrato existente.")
+    else:
+        if not input.imovel_id:
+            raise HTTPException(422, "Selecione o imóvel do contrato")
+        imovel = await db.imoveis.find_one({"id": input.imovel_id})
+        if not imovel:
+            raise HTTPException(status_code=404, detail="Imóvel não encontrado")
 
     data = input.model_dump(exclude={"request_id"})
+    if loja:
+        data.update(imovel_id=None, proprietario_id=None, comissao_pct=0, taxa_admin_pct=0, fim=None, parcelas=1)
+    else:
+        data.update(veiculo_id=None, forma_pagamento=None)
     for field in ("cliente_id", "proprietario_id", "corretor_id"):
         await reference("pessoas", data.get(field), principal)
-    codes = [CODIGO_COMISSAO_VENDA] if input.tipo == "venda" else [CODIGO_TAXA_ADMIN, CODIGO_COMISSAO_LOCACAO]
+    codes = [] if loja else [CODIGO_COMISSAO_VENDA] if input.tipo == "venda" else [CODIGO_TAXA_ADMIN, CODIGO_COMISSAO_LOCACAO]
     for code in codes:
         if not await _conta_id(code): raise HTTPException(409, "Plano de contas obrigatório ausente")
     lead = None
@@ -203,7 +227,8 @@ async def create_contrato(input: ContratoCreate, principal: Principal = Depends(
         if not lead:
             raise HTTPException(status_code=404, detail="Lead não encontrado")
         authorize(principal, "contrato:create", lead)  # lead de outro corretor → 404
-        if lead.get("estagio") != "ganho" and lead.get("status") != "ganho":
+        # Na loja o contrato fecha o negócio (a venda marca o negócio como ganho).
+        if not loja and lead.get("estagio") != "ganho" and lead.get("status") != "ganho":
             raise HTTPException(status_code=409, detail="Só é possível contratar um lead no estágio Ganho")
         existing = await db.contratos.find_one({"lead_id": input.lead_id, "status": {"$ne": "cancelado"}})
         if existing:
@@ -212,15 +237,20 @@ async def create_contrato(input: ContratoCreate, principal: Principal = Depends(
                     raise HTTPException(409, "Chave reutilizada com dados diferentes")
                 return await _concluir(existing, principal)
             raise HTTPException(409, "Este lead já possui um contrato; utilize o registro existente")
-        if lead.get("imovel_id") and lead["imovel_id"] != input.imovel_id:
+        if not loja and lead.get("imovel_id") and lead["imovel_id"] != input.imovel_id:
             raise HTTPException(422, "O imóvel do contrato deve corresponder ao lead")
+        if loja and lead.get("veiculo_id") and lead["veiculo_id"] != input.veiculo_id:
+            raise HTTPException(422, "O veículo do contrato deve corresponder ao negócio")
         data["cliente_id"] = data.get("cliente_id") or lead.get("cliente_id")
         data["corretor_id"] = data.get("corretor_id") or lead.get("corretor_id")
 
     # Dono vem do principal quando é corretor — nunca do corpo.
     if not principal.is_admin:
         data["corretor_id"] = principal.pessoa_id
-    data["proprietario_id"] = data.get("proprietario_id") or imovel.get("proprietario_id")
+    if imovel:
+        data["proprietario_id"] = data.get("proprietario_id") or imovel.get("proprietario_id")
+    if loja and not data.get("corretor_id"):
+        data["corretor_id"] = principal.pessoa_id  # quem fecha a venda assina pela loja
 
     if data["tipo"] == "locacao" and not data.get("fim"):
         raise HTTPException(status_code=422, detail="Informe o fim da vigência para contratos de locação")
@@ -251,7 +281,7 @@ async def create_contrato(input: ContratoCreate, principal: Principal = Depends(
         if not existing: raise HTTPException(409, "Contrato já criado; atualize a lista")
         authorize(principal, "contrato:read", existing)
         if existing.get("request_payload") != input.model_dump(): raise HTTPException(409, "Chave reutilizada com dados diferentes")
-        for key in ("imovel_id", "lead_id", "tipo", "valor", "comissao_pct", "taxa_admin_pct", "inicio", "fim"):
+        for key in ("imovel_id", "veiculo_id", "lead_id", "tipo", "valor", "comissao_pct", "taxa_admin_pct", "inicio", "fim"):
             if existing.get(key) != document.get(key): raise HTTPException(409, "Chave de operação reutilizada com dados diferentes")
         document = existing
     else:
@@ -267,7 +297,9 @@ async def _concluir(doc: dict, principal: Principal):
     if doc.get("status") != "ativo": raise HTTPException(409, "Contrato não está ativo")
     if "financeiro_status" not in doc:
         raise HTTPException(409, "Contrato anterior à migração: concilie os títulos existentes antes de reprocessar")
-    if doc.get("financeiro_status") != "concluido":
+    if doc.get("financeiro_status") != "concluido" and doc.get("veiculo_id"):
+        await _concluir_venda_veiculo(doc, principal)
+    elif doc.get("financeiro_status") != "concluido":
         try:
             await _gerar_parcelas(to_contrato(doc))
             await db.imoveis.update_one({"id": doc["imovel_id"]}, {"$set": {"status": "vendido" if doc["tipo"] == "venda" else "alugado", "updated_at": now_utc()}})
@@ -277,6 +309,36 @@ async def _concluir(doc: dict, principal: Principal):
             await db.contratos.update_one({"id": doc["id"]}, {"$set": {"financeiro_status": "erro"}})
             raise HTTPException(503, "Contrato preservado; financeiro pendente. Reprocesse o contrato.")
     return await get_contrato(doc["id"], principal)
+
+
+async def _concluir_venda_veiculo(doc: dict, principal: Principal) -> None:
+    """Contrato da loja: registra a venda do veículo (receita lançada uma vez só, com o contrato vinculado).
+    Se o veículo já foi vendido por fora do contrato, só vincula a venda existente."""
+    from routers.veiculos import Venda, registrar_venda
+
+    veiculo = await db.veiculos.find_one({"id": doc["veiculo_id"]})
+    if not veiculo:
+        raise HTTPException(404, "Veículo não encontrado")
+    try:
+        if veiculo.get("status") == "vendido":
+            if veiculo.get("contrato_id") not in (None, doc["id"]):
+                raise HTTPException(409, "Este veículo já foi vendido por outro contrato")
+            await db.veiculos.update_one({"id": veiculo["id"], "contrato_id": None}, {"$set": {"contrato_id": doc["id"]}})
+            await db.transacoes.update_many({"veiculo_id": veiculo["id"], "contrato_id": None, "status": {"$ne": "cancelado"}},
+                                            {"$set": {"contrato_id": doc["id"]}})
+        else:
+            vendedor = await db.usuarios.find_one({"pessoa_id": doc.get("corretor_id")}, {"id": 1}) if doc.get("corretor_id") else None
+            await registrar_venda(veiculo["id"], Venda(valor=doc["valor"], data=doc["inicio"], cliente_id=doc.get("cliente_id"),
+                                                       vendedor_usuario_id=(vendedor or {}).get("id"), negocio_id=doc.get("lead_id"),
+                                                       forma_pagamento=doc.get("forma_pagamento")), principal, contrato_id=doc["id"])
+    except HTTPException:
+        await db.contratos.update_one({"id": doc["id"]}, {"$set": {"financeiro_status": "erro"}})
+        raise
+    except Exception:
+        await db.contratos.update_one({"id": doc["id"]}, {"$set": {"financeiro_status": "erro"}})
+        raise HTTPException(503, "Contrato preservado; venda do veículo pendente. Reprocesse o contrato.")
+    await db.contratos.update_one({"id": doc["id"]}, {"$set": {"financeiro_status": "concluido"}})
+    await audit(principal, "contrato.venda_veiculo", doc["id"])
 
 
 @router.post("/{contrato_id}/reprocessar", response_model=ContratoDetalhe)
@@ -308,6 +370,10 @@ async def update_contrato(contrato_id: str, input: ContratoUpdate, principal: Pr
     if data.get("status") in {"encerrado", "cancelado"}:
         filter_ = {"contrato_id": contrato_id, "status": "pendente"}
         if data["status"] == "encerrado": filter_["vencimento"] = {"$gt": today_iso()}
+        if doc.get("veiculo_id") and data["status"] == "cancelado":
+            from routers.veiculos import desfazer_venda
+
+            await desfazer_venda(doc["veiculo_id"], contrato_id)
         await db.transacoes.update_many(filter_, {"$set": {"status": "cancelado", "cancelado_em": now_utc()}})
     await audit(principal, "contrato.update", contrato_id, {k: doc.get(k) for k in data}, data)
     return to_contrato(await db.contratos.find_one({"id": contrato_id}))

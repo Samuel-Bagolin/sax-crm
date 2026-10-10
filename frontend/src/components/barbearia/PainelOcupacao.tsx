@@ -48,7 +48,7 @@ export default function PainelOcupacao() {
     <section className="overflow-hidden rounded-xl border bg-card" data-testid="painel-ocupacao">
       <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
         <div className="min-w-0">
-          <p className="font-semibold">Ocupação das {posto}</p>
+          <p className="font-semibold">Ocupação {posto.endsWith("os") ? "dos" : "das"} {posto}</p>
           <p className="text-xs text-muted-foreground">Funcionamento de hoje: {d.abre} às {d.fecha}{d.agora ? `, agora ${d.agora}` : ""}</p>
         </div>
         {d.unidades.length > 1 && (
@@ -99,7 +99,7 @@ export default function PainelOcupacao() {
             <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
               <div className="h-full rounded-full bg-[#ff7a00]" style={{ width: `${Math.min(100, u.taxa_dia)}%` }} />
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{u.atendimentos} {seg.termos.atendimentos.toLowerCase()} marcados hoje em {u.cadeiras} {posto}.</p>
+            <p className="mt-1 text-xs text-muted-foreground">{u.atendimentos} {seg.termos.atendimentos.toLowerCase()} na agenda de hoje, em {u.cadeiras} {posto}.</p>
           </div>
           <div>
             <p className="mb-1.5 text-sm font-medium">Hora a hora</p>

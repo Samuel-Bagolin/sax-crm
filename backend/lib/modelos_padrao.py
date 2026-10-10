@@ -23,6 +23,14 @@ VARIAVEIS = [
     ("fim", "Fim da vigência"),
     ("dia_vencimento", "Dia de vencimento"),
     ("parcelas", "Número de parcelas"),
+    ("veiculo_codigo", "Código do veículo no estoque"),
+    ("veiculo_titulo", "Marca, modelo, versão e ano"),
+    ("veiculo_placa", "Placa"),
+    ("veiculo_ano", "Ano de fabricação e modelo"),
+    ("veiculo_cor", "Cor"),
+    ("veiculo_km", "Quilometragem"),
+    ("veiculo_combustivel", "Combustível"),
+    ("forma_pagamento", "Forma de pagamento"),
 ]
 
 MODELO_VENDA = """# INSTRUMENTO PARTICULAR DE COMPROMISSO DE COMPRA E VENDA
@@ -102,4 +110,42 @@ As partes reconhecem a validade da assinatura eletrônica deste instrumento, com
 MODELOS_PADRAO = [
     ("Compromisso de compra e venda", "venda", MODELO_VENDA),
     ("Locação residencial", "locacao", MODELO_LOCACAO),
+]
+
+
+MODELO_VEICULO = """# CONTRATO DE COMPRA E VENDA DE VEÍCULO
+
+Contrato nº {{contrato_numero}}
+
+## 1. Das partes
+
+VENDEDORA: {{empresa_nome}}, neste ato representada por {{corretor_nome}}.
+
+COMPRADOR(A): {{cliente_nome}}, inscrito(a) no CPF/CNPJ sob nº {{cliente_cpf}}, e-mail {{cliente_email}}, telefone {{cliente_telefone}}.
+
+## 2. Do veículo
+
+{{veiculo_titulo}}, ano {{veiculo_ano}}, cor {{veiculo_cor}}, placa {{veiculo_placa}}, {{veiculo_km}}, combustível {{veiculo_combustivel}}, código de estoque {{veiculo_codigo}}.
+
+## 3. Do preço e do pagamento
+
+O preço total é de {{valor}}, pago na forma: {{forma_pagamento}}. A posse e os documentos do veículo serão entregues ao COMPRADOR após a confirmação integral do pagamento.
+
+## 4. Do estado do veículo
+
+O COMPRADOR declara ter examinado o veículo e o recebe no estado em que se encontra, com a quilometragem informada acima. A VENDEDORA responde pela garantia legal e pela garantia contratual eventualmente informada na proposta.
+
+## 5. Da transferência
+
+As partes se comprometem a assinar o recibo de transferência (ATPV-e) e a concluir a transferência junto ao DETRAN no prazo legal de 30 dias. Multas, tributos e encargos até a data da entrega são da VENDEDORA; os posteriores, do COMPRADOR.
+
+## 6. Das disposições gerais
+
+As partes reconhecem a validade da assinatura eletrônica deste instrumento, com registro de data, hora, IP e código de integridade do documento. Fica eleito o foro do domicílio do COMPRADOR.
+
+{{data_hoje}}.
+"""
+
+MODELOS_VEICULOS = [
+    ("Compra e venda de veículo", "venda", MODELO_VEICULO),
 ]

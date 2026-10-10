@@ -71,7 +71,7 @@ class Venda(BaseModel):
     cliente_id: str | None = None
     vendedor_usuario_id: str | None = None
     negocio_id: str | None = None
-    forma_pagamento: str | None = Field(default=None, max_length=40)
+    forma_pagamento: str | None = Field(default=None, max_length=120)
 
 
 def _custo(v: dict) -> float:
@@ -229,6 +229,13 @@ async def editar(veiculo_id: str, input: VeiculoIn, principal: Principal = Depen
 
 @router.post("/{veiculo_id}/vender")
 async def vender(veiculo_id: str, input: Venda, principal: Principal = Depends(require("veiculo:update"))):
+    if input.vendedor_usuario_id and input.vendedor_usuario_id != principal.usuario_id and not principal.is_admin:
+        raise HTTPException(403, "Só o gestor registra venda em nome de outro vendedor")
+    return _saida(await registrar_venda(veiculo_id, input, principal))
+
+
+async def registrar_venda(veiculo_id: str, input: Venda, principal: Principal, contrato_id: str | None = None) -> dict:
+    """Marca o veículo como vendido e lança a receita uma vez só. Usado pela venda direta e pelo contrato."""
     from lib.agenda_online import validar_data
     from lib.auth import authorize
 
@@ -236,8 +243,6 @@ async def vender(veiculo_id: str, input: Venda, principal: Principal = Depends(r
     if v.get("status") == "vendido":
         raise HTTPException(409, "Veículo já vendido")
     dia = validar_data(input.data).isoformat() if input.data else agora_local().date().isoformat()
-    if input.vendedor_usuario_id and input.vendedor_usuario_id != principal.usuario_id and not principal.is_admin:
-        raise HTTPException(403, "Só o gestor registra venda em nome de outro vendedor")
     negocio = None
     if input.negocio_id:
         negocio = await db.leads.find_one({"id": input.negocio_id})
@@ -247,7 +252,8 @@ async def vender(veiculo_id: str, input: Venda, principal: Principal = Depends(r
     conta = await db.plano_contas.find_one({"codigo": "1.1.1"}) or await db.plano_contas.find_one({"tipo": "receita"})
     vendedor = await db.usuarios.find_one({"id": input.vendedor_usuario_id or principal.usuario_id}, {"pessoa_id": 1, "nome": 1}) or {}
     dados = {"status": "vendido", "site_status": "inativo", "vendido_em": dia, "valor_vendido": round(input.valor, 2),
-             "comprador_id": input.cliente_id, "vendedor_nome": vendedor.get("nome"), "forma_pagamento": input.forma_pagamento, "updated_at": now_utc()}
+             "comprador_id": input.cliente_id, "vendedor_nome": vendedor.get("nome"), "forma_pagamento": input.forma_pagamento,
+             "contrato_id": contrato_id, "updated_at": now_utc()}
     # Marca como vendido com condição no status: duas vendas ao mesmo tempo não lançam a receita duas vezes.
     r = await db.veiculos.update_one({"id": veiculo_id, "status": {"$ne": "vendido"}}, {"$set": dados})
     if r.modified_count != 1:
@@ -257,7 +263,7 @@ async def vender(veiculo_id: str, input: Venda, principal: Principal = Depends(r
             await db.transacoes.insert_one({
                 "id": new_id(), "descricao": f"Venda {v.get('codigo')} {titulo(v)}"[:300], "tipo": "receber", "valor": round(input.valor, 2),
                 "plano_conta_id": conta["id"], "imovel_id": None, "veiculo_id": veiculo_id, "pessoa_id": input.cliente_id,
-                "corretor_id": vendedor.get("pessoa_id"), "evento_id": None, "contrato_id": None, "vencimento": dia, "pagamento": None,
+                "corretor_id": vendedor.get("pessoa_id"), "evento_id": None, "contrato_id": contrato_id, "vencimento": dia, "pagamento": None,
                 "status": "pendente", "forma_pagamento": input.forma_pagamento, "vencido": False, "cancelado_em": None, "created_at": now_utc()})
         except Exception:
             await db.veiculos.update_one({"id": veiculo_id}, {"$set": {k: v.get(k) for k in dados}})
@@ -268,7 +274,21 @@ async def vender(veiculo_id: str, input: Venda, principal: Principal = Depends(r
     from routers.site_imobiliaria import limpar_cache
 
     limpar_cache()
-    return _saida({**v, **dados})
+    return {**v, **dados}
+
+
+async def desfazer_venda(veiculo_id: str, contrato_id: str) -> bool:
+    """Contrato cancelado antes de receber: o veículo volta ao estoque. Venda já recebida fica como está."""
+    if await db.transacoes.find_one({"veiculo_id": veiculo_id, "contrato_id": contrato_id, "status": "pago"}, {"id": 1}):
+        return False
+    r = await db.veiculos.update_one({"id": veiculo_id, "status": "vendido", "contrato_id": contrato_id},
+                                     {"$set": {"status": "disponivel", "vendido_em": None, "valor_vendido": None, "comprador_id": None,
+                                               "vendedor_nome": None, "contrato_id": None, "updated_at": now_utc()}})
+    if r.modified_count == 1:
+        from routers.site_imobiliaria import limpar_cache
+
+        limpar_cache()
+    return r.modified_count == 1
 
 
 @router.delete("/{veiculo_id}", status_code=204)

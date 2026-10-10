@@ -37,7 +37,7 @@ export function PainelAtendimento() {
   const d = r.data;
   const primeiroNome = principal?.nome.split(" ")[0];
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-heading text-2xl font-bold tracking-tight">Olá, {primeiroNome}</h2>
@@ -52,7 +52,7 @@ export function PainelAtendimento() {
         <Kpi icone={Globe} rotulo="Agendados pelo link" valor={String(d?.mes.online ?? "-")} detalhe="no mês" />
       </div>
       <PainelOcupacao />
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px] [&>*]:min-w-0">
         <section className="rounded-xl border bg-card">
           <p className="border-b px-4 py-3 font-semibold">Agenda de hoje</p>
           {!d?.hoje.length ? <p className="p-6 text-sm text-muted-foreground">Nada agendado para hoje.</p> : (
@@ -100,7 +100,7 @@ export function PainelVeiculos() {
   const r = useQuery({ queryKey: ["veiculos-resumo"], queryFn: () => apiGet<ResumoV>("/veiculos/resumo") });
   const d = r.data;
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-heading text-2xl font-bold tracking-tight">Olá, {principal?.nome.split(" ")[0]}</h2>

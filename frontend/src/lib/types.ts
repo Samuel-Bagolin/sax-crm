@@ -490,7 +490,9 @@ export interface ContratoBase {
   numero: string;
   tipo: ContratoTipo;
   lead_id: string | null;
-  imovel_id: string;
+  imovel_id: string | null;
+  veiculo_id?: string | null;
+  forma_pagamento?: string | null;
   cliente_id: string | null;
   proprietario_id: string | null;
   corretor_id: string | null;
@@ -515,6 +517,7 @@ export type ContratoStatus = "ativo" | "encerrado" | "cancelado";
 
 export interface ContratoDetalhe extends ContratoBase {
   imovel_titulo: string | null;
+  veiculo_titulo?: string | null;
   cliente_nome: string | null;
   proprietario_nome: string | null;
   corretor_nome: string | null;
@@ -743,7 +746,7 @@ export interface ResultadoBusca {
   subtitulo: string | null;
 }
 
-export type PapelSignatario = "comprador" | "vendedor" | "locatario" | "locador" | "fiador" | "testemunha" | "imobiliaria" | "corretor" | "outro";
+export type PapelSignatario = "comprador" | "vendedor" | "locatario" | "locador" | "fiador" | "testemunha" | "imobiliaria" | "loja" | "corretor" | "outro";
 
 export interface Signatario {
   id: string;

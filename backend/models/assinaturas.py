@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from models.common import new_id, now_utc
 
 PapelSignatario = Literal[
-    "comprador", "vendedor", "locatario", "locador", "fiador", "testemunha", "imobiliaria", "corretor", "outro"
+    "comprador", "vendedor", "locatario", "locador", "fiador", "testemunha", "imobiliaria", "loja", "corretor", "outro"
 ]
 
 

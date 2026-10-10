@@ -25,7 +25,7 @@ from lib.auth import Principal, authorize, require
 from lib.crm import registrar
 from lib.db import controle, db, definir_empresa, empresa_atual_db
 from lib.integrity import audit
-from lib.modelos_padrao import MODELOS_PADRAO, VARIAVEIS
+from lib.modelos_padrao import MODELOS_PADRAO, MODELOS_VEICULOS, VARIAVEIS
 from lib.pdf import gerar_contrato_pdf
 from models.assinaturas import (
     AssinarInput, DocumentoContrato, DocumentoInput, DocumentoPublico, EventoAssinatura, GerarDocumentoInput,
@@ -38,7 +38,7 @@ publico_router = APIRouter(prefix="/assinatura", tags=["assinaturas-publico"])
 
 PAPEL_LABEL = {
     "comprador": "Comprador(a)", "vendedor": "Vendedor(a)", "locatario": "Locatário(a)", "locador": "Locador(a)",
-    "fiador": "Fiador(a)", "testemunha": "Testemunha", "imobiliaria": "Imobiliária", "corretor": "Corretor(a)", "outro": "Signatário(a)",
+    "fiador": "Fiador(a)", "testemunha": "Testemunha", "imobiliaria": "Imobiliária", "loja": "Loja", "corretor": "Corretor(a)", "outro": "Signatário(a)",
 }
 
 
@@ -149,7 +149,13 @@ def _modelo(doc: dict) -> ModeloContrato:
 
 @router.get("/modelos-contrato", response_model=List[ModeloContrato])
 async def list_modelos(principal: Principal = Depends(require("modelo:read"))):
-    if await db.modelos_contrato.count_documents({}) == 0:
+    if principal.segmento == "veiculos":
+        # Loja: o modelo de compra e venda de veículo (empresas antigas podem ter recebido os da imobiliária).
+        nomes = {d.get("nome") for d in await db.modelos_contrato.find({}, {"nome": 1}).to_list(None)}
+        novos = [ModeloContrato(nome=n, tipo=t, texto=x).model_dump() for n, t, x in MODELOS_VEICULOS if n not in nomes]
+        if novos:
+            await db.modelos_contrato.insert_many(novos)
+    elif await db.modelos_contrato.count_documents({}) == 0:
         await db.modelos_contrato.insert_many([ModeloContrato(nome=n, tipo=t, texto=x).model_dump() for n, t, x in MODELOS_PADRAO])
     return [_modelo(d) for d in await db.modelos_contrato.find({}).sort("nome", 1).to_list(None)]
 
@@ -185,7 +191,8 @@ async def _variaveis_contrato(contrato: dict) -> dict[str, str]:
         return (await db.pessoas.find_one({"id": pid})) if pid else None
 
     cliente, prop, corretor = await pessoa(contrato.get("cliente_id")), await pessoa(contrato.get("proprietario_id")), await pessoa(contrato.get("corretor_id"))
-    imovel = await db.imoveis.find_one({"id": contrato.get("imovel_id")}) or {}
+    imovel = (await db.imoveis.find_one({"id": contrato["imovel_id"]}) if contrato.get("imovel_id") else None) or {}
+    veiculo = (await db.veiculos.find_one({"id": contrato["veiculo_id"]}) if contrato.get("veiculo_id") else None) or {}
     config = await db.configuracoes.find_one({"id": "singleton"}, {"nome_software": 1}) or {}
     empresa = await controle.empresas.find_one({"db_name": empresa_atual_db()}, {"nome": 1}) if empresa_atual_db() else None
     endereco = ", ".join(x for x in (imovel.get("endereco"), imovel.get("bairro"), imovel.get("cidade"), imovel.get("estado"), imovel.get("cep")) if x)
@@ -212,6 +219,25 @@ async def _variaveis_contrato(contrato: dict) -> dict[str, str]:
         "fim": _data(contrato.get("fim")),
         "dia_vencimento": str(contrato.get("dia_vencimento", "")),
         "parcelas": str(contrato.get("parcelas", "")),
+        **_variaveis_veiculo(veiculo),
+        "forma_pagamento": contrato.get("forma_pagamento") or "____________",
+    }
+
+
+def _variaveis_veiculo(v: dict) -> dict[str, str]:
+    if not v:
+        return {k: "—" for k in ("veiculo_codigo", "veiculo_titulo", "veiculo_placa", "veiculo_ano", "veiculo_cor", "veiculo_km", "veiculo_combustivel")}
+    from routers.veiculos import titulo
+
+    km = f"{int(v.get('km') or 0):,}".replace(",", ".") + " km"
+    return {
+        "veiculo_codigo": v.get("codigo") or "—",
+        "veiculo_titulo": titulo(v),
+        "veiculo_placa": v.get("placa") or "____________",
+        "veiculo_ano": f"{v.get('ano_fabricacao', '')}/{v.get('ano_modelo', '')}",
+        "veiculo_cor": v.get("cor") or "____________",
+        "veiculo_km": km,
+        "veiculo_combustivel": (v.get("combustivel") or "—").capitalize(),
     }
 
 
@@ -277,6 +303,17 @@ async def adicionar_partes(contrato_id: str, principal: Principal = Depends(requ
     contrato = await _contrato(contrato_id, principal)
     existentes = {(s.get("nome") or "").lower() for s in contrato.get("signatarios") or []}
     venda = contrato.get("tipo") == "venda"
+    if contrato.get("veiculo_id"):
+        # Loja: quem assina é o comprador e a própria loja (representada por quem vendeu).
+        cliente = await db.pessoas.find_one({"id": contrato.get("cliente_id")}) if contrato.get("cliente_id") else None
+        if cliente and cliente["nome"].lower() not in existentes:
+            await adicionar_signatario(contrato_id, SignatarioInput(nome=cliente["nome"], email=cliente.get("email"), telefone=cliente.get("telefone"),
+                                                                    cpf=cliente.get("cpf_cnpj"), papel="comprador"), principal)
+        vendedor = await db.pessoas.find_one({"id": contrato.get("corretor_id")}) if contrato.get("corretor_id") else None
+        if vendedor and vendedor["nome"].lower() not in existentes:
+            await adicionar_signatario(contrato_id, SignatarioInput(nome=vendedor["nome"], email=vendedor.get("email"), telefone=vendedor.get("telefone"),
+                                                                    cpf=vendedor.get("cpf_cnpj"), papel="loja"), principal)
+        return _painel(await _atualizar_status(contrato_id))
     for campo, papel in (("cliente_id", "comprador" if venda else "locatario"), ("proprietario_id", "vendedor" if venda else "locador")):
         pessoa = await db.pessoas.find_one({"id": contrato.get(campo)}) if contrato.get(campo) else None
         if pessoa and pessoa["nome"].lower() not in existentes:

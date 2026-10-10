@@ -50,7 +50,7 @@ export default function MeuDia() {
   const ranking = [...equipe].filter((m) => m.pessoa_id).sort((a, b) => b.valor_ganho_mes - a.valor_ganho_mes).slice(0, 5);
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+    <section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] [&>*]:min-w-0">
       <div className="rounded-lg border bg-card">
         <header className="flex items-center gap-3 border-b px-4 py-3">
           <div className="min-w-0 flex-1">
@@ -96,7 +96,7 @@ export default function MeuDia() {
           })}
           {!atrasadas.length && !deHoje.length && <li className="px-4 py-8 text-center text-sm text-muted-foreground">Agenda de hoje livre. Bom momento para prospectar.</li>}
         </ul>
-        <div className="grid grid-cols-3 border-t text-center">
+        <div className="grid grid-cols-3 border-t text-center [&>*]:min-w-0">
           <Link to="/leads" className="px-2 py-3 hover:bg-muted/50">
             <p className="num flex items-center justify-center gap-1 text-lg font-semibold">
               <Inbox className="h-4 w-4 text-primary" />

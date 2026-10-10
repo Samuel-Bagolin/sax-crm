@@ -249,7 +249,7 @@ export default function AssinaturaPanel({ contratoId, onClose }: { contratoId: s
                 {!temDoc ? (
                   <div className="mx-auto max-w-lg space-y-3 py-6">
                     <h3 className="text-lg font-semibold">Escolha o modelo do documento</h3>
-                    <p className="text-sm text-muted-foreground">Os dados do contrato (partes, imóvel, valores e datas) entram automaticamente. Você revisa antes de enviar.</p>
+                    <p className="text-sm text-muted-foreground">Os dados do contrato (partes, imóvel ou veículo, valores e datas) entram automaticamente. Você revisa antes de enviar.</p>
                     {modelos.map((m) => (
                       <button
                         key={m.id}
@@ -266,7 +266,7 @@ export default function AssinaturaPanel({ contratoId, onClose }: { contratoId: s
                         </span>
                       </button>
                     ))}
-                    <p className="text-xs text-muted-foreground">Modelos são editáveis em Configurar CRM. Revise o texto com o jurídico da imobiliária.</p>
+                    <p className="text-xs text-muted-foreground">Modelos são editáveis em Configurar CRM. Revise o texto com o seu jurídico antes de usar.</p>
                   </div>
                 ) : editando ? (
                   <div className="mx-auto max-w-3xl space-y-3">
@@ -297,7 +297,7 @@ export default function AssinaturaPanel({ contratoId, onClose }: { contratoId: s
                   <h3 className="flex-1 text-sm font-semibold">
                     Quem assina {total > 0 && <span className="font-normal text-muted-foreground">({assinados} de {total})</span>}
                   </h3>
-                  <Button variant="ghost" size="sm" onClick={() => partes.mutate()} disabled={partes.isPending} title="Inclui cliente e proprietário do contrato">
+                  <Button variant="ghost" size="sm" onClick={() => partes.mutate()} disabled={partes.isPending} title="Inclui as partes do contrato">
                     <Users className="h-3.5 w-3.5" /> Partes
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setNovoSig((v) => !v)} data-testid="add-signatario">
@@ -383,7 +383,7 @@ export default function AssinaturaPanel({ contratoId, onClose }: { contratoId: s
                   })}
                   {!total && !novoSig && (
                     <li className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-                      Ninguém incluído ainda. Use <strong>Partes</strong> para trazer cliente e proprietário do contrato.
+                      Ninguém incluído ainda. Use <strong>Partes</strong> para trazer as partes do contrato.
                     </li>
                   )}
                 </ul>

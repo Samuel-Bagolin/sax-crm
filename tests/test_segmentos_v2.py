@@ -123,3 +123,37 @@ def test_negocio_de_veiculo_e_fila_livre(cartao_demo):
     # Vendedor não manda lead para a fila sozinho.
     assert vendedores[0].patch(f"/entradas/{e['id']}", json={"na_fila": True}).json()["na_fila"] is False
     _ = timedelta  # noqa
+
+
+def test_contrato_de_veiculo_vende_uma_vez_e_assina(cartao_demo):
+    c, _ = _cadastrar("veiculos", cartao_demo)
+    v = c.post("/veiculos", json={"marca": "Jeep", "modelo": "Compass", "versao": "Longitude", "ano_fabricacao": 2022, "ano_modelo": 2023,
+                                  "km": 31000, "cor": "Branco", "placa": "ABC1D23", "preco_venda": 139900}).json()
+    cli = c.post("/pessoas", json={"nome": "Carlos Comprador", "papeis": ["cliente"], "email": "carlos@exemplo.com"}).json()
+    # Sem veículo: erro claro, não "imóvel".
+    r = c.post("/contratos", json={"tipo": "venda", "cliente_id": cli["id"], "valor": 135000, "inicio": date.today().isoformat()})
+    assert r.status_code == 422 and "veículo" in r.json()["detail"]
+    corpo = {"tipo": "venda", "veiculo_id": v["id"], "cliente_id": cli["id"], "valor": 135000, "inicio": date.today().isoformat(),
+             "forma_pagamento": "Entrada de R$ 35.000 e financiamento", "request_id": uuid.uuid4().hex}
+    ct = c.post("/contratos", json=corpo)
+    assert ct.status_code == 201, ct.text
+    ct = ct.json()
+    assert ct["veiculo_titulo"] and "Compass" in ct["veiculo_titulo"] and ct["financeiro_status"] == "concluido"
+    assert len(ct["transacoes"]) == 1 and ct["transacoes"][0]["valor"] == 135000
+    assert c.get(f"/veiculos/{v['id']}").json()["status"] == "vendido"
+    # Mesmo pedido de novo (clique duplo): não duplica venda nem receita.
+    assert c.post("/contratos", json=corpo).status_code in (200, 201)
+    assert c.post("/contratos", json={**corpo, "request_id": uuid.uuid4().hex}).status_code == 409
+    vendas = [t for t in c.get("/transacoes").json() if t.get("veiculo_id") == v["id"] and t["status"] != "cancelado"]
+    assert len(vendas) == 1
+    # Modelo de compra e venda de veículo preenchido com os dados do carro.
+    modelos = c.get("/modelos-contrato").json()
+    mv = next(m for m in modelos if m["nome"] == "Compra e venda de veículo")
+    doc = c.post(f"/contratos/{ct['id']}/documento/gerar", json={"modelo_id": mv["id"]}).json()
+    assert "ABC1D23" in doc["documento"]["texto"] and "2022/2023" in doc["documento"]["texto"] and "financiamento" in doc["documento"]["texto"]
+    partes = c.post(f"/contratos/{ct['id']}/signatarios/partes").json()
+    assert {s["papel"] for s in partes["signatarios"]} >= {"comprador"}
+    # Cancelado antes de receber: o carro volta ao estoque e a receita é cancelada.
+    assert c.delete(f"/contratos/{ct['id']}").status_code == 204
+    assert c.get(f"/veiculos/{v['id']}").json()["status"] == "disponivel"
+    assert not [t for t in c.get("/transacoes").json() if t.get("veiculo_id") == v["id"] and t["status"] != "cancelado"]

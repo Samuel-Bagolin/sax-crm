@@ -17,7 +17,9 @@ class Contrato(BaseModel):
     numero: str  # legível: CT-2026-0001
     tipo: Literal["venda", "locacao"]
     lead_id: str | None = None
-    imovel_id: str
+    imovel_id: str | None = None  # imobiliária
+    veiculo_id: str | None = None  # loja de veículos
+    forma_pagamento: str | None = None  # loja de veículos: à vista, financiado, troca...
     cliente_id: str | None = None  # comprador/inquilino
     proprietario_id: str | None = None
     corretor_id: str | None = None  # dono do contrato (pessoa_id do corretor)
@@ -39,7 +41,9 @@ class Contrato(BaseModel):
 class ContratoCreate(BaseModel):
     request_id: str | None = Field(default=None, min_length=16, max_length=100)
     tipo: Literal["venda", "locacao"]
-    imovel_id: str
+    imovel_id: str | None = None
+    veiculo_id: str | None = None
+    forma_pagamento: str | None = Field(default=None, max_length=120)
     lead_id: str | None = None
     cliente_id: str | None = None
     proprietario_id: str | None = None
@@ -69,6 +73,7 @@ class ContratoUpdate(BaseModel):
 
 class ContratoDetalhe(Contrato):
     imovel_titulo: str | None = None
+    veiculo_titulo: str | None = None
     cliente_nome: str | None = None
     proprietario_nome: str | None = None
     corretor_nome: str | None = None

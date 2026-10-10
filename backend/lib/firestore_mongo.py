@@ -90,10 +90,28 @@ def _codificar(v: Any) -> dict:
     if isinstance(v, dict):
         return {"mapValue": {"fields": {str(k): _codificar(x) for k, x in v.items()}}}
     if isinstance(v, (list, tuple, set)):
-        return {"arrayValue": {"values": [_codificar(x) for x in v]}}
+        return {"arrayValue": {"values": [_codificar_item(x) for x in v]}}
     if type(v).__name__ == "ObjectId":
         return {"stringValue": str(v)}
     raise TypeError(f"Tipo não suportado no Firestore: {type(v).__name__}")
+
+
+# O Firestore não aceita lista dentro de lista (ex.: jornada {"1": [["09:00", "18:00"]]}).
+# A lista interna é guardada como um mapa {LISTA_INTERNA: [...]} e volta como lista na leitura.
+LISTA_INTERNA = "_lista_"
+
+
+def _codificar_item(x: Any) -> dict:
+    if isinstance(x, (list, tuple, set)):
+        return {"mapValue": {"fields": {LISTA_INTERNA: _codificar(x)}}}
+    return _codificar(x)
+
+
+def _decodificar_item(x: dict) -> Any:
+    campos = (x.get("mapValue") or {}).get("fields")
+    if campos is not None and set(campos) == {LISTA_INTERNA} and "arrayValue" in campos[LISTA_INTERNA]:
+        return _decodificar(campos[LISTA_INTERNA])
+    return _decodificar(x)
 
 
 def _decodificar(v: dict) -> Any:
@@ -122,7 +140,7 @@ def _decodificar(v: dict) -> Any:
     if "mapValue" in v:
         return {k: _decodificar(x) for k, x in (v["mapValue"].get("fields") or {}).items()}
     if "arrayValue" in v:
-        return [_decodificar(x) for x in (v["arrayValue"].get("values") or [])]
+        return [_decodificar_item(x) for x in (v["arrayValue"].get("values") or [])]
     if "referenceValue" in v:
         return v["referenceValue"]
     return None

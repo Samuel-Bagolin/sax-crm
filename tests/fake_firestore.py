@@ -25,6 +25,17 @@ def _doc(nome):
     return {"name": nome, "fields": d["fields"], "updateTime": "2026-01-01T00:00:00Z", "createTime": "2026-01-01T00:00:00Z"}
 
 
+def _tem_lista_aninhada(v, dentro_de_lista=False):
+    """Firestore real: "Cannot convert an array value in an array value"."""
+    if "arrayValue" in v:
+        if dentro_de_lista:
+            return True
+        return any(_tem_lista_aninhada(x, True) for x in (v["arrayValue"].get("values") or []))
+    if "mapValue" in v:
+        return any(_tem_lista_aninhada(x) for x in (v["mapValue"].get("fields") or {}).values())
+    return False
+
+
 def _ler(tx, nome):
     if tx:
         TX.setdefault(tx, {})[nome] = DOCS.get(nome, {}).get("v", 0)
@@ -117,6 +128,8 @@ async def post(caminho: str, request: Request):
                 if DOCS.get(n, {}).get("v", 0) != v:
                     return _erro(409, "ABORTED", "Transaction lock timeout / contention")
         for w in corpo.get("writes", []):  # validação antes de aplicar (atômico)
+            if "update" in w and any(_tem_lista_aninhada(x) for x in w["update"].get("fields", {}).values()):
+                return _erro(400, "INVALID_ARGUMENT", "Cannot convert an array value in an array value.")
             if "update" in w and w.get("currentDocument", {}).get("exists") is False and w["update"]["name"] in DOCS:
                 return _erro(409, "ALREADY_EXISTS", "Document already exists: " + w["update"]["name"])
         for w in corpo.get("writes", []):

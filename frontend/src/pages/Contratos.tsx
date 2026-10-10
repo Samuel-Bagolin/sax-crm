@@ -27,6 +27,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import ContratoModal from "@/components/contratos/ContratoModal";
+import ContratoVeiculoModal from "@/components/contratos/ContratoVeiculoModal";
+import { useSegmento } from "@/lib/segmento";
 import AssinaturaPanel from "@/components/contratos/AssinaturaPanel";
 import DocumentosPainel from "@/components/shared/DocumentosPainel";
 import { PenLine } from "lucide-react";
@@ -47,6 +49,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default function Contratos() {
   const qc = useQueryClient();
   const { isAdmin } = useAuth();
+  const loja = useSegmento().chave === "veiculos";
   const [params, setParams] = useSearchParams();
   const [modalAberto, setModalAberto] = useState(params.get("novo") === "1");
   const [abertoId, setAbertoId] = useState<string | null>(params.get("id"));
@@ -72,7 +75,7 @@ export default function Contratos() {
 
   const reprocessar = useMutation({
     mutationFn: (id: string) => apiPost(`/contratos/${id}/reprocessar`, {}),
-    onSuccess: () => { invalidar(); toast.success("Parcelas conferidas e financeiro concluído."); },
+    onSuccess: () => { invalidar(); toast.success(loja ? "Venda registrada no Financeiro." : "Parcelas conferidas e financeiro concluído."); },
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível reprocessar."),
   });
 
@@ -132,7 +135,7 @@ export default function Contratos() {
             <div className="flex flex-col items-start gap-2 py-8">
               <FileSignature className="h-8 w-8 text-muted-foreground/50" />
               <p className="text-sm text-muted-foreground">
-                Nenhum contrato ainda. Feche um lead no funil e transforme-o em contrato.
+                {loja ? "Nenhum contrato ainda. Crie o contrato de venda de um veículo do estoque e envie para o comprador assinar." : "Nenhum contrato ainda. Feche um lead no funil e transforme-o em contrato."}
               </p>
             </div>
           ) : (
@@ -141,9 +144,9 @@ export default function Contratos() {
                 <TableRow>
                   <TableHead>Número</TableHead>
                   <TableHead>Tipo</TableHead>
-                  <TableHead>Vigência</TableHead>
+                  <TableHead>{loja ? "Data" : "Vigência"}</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-right">Parcelas</TableHead>
+                  {!loja && <TableHead className="text-right">Parcelas</TableHead>}
                   <TableHead>Assinatura</TableHead>
                   <TableHead>Situação</TableHead>
                 </TableRow>
@@ -162,7 +165,7 @@ export default function Contratos() {
                       {dataBR(c.inicio)} {c.fim ? `– ${dataBR(c.fim)}` : ""}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">{brl(c.valor)}</TableCell>
-                    <TableCell className="text-right font-mono text-sm">{c.parcelas}</TableCell>
+                    {!loja && <TableCell className="text-right font-mono text-sm">{c.parcelas}</TableCell>}
                     <TableCell>
                       <button
                         type="button"
@@ -196,8 +199,8 @@ export default function Contratos() {
               {detalhe ? `${detalhe.numero}, ${detalhe.tipo === "venda" ? "venda" : "locação"}` : "Contrato"}
             </SheetTitle>
             <SheetDescription>
-              {detalhe?.imovel_titulo ?? ""}
-              {detalhe?.cliente_nome ? ` · Cliente: ${detalhe.cliente_nome}` : ""}
+              {detalhe?.veiculo_titulo ?? detalhe?.imovel_titulo ?? ""}
+              {detalhe?.cliente_nome ? ` · ${loja ? "Comprador" : "Cliente"}: ${detalhe.cliente_nome}` : ""}
             </SheetDescription>
           </SheetHeader>
 
@@ -205,8 +208,8 @@ export default function Contratos() {
             <div className="space-y-5 p-4">
               {detalhe.status === "ativo" && ["erro", "pendente"].includes(detalhe.financeiro_status) && (
                 <div className="rounded-md border p-3 text-sm">
-                  <p>Geração financeira pendente. Confira os dados e retome a operação.</p>
-                  <Button className="mt-2" disabled={reprocessar.isPending} onClick={() => reprocessar.mutate(detalhe.id)}>Retomar geração de parcelas</Button>
+                  <p>{loja ? "Venda do veículo pendente. Confira os dados e registre a venda." : "Geração financeira pendente. Confira os dados e retome a operação."}</p>
+                  <Button className="mt-2" disabled={reprocessar.isPending} onClick={() => reprocessar.mutate(detalhe.id)}>{loja ? "Registrar a venda" : "Retomar geração de parcelas"}</Button>
                 </div>
               )}
               <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
@@ -230,21 +233,21 @@ export default function Contratos() {
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-muted-foreground">Vigência</p>
+                  <p className="text-xs text-muted-foreground">{loja ? "Data da venda" : "Vigência"}</p>
                   <p className="font-medium">
                     {dataBR(detalhe.inicio)} {detalhe.fim ? `– ${dataBR(detalhe.fim)}` : ""}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Proprietário</p>
-                  <p className="font-medium">{detalhe.proprietario_nome ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground">{loja ? "Pagamento" : "Proprietário"}</p>
+                  <p className="font-medium">{(loja ? detalhe.forma_pagamento : detalhe.proprietario_nome) ?? "—"}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Corretor</p>
+                  <p className="text-xs text-muted-foreground">{loja ? "Vendedor" : "Corretor"}</p>
                   <p className="font-medium">{detalhe.corretor_nome ?? "—"}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Total gerado</p>
+                  <p className="text-xs text-muted-foreground">{loja ? "Valor da venda" : "Total gerado"}</p>
                   <p className="font-mono font-semibold" data-testid="contrato-detalhe-total">
                     {brl(detalhe.total_gerado)}
                   </p>
@@ -253,7 +256,7 @@ export default function Contratos() {
 
               <div>
                 <p className="mb-2 text-sm font-semibold">
-                  Parcelas geradas ({detalhe.transacoes.length})
+                  {loja ? "Lançado no Financeiro" : `Parcelas geradas (${detalhe.transacoes.length})`}
                 </p>
                 <div className="space-y-2">
                   {detalhe.transacoes.map((t) => (
@@ -290,7 +293,7 @@ export default function Contratos() {
 
               {isAdmin && (
                 <div className="flex flex-wrap gap-2 border-t pt-4">
-                  <Button
+                  {!loja && <Button
                     variant="outline"
                     size="sm"
                     onClick={() => encerrar.mutate(detalhe.id)}
@@ -298,7 +301,7 @@ export default function Contratos() {
                     data-testid="contrato-encerrar-button"
                   >
                     Encerrar contrato
-                  </Button>
+                  </Button>}
                   <Button
                     variant="destructive"
                     size="sm"
@@ -315,12 +318,16 @@ export default function Contratos() {
         </SheetContent>
       </Sheet>
 
-      <ContratoModal
-        open={modalAberto}
-        onClose={fecharModal}
-        leadInicial={params.get("lead")}
-        onCriado={(c) => setAssinaturaId(c.id)}
-      />
+      {loja ? (
+        <ContratoVeiculoModal open={modalAberto} onClose={fecharModal} leadInicial={params.get("lead")} onCriado={(c) => setAssinaturaId(c.id)} />
+      ) : (
+        <ContratoModal
+          open={modalAberto}
+          onClose={fecharModal}
+          leadInicial={params.get("lead")}
+          onCriado={(c) => setAssinaturaId(c.id)}
+        />
+      )}
       <AssinaturaPanel
         contratoId={assinaturaId}
         onClose={() => {
