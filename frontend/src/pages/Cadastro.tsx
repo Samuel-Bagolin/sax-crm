@@ -112,6 +112,15 @@ export default function Cadastro() {
   useEffect(() => {
     document.title = "Criar conta | SAX CRM";
   }, []);
+  // Link do site com o segmento escolhido (/cadastro?segmento=barbearia): já abre na escolha do plano.
+  useEffect(() => {
+    const pedido = new URLSearchParams(window.location.search).get("segmento");
+    if (pedido && !segmento && opcoes.data?.segmentos.some((s) => s.chave === pedido)) {
+      setSegmento(pedido as SegmentoChave);
+      setPasso(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opcoes.data]);
 
   const seg = opcoes.data?.segmentos.find((s) => s.chave === segmento);
   const planos = segmento ? opcoes.data?.planos[segmento] ?? [] : [];
