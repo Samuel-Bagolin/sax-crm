@@ -5,7 +5,7 @@ import { Link as LinkRR } from "react-router-dom";
 import { toast } from "sonner";
 import { Loader2, LogIn } from "lucide-react";
 import MarcaSax from "@/components/shared/MarcaSax";
-import { CartaoImovelDemo, Skyline } from "@/components/shared/LoginIlustracao";
+import LoginVitrine from "@/components/shared/LoginVitrine";
 import { apiPost, detalheErro } from "@/lib/api";
 import { beginSession } from "@/lib/session";
 import { useConfig } from "@/lib/useConfig";
@@ -63,7 +63,10 @@ export default function Login() {
           {logoUrl ? (
             <img src={logoUrl} alt={config.nome_software} className="h-10 rounded-md bg-white object-contain p-1" data-testid="login-logo" />
           ) : (
-            <MarcaSax className="w-32" />
+            <span className="flex items-center gap-3">
+              <MarcaSax className="w-28" />
+              <span className="border-l border-white/25 pl-3 text-sm font-medium tracking-wider text-white/75">CRM</span>
+            </span>
           )}
           {logoUrl && (
             <div className="border-l border-sidebar-foreground/20 pl-4">
@@ -76,26 +79,26 @@ export default function Login() {
         </div>
 
         {!config.imagem_fundo_login && (
-          <Skyline className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-56 lg:block w-full text-sidebar-foreground/[0.07]" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.09] [background-image:radial-gradient(#fff_1.5px,transparent_1.5px)] [background-size:26px_26px]" />
         )}
 
         <div className="relative my-10 lg:my-0">
-          <h1 className="font-heading text-3xl font-bold leading-tight tracking-tight lg:text-4xl">
-            Do primeiro contato
+          <h1 className="font-heading text-3xl font-bold leading-tight tracking-tight lg:text-[40px]">
+            O CRM feito para o
             <br />
-            ao contrato assinado.
+            seu tipo de negócio.
           </h1>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-sidebar-foreground/70">
-            Leads, funil de negócios, agenda da equipe e assinatura de contratos no mesmo lugar. Cada
-            corretor com a sua carteira, o gestor com a visão completa.
+            Imobiliária, loja de veículos, odontologia, clínica terapêutica, barbearia e estética. Cada um com menu,
+            funil, agenda e telas feitas para a sua rotina.
           </p>
-          <div className="mt-14 hidden pl-8 lg:block">
-            <CartaoImovelDemo />
+          <div className="mt-10 hidden lg:block">
+            <LoginVitrine />
           </div>
         </div>
 
         <p className="relative text-[11px] text-sidebar-foreground/40">
-          CRM imobiliário com tecnologia SAX
+          CRM por segmento com tecnologia SAX
         </p>
       </div>
 
@@ -103,7 +106,7 @@ export default function Login() {
       <div className="flex flex-1 items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-sm">
           <h2 className="font-heading text-2xl font-bold tracking-tight">Entrar</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Acesse o CRM da sua imobiliária.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Acesse o CRM da sua empresa.</p>
 
           <form onSubmit={submeter} className="mt-6 flex flex-col gap-4" data-testid="login-form">
             <div className="grid gap-2">
@@ -112,7 +115,7 @@ export default function Login() {
                 id="email"
                 type="email"
                 autoComplete="username"
-                placeholder="voce@suaimobiliaria.com.br"
+                placeholder="voce@suaempresa.com.br"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 data-testid="login-email-input"
