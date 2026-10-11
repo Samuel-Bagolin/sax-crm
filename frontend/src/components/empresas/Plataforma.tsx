@@ -334,3 +334,49 @@ export function LinksPagamento({ configurado }: { configurado: boolean }) {
     </section>
   );
 }
+
+interface Contratada { razao_social: string; cnpj: string; endereco: string; cidade_uf: string; email: string; configurada: boolean; versao: string; aceites: number }
+
+/** Dados da SAX que entram no termo de adesão. Sem eles o termo não é exigido no primeiro acesso. */
+export function DadosContratada() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["contratada"], queryFn: () => apiGet<Contratada>("/plataforma/contratada") });
+  const [f, setF] = useState<Partial<Contratada> | null>(null);
+  const v = f ?? q.data ?? {};
+  const salvar = useMutation({
+    mutationFn: () => apiPut("/plataforma/contratada", { razao_social: v.razao_social, cnpj: v.cnpj, endereco: v.endereco, cidade_uf: v.cidade_uf, email: v.email }),
+    onSuccess: () => { toast.success("Dados salvos. O termo passa a ser pedido no primeiro acesso de cada gestor."); setF(null); qc.invalidateQueries({ queryKey: ["contratada"] }); qc.invalidateQueries({ queryKey: ["empresas"] }); },
+    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível salvar"),
+  });
+  const campo = (k: keyof Contratada, rotulo: string, dica?: string) => (
+    <div className="grid gap-1.5">
+      <Label htmlFor={`ct-${k}`}>{rotulo}</Label>
+      <Input id={`ct-${k}`} value={String(v[k] ?? "")} placeholder={dica} onChange={(e) => setF({ ...v, [k]: e.target.value })} data-testid={`contratada-${k}`} />
+    </div>
+  );
+  return (
+    <section className="grid gap-4 rounded-xl border bg-card p-4 sm:p-5" data-testid="dados-contratada">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="font-semibold">Termo de adesão</h2>
+          <p className="text-sm text-muted-foreground">
+            Dados da SAX que aparecem no contrato. Com eles preenchidos, o gestor de cada empresa aceita o termo no primeiro acesso.
+            Em cada empresa você vê a data do aceite e baixa o comprovante em PDF.
+          </p>
+        </div>
+        <a href="/termos" target="_blank" rel="noreferrer" className="text-sm font-medium text-primary underline">Ver o termo (versão {q.data?.versao ?? ""})</a>
+      </div>
+      {q.data && (q.data.configurada
+        ? <p className="flex items-center gap-1.5 text-sm text-emerald-700"><ShieldCheck className="h-4 w-4" /> Ativo. {q.data.aceites} empresa(s) já aceitaram a versão {q.data.versao}.</p>
+        : <p className="flex items-center gap-1.5 text-sm text-amber-700"><AlertTriangle className="h-4 w-4" /> Desligado até você preencher todos os campos.</p>)}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {campo("razao_social", "Razão social", "Nome da empresa no CNPJ")}
+        {campo("cnpj", "CNPJ")}
+        {campo("endereco", "Endereço da sede", "Rua, número, bairro, cidade/UF, CEP")}
+        {campo("cidade_uf", "Comarca do foro", "Ex.: Curitiba/PR")}
+        {campo("email", "E-mail para cancelamento e suporte")}
+      </div>
+      <div><Button onClick={() => salvar.mutate()} disabled={salvar.isPending || !f} data-testid="contratada-salvar">{salvar.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Salvar</Button></div>
+    </section>
+  );
+}

@@ -343,7 +343,7 @@ export default function Cadastro() {
                 <input tabIndex={-1} aria-hidden autoComplete="off" className="absolute -left-[9999px] h-0 w-0 opacity-0" value={isca} onChange={(e) => setIsca(e.target.value)} />
                 <label className="flex items-start gap-2.5 text-sm sm:col-span-2">
                   <input type="checkbox" checked={aceite} onChange={(e) => setAceite(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#4a03a2]" data-testid="cad-aceite" />
-                  <span>Li e aceito os termos de uso e a política de privacidade do SAX CRM, e autorizo a cobrança recorrente neste cartão.</span>
+                  <span>Li e aceito o <a href="/termos" target="_blank" rel="noreferrer" className="font-medium text-[#4a03a2] underline">Termo de Adesão do SAX CRM</a> (sem fidelidade e sem multa; valores pagos, inclusive a implantação, não são devolvidos) e autorizo a cobrança recorrente neste cartão.</span>
                 </label>
               </div>
               <aside className="h-fit rounded-2xl bg-[#140634] p-5 text-white">

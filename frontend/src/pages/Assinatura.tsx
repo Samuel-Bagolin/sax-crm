@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ComprovanteTermo } from "@/components/termo/ComprovanteTermo";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, Check, CreditCard, ExternalLink, Loader2 } from "lucide-react";
@@ -100,6 +101,8 @@ export default function Assinatura() {
           ) : <p className="text-muted-foreground">O contrato desta empresa é feito pelo comercial do SAX. Para mudar de plano ou forma de pagamento, fale com o suporte.</p>}
         </div>
       </section>
+
+      <ComprovanteTermo />
 
       {d.autoatendimento && a?.status !== "cancelada" && (
         <section className="grid gap-3">

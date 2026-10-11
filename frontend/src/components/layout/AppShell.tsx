@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { primeiroNome } from "@/lib/format";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { TermoGate } from "@/components/termo/TermoGate";
 import { useQuery } from "@tanstack/react-query";
 import {
   Building,
@@ -443,7 +444,7 @@ export default function AppShell() {
           <main className="min-w-0 flex-1">
             <div className={cn("mx-auto w-full", larguraTotal ? "p-3 sm:p-5" : "max-w-7xl p-4 sm:p-6 lg:p-8")}>
               {!noControle && !larguraTotal && <AvisoVisitasBanner />}
-              <Outlet />
+              <TermoGate><Outlet /></TermoGate>
             </div>
           </main>
         </div>

@@ -25,6 +25,7 @@ import AtivarAcesso from "@/pages/AtivarAcesso";
 import Login from "@/pages/Login";
 import MeuSite from "@/pages/MeuSite";
 import Cadastro from "@/pages/Cadastro";
+import Termos from "@/pages/Termos";
 import AgendarPublico from "@/pages/AgendarPublico";
 import Atendimentos from "@/pages/Atendimentos";
 import AgendaOnline from "@/pages/AgendaOnline";
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="/proprietario/:token" element={<RelatorioProprietario />} />
         <Route path="/s/:slug" element={<SitePublico />} />
         <Route path="/cadastro" element={<Cadastro />} />
+        <Route path="/termos" element={<Termos />} />
         <Route path="/agendar/:slug" element={<AgendarPublico />} />
         <Route path="/agendar/:slug/reserva/:token" element={<AgendarPublico />} />
         <Route path="/agendar/:slug/:prof" element={<AgendarPublico />} />

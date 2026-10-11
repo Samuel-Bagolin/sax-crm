@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LinhaAceite } from "@/components/termo/ComprovanteTermo";
 import { abrirEmpresaEmNovaAba } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -21,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCatalogoPlanos } from "@/lib/diferenciais";
 import { CatalogoComercial, ComercialDialog } from "@/components/empresas/Comercial";
-import { ConfigPagamentos, PainelSegmentos } from "@/components/empresas/Plataforma";
+import { ConfigPagamentos, DadosContratada, PainelSegmentos } from "@/components/empresas/Plataforma";
 import { cn } from "@/lib/utils";
 
 function Uso({ rotulo, uso, limite }: { rotulo: string; uso: number; limite: number | null }) {
@@ -139,6 +140,7 @@ export default function Empresas() {
 
   // Entrar abre a empresa numa aba nova, com acesso completo; esta aba continua no plano de controle.
   const acessar = { mutate: (e: EmpresaResumo) => abrirEmpresaEmNovaAba(e.id), isPending: false };
+  const { data: contratada } = useQuery({ queryKey: ["contratada"], queryFn: () => apiGet<{ configurada: boolean; versao: string }>("/plataforma/contratada") });
 
   const reenviar = useMutation({
     mutationFn: (e: EmpresaResumo) =>
@@ -222,7 +224,7 @@ export default function Empresas() {
       {aba === "painel" ? (
         <PainelSegmentos onFiltrar={(sg) => { setFiltroSeg(sg); setAba("empresas"); }} />
       ) : aba === "pagamentos" ? (
-        <ConfigPagamentos />
+        <div className="grid gap-6"><ConfigPagamentos /><DadosContratada /></div>
       ) : aba === "planos" ? (
         <CatalogoComercial />
       ) : (
@@ -313,19 +315,20 @@ export default function Empresas() {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="grid auto-cols-fr grid-flow-col gap-2 text-center">
                 {[
                   ["Usuários", e.usuarios],
-                  ["Imóveis", e.imoveis],
+                  [e.segmento === "veiculos" ? "Veículos" : "Imóveis", e.imoveis],
                   ["Leads", e.leads],
                   ["Contratos", e.contratos],
-                ].map(([rotulo, valor]) => (
+                ].filter(([r]) => r !== "Imóveis" || !e.segmento || e.segmento === "imobiliaria").map(([rotulo, valor]) => (
                   <div key={String(rotulo)} className="rounded-md bg-muted/50 p-2">
                     <p className="font-mono text-sm font-bold">{valor}</p>
                     <p className="text-[10px] text-muted-foreground">{rotulo}</p>
                   </div>
                 ))}
               </div>
+              {contratada?.configurada && <LinhaAceite aceite={e.termo_aceite} urlPdf={`/api/plataforma/termos/${e.id}/comprovante.pdf`} versaoAtual={contratada.versao} />}
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"

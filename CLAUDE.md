@@ -96,7 +96,13 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    (gerado em Empresas > Pagamentos) cria conta paga sem cobrança, só para o dono da plataforma testar.
    Links de pagamento dos planos (`lib/links_pagamento.py`, Empresas > Pagamentos): cartão no preço da
    tabela e Pix com 10% de desconto, recorrentes; gerados em lotes e idempotentes (preço mudou, troca o link).
-9. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
+9. **Termo de adesão.** Texto e versão em `lib/termo_aceite.py`, rotas em `routers/termo.py`. O gestor
+   aceita no primeiro acesso (`TermoGate` no `AppShell`); suporte nunca aceita. O registro em
+   `termos_aceite` (id `empresa:versao`) guarda texto integral, SHA-256, IP, navegador, nome, CPF e cargo,
+   e não é alterado. Mudou uma vírgula do texto, suba `VERSAO`: todos aceitam de novo. Os dados da
+   contratada ficam em Empresas > Pagamentos; sem eles o termo não é exigido. Comprovante em PDF na
+   tela Assinatura (cliente) e no card da empresa (administrador).
+10. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
    `FIREBASE_SERVICE_ACCOUNT`; o resto é gerado e guardado no banco (`lib/autoconfig.py`).
 
 ## Texto da interface

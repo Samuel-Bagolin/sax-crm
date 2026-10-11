@@ -46,6 +46,7 @@ class Empresa(BaseModel):
     observacoes: str | None = None
     # Assinatura da plataforma (cadastro público): gateway, situação, cartão (só final e bandeira).
     assinatura: dict | None = None
+    termo_aceite: dict | None = None  # resumo do último aceite do termo de adesão (lib/termo_aceite.py)
     origem: str = "painel"  # painel (criada pelo administrador de sistema) | cadastro (autoatendimento)
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
