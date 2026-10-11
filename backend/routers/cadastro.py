@@ -56,6 +56,18 @@ class DadosCadastro(BaseModel):
     numero_endereco: str = Field(min_length=1, max_length=10)
     aceite: bool = False
     site: str | None = None  # isca para robôs
+    origem: dict[str, str] | None = None  # utm_* e gclid do anúncio que trouxe o cliente
+
+
+_CHAVES_ORIGEM = ("utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid")
+
+
+def _origem(o: dict | None) -> dict | None:
+    """Só as chaves conhecidas, texto curto: vem da URL e não pode virar lixo no banco."""
+    if not isinstance(o, dict):
+        return None
+    limpo = {k: str(o[k])[:120] for k in _CHAVES_ORIGEM if o.get(k)}
+    return limpo or None
 
 
 class Cartao(BaseModel):
@@ -258,7 +270,7 @@ async def _processar(d: "DadosCadastro", cartao: dict, email: str, doc: str, tel
         await indexar_usuario(email, empresa.id, db_name)
         api_key = await provisionar_empresa(nome=empresa.nome, db_name=db_name, admin=gestor, segmento=d.segmento)
         dados = empresa.model_dump()
-        dados.update(site_api_key=api_key, asaas_assinatura_id=assinatura.get("asaas_assinatura_id"),
+        dados.update(origem_marketing=_origem(d.origem), site_api_key=api_key, asaas_assinatura_id=assinatura.get("asaas_assinatura_id"),
                      comercial={"periodicidade": d.periodicidade, "adicionais": [], "taxa_instalacao": 0},
                      titular={"nome": d.nome.strip(), "documento": formatar_documento(doc), "email": email,
                               "telefone": telefone, "cep": cep, "numero": d.numero_endereco.strip()})

@@ -122,6 +122,17 @@ export default function Cadastro() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opcoes.data]);
 
+  // Origem do anúncio (Google, Meta): vai junto com o cadastro para saber qual campanha trouxe o cliente.
+  const origem = useMemo(() => {
+    const q = new URLSearchParams(window.location.search);
+    const o: Record<string, string> = {};
+    for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid"]) {
+      const v = q.get(k);
+      if (v) o[k] = v.slice(0, 120);
+    }
+    return Object.keys(o).length ? o : null;
+  }, []);
+
   const seg = opcoes.data?.segmentos.find((s) => s.chave === segmento);
   const planos = segmento ? opcoes.data?.planos[segmento] ?? [] : [];
   const escolhido = planos.find((p) => p.chave === plano);
@@ -130,7 +141,7 @@ export default function Cadastro() {
   const assinar = useMutation({
     mutationFn: () =>
       apiPost<{ ok: boolean; demo: boolean }>("/publico/cadastro", {
-        chave, segmento, plano, periodicidade: anual ? "anual" : "mensal", ...f, aceite, site: isca || null,
+        chave, segmento, plano, periodicidade: anual ? "anual" : "mensal", ...f, aceite, site: isca || null, origem,
         cartao: { numero: digitos(c.numero), nome: c.nome, validade: c.validade, cvv: c.cvv },
       }),
     onSuccess: () => {

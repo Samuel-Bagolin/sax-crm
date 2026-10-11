@@ -328,6 +328,12 @@ export default function Empresas() {
                   </div>
                 ))}
               </div>
+              {e.origem_marketing && (
+                <p className="text-xs text-muted-foreground" data-testid="empresa-origem">
+                  Veio de: {[e.origem_marketing.utm_source, e.origem_marketing.utm_campaign].filter(Boolean).join(", ") || (e.origem_marketing.gclid ? "anúncio do Google" : "anúncio")}
+                  {e.origem_marketing.utm_term ? ` (busca: ${e.origem_marketing.utm_term})` : ""}
+                </p>
+              )}
               {contratada?.configurada && <LinhaAceite aceite={e.termo_aceite} urlPdf={`/api/plataforma/termos/${e.id}/comprovante.pdf`} versaoAtual={contratada.versao} />}
               <div className="flex flex-wrap gap-2">
                 <Button

@@ -219,6 +219,7 @@ export interface Empresa {
 }
 
 export interface EmpresaResumo extends Empresa {
+  origem_marketing?: Record<string, string> | null;
   termo_aceite?: { versao: string; em: string; nome: string; email?: string; cargo?: string; hash?: string } | null;
   segmento?: SegmentoChave;
   segmento_nome?: string | null;
