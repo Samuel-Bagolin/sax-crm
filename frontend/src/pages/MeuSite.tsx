@@ -42,6 +42,9 @@ const PALETAS: { nome: string; p: string; d: string }[] = [
   { nome: "Azul e ciano", p: "#1d4ed8", d: "#06b6d4" },
 ];
 
+/** Sites de exemplo dos 6 segmentos, no site de vendas do SAX CRM. */
+const SITE_MODELOS = "https://site-crm-sax.vercel.app/modelo.html";
+
 // Barra do topo, onde fica o nome da empresa.
 const CABECALHOS: { nome: string; fundo: string; texto: string }[] = [
   { nome: "Branco", fundo: "#ffffff", texto: "#111827" },
@@ -124,6 +127,9 @@ export default function MeuSite() {
           Um site com a sua marca, o que você oferece e o WhatsApp da equipe, atualizado direto pelo CRM. Ele não faz parte do plano atual.
           Fale com o suporte para liberar.
         </p>
+        <a href={`${SITE_MODELOS}?seg=${seg.chave}`} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4")}>
+          <Eye className="h-4 w-4" /> Ver como fica o site do meu segmento
+        </a>
       </div>
     );
   }
@@ -164,6 +170,9 @@ export default function MeuSite() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
+          <a href={`${SITE_MODELOS}?seg=${seg.chave}`} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })} data-testid="site-modelo">
+            <Eye className="h-4 w-4" /> Ver site de exemplo
+          </a>
           {urlCompleta && (
             <>
               <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(urlCompleta).then(() => toast.success("Link copiado."))}>
