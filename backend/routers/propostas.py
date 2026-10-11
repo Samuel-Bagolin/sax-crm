@@ -172,11 +172,11 @@ async def responder(proposta_id: str, input: RespostaInput, principal: Principal
     obs = (input.observacao or "").strip() or None
     await db.propostas.update_one({"id": d["id"]}, {"$set": {"status": input.status, "observacao_resposta": obs, "respondida_em": now_utc()}})
     if input.status == "aceita":
-        await registrar(n["id"], "proposta", f"Proposta {d['numero']} ACEITA: {_brl(d['valor'])}" + (f" — {obs}" if obs else ""), principal)
+        await registrar(n["id"], "proposta", f"Proposta {d['numero']} ACEITA: {_brl(d['valor'])}" + (f": {obs}" if obs else ""), principal)
         from routers.leads import _aplicar
         await _aplicar(n, {"valor_estimado": d["valor"], **({"imovel_id": d["imovel_id"]} if d.get("imovel_id") else {})}, principal)
     else:
-        await registrar(n["id"], "proposta", f"Proposta {d['numero']} recusada" + (f" — {obs}" if obs else ""), principal)
+        await registrar(n["id"], "proposta", f"Proposta {d['numero']} recusada" + (f": {obs}" if obs else ""), principal)
     return await _saida(await db.propostas.find_one({"id": d["id"]}))
 
 
@@ -212,16 +212,23 @@ async def pdf(proposta_id: str, principal: Principal = Depends(require("lead:rea
     cliente = await db.pessoas.find_one({"id": n.get("cliente_id")}) if n.get("cliente_id") else None
     corretor = await db.pessoas.find_one({"id": n.get("corretor_id")}, {"nome": 1}) if n.get("corretor_id") else None
     im = await db.imoveis.find_one({"id": d.get("imovel_id")}) if d.get("imovel_id") else None
+    loja = principal.segmento == "veiculos"
+    ve = await db.veiculos.find_one({"id": n.get("veiculo_id")}) if loja and n.get("veiculo_id") else None
     config = await db.configuracoes.find_one({"id": "singleton"}, {"cor_primaria": 1, "logo_base64": 1, "nome_software": 1}) or {}
     empresa = await controle.empresas.find_one({"db_name": empresa_atual_db()}, {"nome": 1}) if empresa_atual_db() else None
-    nome_empresa = (empresa or {}).get("nome") or config.get("nome_software") or "Imobiliária"
+    nome_empresa = (empresa or {}).get("nome") or config.get("nome_software") or "SAX"
     finalidade = "locação" if im and im.get("finalidade") == "locacao" else "compra"
-    linhas = [
-        ("Proponente", f"{(cliente or {}).get('nome') or n['nome']}" + (f" · CPF {cliente['cpf_cnpj']}" if cliente and cliente.get("cpf_cnpj") else "")),
-        ("Imóvel", f"{im.get('codigo', '')} · {im['titulo']} — {im.get('endereco', '')}, {im.get('bairro') or ''} {im.get('cidade', '')}" if im else "—"),
-        ("Valor proposto", _brl(d["valor"])),
-    ]
-    pedido = (im or {}).get("valor_aluguel" if finalidade == "locação" else "valor_venda")
+    outra_parte = "Loja" if loja else "Proprietário"
+    linhas = [("Proponente", f"{(cliente or {}).get('nome') or n['nome']}" + (f" · CPF {cliente['cpf_cnpj']}" if cliente and cliente.get("cpf_cnpj") else ""))]
+    if loja:
+        from routers.veiculos import titulo as titulo_veiculo
+
+        linhas.append(("Veículo", " · ".join(x for x in (ve.get("codigo"), titulo_veiculo(ve), ve.get("placa")) if x) if ve else "Não informado"))
+    else:
+        local = ", ".join(x for x in (im.get("endereco"), " ".join(y for y in (im.get("bairro"), im.get("cidade")) if y)) if x) if im else ""
+        linhas.append(("Imóvel", " · ".join(x for x in ((im or {}).get("codigo"), (im or {}).get("titulo"), local) if x) if im else "Não informado"))
+    linhas.append(("Valor proposto", _brl(d["valor"])))
+    pedido = (ve or {}).get("preco_venda") if loja else (im or {}).get("valor_aluguel" if finalidade == "locação" else "valor_venda")
     if pedido:
         linhas.append(("Valor anunciado", _brl(pedido)))
     linhas.append(("Forma de pagamento", ", ".join(FORMA_LABEL.get(f, f) for f in d.get("formas_pagamento", []))))
@@ -237,15 +244,20 @@ async def pdf(proposta_id: str, principal: Principal = Depends(require("lead:rea
         atual = await db.propostas.find_one({"id": atual["parent_id"]}) or {}
         if not atual:
             break
-        cadeia.append(f"{atual['numero']} · {'Cliente' if atual['autor'] == 'cliente' else 'Proprietário'}: {_brl(atual['valor'])} "
+        cadeia.append(f"{atual['numero']} · {'Cliente' if atual['autor'] == 'cliente' else outra_parte}: {_brl(atual['valor'])} "
                       f"em {utc_aware(atual['created_at']).strftime('%d/%m/%Y')}")
     tipo = "Contraproposta" if d["tipo"] == "contraproposta" else "Proposta"
-    titulo = f"{tipo} de {finalidade}" + (" (do proprietário)" if d["autor"] == "proprietario" else "")
+    titulo = f"{tipo} de {finalidade}" + (f" (da {outra_parte.lower()})" if loja and d["autor"] == "proprietario" else " (do proprietário)" if d["autor"] == "proprietario" else "")
     conteudo = gerar_proposta_pdf(
         empresa=nome_empresa, numero=d["numero"], titulo=titulo, linhas=linhas, condicoes=d.get("condicoes"),
-        proponente=(cliente or {}).get("nome") or n["nome"] if d["autor"] == "cliente" else "Proprietário",
+        proponente=(cliente or {}).get("nome") or n["nome"] if d["autor"] == "cliente" else outra_parte,
         corretor=(corretor or {}).get("nome"), historico=list(reversed(cadeia)), cor_primaria=_cor(config),
         logo_base64=config.get("logo_base64"),
+        rotulo_responsavel="Vendedor responsável" if loja else "Corretor responsável",
+        aviso=("Esta proposta não substitui o contrato de compra e venda. A aceitação está sujeita à avaliação do veículo na troca, "
+               "à aprovação do financiamento, quando houver, e à confirmação por escrito da loja.") if loja else
+              ("Esta proposta não substitui o contrato. A aceitação está sujeita à análise documental e à confirmação "
+               "por escrito do proprietário."),
     )
     return Response(conteudo, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename={d['numero']}.pdf"})
 

@@ -73,6 +73,9 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    `useItemSegmento()` (imóvel ou veículo; atendimento não tem). Leads: rodízio e fila livre
    (`repescar_leads` em `routers/crm.py`; quem pega primeiro fica, com `update_one` condicional).
    Barbearia: clube de assinantes em `routers/clube.py` (mensalidade com id fixo por mês, não duplica).
+   Texto de tela compartilhada nunca fixa "imóvel", "corretor" ou "imobiliária": use `useSegmento()`
+   (`termos`, `empresa`, `registro`, `dominio`) e, no servidor, o segmento da empresa. Recursos do plano
+   por segmento: `recursos_do_segmento` (`lib/planos.py`). A varredura em `tests/test_textos_segmento.py` cobre.
 7. **Dinheiro lançado uma vez só.** Concluir atendimento, aprovar tratamento e vender veículo mudam o
    status com `update_one` condicional e só lançam no Financeiro se `modified_count == 1`.
    Contrato da loja de veículos (`veiculo_id` no lugar de `imovel_id`) registra a venda por

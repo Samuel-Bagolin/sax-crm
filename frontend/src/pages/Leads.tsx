@@ -195,6 +195,7 @@ function ConverterDialog({ entrada, onClose }: { entrada: Entrada | null; onClos
   const [funilId, setFunilId] = useState("");
   const [etapaId, setEtapaId] = useState("");
   const [titulo, setTitulo] = useState("");
+  const segChave = useSegmento().chave;
   const [valor, setValor] = useState("");
   const [corretor, setCorretor] = useState("");
 
@@ -203,7 +204,9 @@ function ConverterDialog({ entrada, onClose }: { entrada: Entrada | null; onClos
     const preferido = funis.find((f) => (entrada.interesse === "locacao" ? f.nome.toLowerCase().includes("loca") : f.padrao)) ?? funis[0];
     setFunilId(preferido?.id ?? "");
     setEtapaId(preferido?.etapas[1]?.id ?? preferido?.etapas[0]?.id ?? "");
-    setTitulo(`${entrada.nome} — ${entrada.interesse === "locacao" ? "Locação" : entrada.interesse === "venda" ? "Captação" : "Compra"}`);
+    const motivo = segChave === "imobiliaria" ? (entrada.interesse === "locacao" ? "Locação" : entrada.interesse === "venda" ? "Captação" : "Compra")
+      : segChave === "veiculos" && entrada.interesse ? rotuloInteresse(segChave, entrada.interesse) : null;
+    setTitulo(motivo ? `${entrada.nome}, ${motivo}` : entrada.nome);
     setValor(entrada.valor_estimado?.toString() ?? "");
     setCorretor(entrada.corretor_id ?? "");
   }, [entrada, funis]);

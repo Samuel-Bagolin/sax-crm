@@ -166,7 +166,7 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
                 data-testid="usuario-gerencia-site"
               />
               <span>
-                <span className="font-medium">Pode editar o site da {seg.veiculos ? "loja" : "imobiliária"}</span>
+                <span className="font-medium">Pode editar o site da {seg.empresa}</span>
                 <span className="block text-xs text-muted-foreground">Muda marca e textos do site e decide quais {seg.termos.itens.toLowerCase()} aparecem, reservados ou fora do site.</span>
               </span>
             </label>
@@ -250,7 +250,7 @@ export default function Usuarios() {
           </button>
           <div className="min-w-0 flex-1">
             <h3 className="truncate font-semibold">{u.nome}</h3>
-            <p className="truncate text-xs text-muted-foreground">{u.cargo || PAPEL_LABEL[u.papel]}</p>
+            <p className="truncate text-xs text-muted-foreground">{u.cargo || (u.papel === "corretor" ? seg.termos.profissional : PAPEL_LABEL[u.papel])}</p>
             <p className="mt-1 flex flex-wrap gap-1">
               <span className={cn("rounded-sm px-1.5 text-[11px] font-medium", u.papel === "corretor" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>{u.papel === "corretor" ? seg.termos.profissional : PAPEL_LABEL[u.papel]}</span>
               {u.creci && <span className="rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{rotuloRegistro(seg.chave) ?? "Registro"} {u.creci}</span>}

@@ -282,7 +282,7 @@ async def _aplicar(doc: dict, data: dict, principal: Principal) -> dict:
             data["motivo_perda"] = None
         rotulo = {"ganho": "Negócio GANHO 🎉", "perdido": "Negócio perdido", "aberto": "Negócio reaberto"}[novo_status]
         if novo_status == "perdido" and data.get("motivo_perda"):
-            rotulo += f" — {data['motivo_perda']}"
+            rotulo += f": {data['motivo_perda']}"
         eventos.append(("status", rotulo))
 
     for campo, rotulo in (("valor_estimado", "Valor"), ("corretor_id", "Responsável"), ("imovel_id", "Imóvel")):

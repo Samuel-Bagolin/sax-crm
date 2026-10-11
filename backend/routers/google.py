@@ -122,7 +122,7 @@ async def eventos(inicio: str, fim: str, corretor_id: str | None = None, princip
     privado = False
     if corretor_id and corretor_id != principal.pessoa_id:
         if not principal.is_admin:
-            raise HTTPException(403, "Sem acesso à agenda de outro corretor")
+            raise HTTPException(403, "Sem acesso à agenda de outra pessoa da equipe")
         u = await db.usuarios.find_one({"pessoa_id": corretor_id}, {"id": 1})
         if not u:
             return []

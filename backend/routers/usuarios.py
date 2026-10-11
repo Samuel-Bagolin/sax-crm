@@ -62,7 +62,7 @@ async def create_usuario(input: UsuarioCreate, principal: Principal = Depends(re
         raise HTTPException(status_code=403, detail="Você não pode conceder este perfil")
 
     if not principal.empresa_id and input.papel != "sysadmin":
-        raise HTTPException(422, "Entre em uma empresa para cadastrar gestores e corretores")
+        raise HTTPException(422, "Entre em uma empresa para cadastrar gestores e a equipe")
     email = input.email.lower().strip()
     if await db.usuarios.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="Já existe um usuário com este e-mail")
@@ -200,7 +200,7 @@ def _decodificar_foto(input: FotoInput) -> bytes:
     if not assinaturas or not any(bruto.startswith(a) for a in assinaturas):
         raise HTTPException(422, "Use uma foto JPG, PNG ou WEBP")
     if len(bruto) > FOTO_MAX_BYTES:
-        raise HTTPException(413, "Foto acima de 700 KB — reduza a imagem")
+        raise HTTPException(413, "Foto acima de 700 KB. Reduza a imagem e envie de novo.")
     return bruto
 
 

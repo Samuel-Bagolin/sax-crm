@@ -1,3 +1,4 @@
+import { useSegmento } from "@/lib/segmento";
 import { Check, Lock } from "lucide-react";
 import { useCatalogoPlanos, usePlano, type Recurso } from "@/lib/diferenciais";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,8 @@ function Barra({ rotulo, uso, limite }: { rotulo: string; uso: number; limite: n
 /** Plano contratado, uso e recursos (compacto = só as barras). */
 export default function PlanoUso({ compacto = false }: { compacto?: boolean }) {
   const { data: plano } = usePlano();
+  const seg = useSegmento();
+  const rotuloItens = seg.veiculos ? "Veículos em estoque" : "Imóveis em carteira";
   const { data: catalogo } = useCatalogoPlanos(!compacto);
   if (!plano) return null;
   if (compacto)
@@ -36,7 +39,7 @@ export default function PlanoUso({ compacto = false }: { compacto?: boolean }) {
           <p className="font-semibold">{plano.nome}</p>
         </div>
         <Barra rotulo="Usuários ativos" uso={plano.uso_usuarios} limite={plano.usuarios} />
-        <Barra rotulo="Imóveis em carteira" uso={plano.uso_imoveis} limite={plano.imoveis} />
+        {seg.vendas && <Barra rotulo={rotuloItens} uso={plano.uso_imoveis} limite={plano.imoveis} />}
       </div>
     );
   return (
@@ -48,8 +51,8 @@ export default function PlanoUso({ compacto = false }: { compacto?: boolean }) {
           <p className="text-sm text-muted-foreground">{plano.resumo}</p>
         </div>
         <Barra rotulo="Usuários ativos" uso={plano.uso_usuarios} limite={plano.usuarios} />
-        <Barra rotulo="Imóveis em carteira" uso={plano.uso_imoveis} limite={plano.imoveis} />
-        <p className="text-xs text-muted-foreground">Imóveis vendidos ou alugados não contam no limite. Para ampliar o plano, fale com o suporte.</p>
+        {seg.vendas && <Barra rotulo={rotuloItens} uso={plano.uso_imoveis} limite={plano.imoveis} />}
+        <p className="text-xs text-muted-foreground">{seg.imobiliaria ? "Imóveis vendidos ou alugados não contam no limite. " : seg.veiculos ? "Veículos vendidos não contam no limite. " : ""}Para ampliar o plano, fale com o suporte.</p>
       </section>
       <section className="rounded-lg border bg-card p-4">
         <p className="mb-3 text-sm font-semibold">Recursos</p>

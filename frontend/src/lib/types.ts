@@ -457,6 +457,7 @@ export interface Visita {
   duracao_min: number;
   lead_id: string | null;
   imovel_id: string | null;
+  veiculo_id?: string | null;
   cliente_id: string | null;
   corretor_id: string | null;
   local: string | null;

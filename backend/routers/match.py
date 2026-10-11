@@ -402,7 +402,7 @@ async def reagir(token: str, input: ReacaoInput):
     if not n:
         return Response(status_code=204)
     rotulo = {"gostei": "gostou de", "nao_gostei": "descartou", "quero_visitar": "quer visitar"}[input.reacao]
-    texto = f"Cliente {rotulo} {im.get('codigo', '')} · {im.get('titulo', '')}" + (f" — “{comentario}”" if comentario else "")
+    texto = f"Cliente {rotulo} {im.get('codigo', '')} · {im.get('titulo', '')}" + (f": “{comentario}”" if comentario else "")
     await registrar(n["id"], "vitrine", texto)
     if input.reacao == "quero_visitar":
         chave = f"vitrine-visita:{v['id']}:{input.imovel_id}"

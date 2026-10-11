@@ -166,7 +166,7 @@ async def relatorio_funil(
 
     motivos: dict[str, int] = {}
     for d in perdidos:
-        m = (d.get("motivo_perda") or "Sem motivo").split(" — ")[0]
+        m = (d.get("motivo_perda") or "Sem motivo").split(" — ")[0].split(": ")[0]
         motivos[m] = motivos.get(m, 0) + 1
     r.motivos_perda = sorted((Fatia(rotulo=k, qtd=v) for k, v in motivos.items()), key=lambda x: -x.qtd)
 

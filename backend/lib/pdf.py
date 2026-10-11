@@ -158,7 +158,7 @@ def gerar_contrato_pdf(
         cor = HexColor("#5b2bd0")
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,
-                            topMargin=24 * mm, bottomMargin=20 * mm, title=f"{numero} — {titulo}", author=empresa)
+                            topMargin=24 * mm, bottomMargin=20 * mm, title=f"{numero}, {titulo}", author=empresa)
     corpo = ParagraphStyle("corpo", fontName="Helvetica", fontSize=10, leading=14.5, spaceAfter=6, alignment=4)
     h1 = ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=14, leading=18, spaceAfter=10, alignment=1)
     h2 = ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=11, leading=15, spaceBefore=8, spaceAfter=4, textColor=cor)
@@ -234,7 +234,7 @@ def gerar_contrato_pdf(
     historia.append(Spacer(1, 4 * mm))
     historia.append(Paragraph("Trilha de auditoria", h2))
     for e in eventos:
-        historia.append(Paragraph(f"{_fmt_dt(e.get('em'))} — {esc(e.get('texto', ''))}" + (f" (IP {esc(e['ip'])})" if e.get("ip") else ""), pequeno))
+        historia.append(Paragraph(f"{_fmt_dt(e.get('em'))}: {esc(e.get('texto', ''))}" + (f" (IP {esc(e['ip'])})" if e.get("ip") else ""), pequeno))
     historia.append(Spacer(1, 4 * mm))
     historia.append(Paragraph(f"Documento emitido por {esc(empresa)} em {datetime.now().strftime('%d/%m/%Y %H:%M')}.", pequeno))
 
@@ -254,6 +254,8 @@ def gerar_proposta_pdf(
     historico: list[str],
     cor_primaria: str = "#4a03a2",
     logo_base64: str | None = None,
+    rotulo_responsavel: str = "Corretor responsável",
+    aviso: str = "Esta proposta não substitui o contrato. A aceitação está sujeita à análise documental e à confirmação por escrito do proprietário.",
 ) -> bytes:
     """Proposta de compra/locação em uma página: quadro de valores, condições e campos de assinatura."""
     from html import escape as esc
@@ -266,7 +268,7 @@ def gerar_proposta_pdf(
         cor = HexColor("#4a03a2")
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,
-                            topMargin=24 * mm, bottomMargin=20 * mm, title=f"{numero} — {titulo}", author=empresa)
+                            topMargin=24 * mm, bottomMargin=20 * mm, title=f"{numero}, {titulo}", author=empresa)
     corpo = ParagraphStyle("corpo", fontName="Helvetica", fontSize=10, leading=14.5, spaceAfter=6)
     h1 = ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=15, leading=19, spaceAfter=4)
     sub = ParagraphStyle("sub", fontName="Helvetica", fontSize=9, leading=12, textColor=HexColor("#6b7280"), spaceAfter=10)
@@ -310,13 +312,12 @@ def gerar_proposta_pdf(
         for h in historico:
             historia.append(Paragraph(esc(h), pequeno))
     historia.append(Spacer(1, 18 * mm))
-    assin = Table([["", ""], [Paragraph(f"<b>{esc(proponente)}</b><br/>Proponente", rot), Paragraph(f"<b>{esc(corretor or empresa)}</b><br/>Corretor responsável", rot)]],
+    assin = Table([["", ""], [Paragraph(f"<b>{esc(proponente)}</b><br/>Proponente", rot), Paragraph(f"<b>{esc(corretor or empresa)}</b><br/>{esc(rotulo_responsavel)}", rot)]],
                   colWidths=[80 * mm, 80 * mm], rowHeights=[10 * mm, None])
     assin.setStyle(TableStyle([("LINEABOVE", (0, 1), (0, 1), 0.6, HexColor("#111827")), ("LINEABOVE", (1, 1), (1, 1), 0.6, HexColor("#111827")),
                                ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (0, -1), 10 * mm)]))
     historia.append(assin)
     historia.append(Spacer(1, 8 * mm))
-    historia.append(Paragraph("Esta proposta não substitui o contrato. A aceitação está sujeita à análise documental e à confirmação "
-                              "por escrito do proprietário.", pequeno))
+    historia.append(Paragraph(esc(aviso), pequeno))
     doc.build(historia, onFirstPage=cabecalho, onLaterPages=cabecalho)
     return buffer.getvalue()

@@ -47,7 +47,7 @@ async def login(input: LoginInput, response: Response):
             if not empresa:
                 raise HTTPException(status_code=401, detail=ERRO_CREDENCIAL)
             if not empresa.get("ativo", True):
-                raise HTTPException(status_code=403, detail="Empresa desativada — fale com o suporte")
+                raise HTTPException(status_code=403, detail="Empresa desativada. Fale com o suporte.")
             doc = await client[empresa["db_name"]].usuarios.find_one({"email": email})
         else:
             # 3) Sistema recém-instalado: o primeiro administrador vem do Firebase Authentication.
@@ -60,7 +60,7 @@ async def login(input: LoginInput, response: Response):
     if not doc or doc.get("activation_required") or not conferir_senha(input.senha, doc["senha_hash"]):
         raise HTTPException(status_code=401, detail=ERRO_CREDENCIAL)
     if not doc.get("ativo", True):
-        raise HTTPException(status_code=403, detail="Usuário desativado — fale com o gestor")
+        raise HTTPException(status_code=403, detail="Usuário desativado. Fale com o gestor.")
 
     empresa_id = empresa["id"] if empresa else None
     if empresa:

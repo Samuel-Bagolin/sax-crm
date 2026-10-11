@@ -106,7 +106,7 @@ async def update_plano_conta(
 @router.delete("/plano-contas/{conta_id}", status_code=204)
 async def delete_plano_conta(conta_id: str, principal: Principal = Depends(require("plano:write"))):
     if await db.plano_contas.find_one({"conta_pai_id": conta_id}):
-        raise HTTPException(status_code=409, detail="Esta conta possui subcontas — remova-as primeiro")
+        raise HTTPException(status_code=409, detail="Esta conta possui subcontas. Remova as subcontas primeiro.")
     if await db.transacoes.find_one({"plano_conta_id": conta_id}):
         raise HTTPException(status_code=409, detail="Esta conta possui lançamentos vinculados")
     await db.plano_contas.delete_one({"id": conta_id})

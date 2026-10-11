@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { BellRing, CalendarDays, Check, ChevronLeft, ChevronRight, Home, Plus, Users } from "lucide-react";
+import { BellRing, CalendarDays, Car, Check, ChevronLeft, ChevronRight, Home, Plus, Users } from "lucide-react";
 import { apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
 import { ATIVIDADE, corDoMembro, isoLocal, useEquipe } from "@/lib/crm";
 import { useAuth } from "@/lib/useAuth";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import Avatar from "@/components/shared/Avatar";
 import AtividadeModal, { type PadraoAtividade } from "@/components/crm/AtividadeModal";
 import VisitaModal from "@/components/agenda/VisitaModal";
+import { useSegmento } from "@/lib/segmento";
 import { cn } from "@/lib/utils";
 import type { EventoGoogle } from "@/lib/google";
 
@@ -209,6 +210,9 @@ export default function Agenda() {
   const { isAdmin, principal } = useAuth();
   const { data: equipe = [] } = useEquipe();
   const membros = equipe.filter((m) => m.pessoa_id);
+  const seg = useSegmento();
+  const prof = seg.termos.profissional.toLowerCase();
+  const profs = seg.termos.profissionais.toLowerCase();
 
   const [visao, setVisao] = useState<Visao>(isAdmin ? "dia" : "semana");
   const [base, setBase] = useState(() => new Date());
@@ -325,7 +329,7 @@ export default function Agenda() {
     if (e.origem === "google") {
       const g = e.bruto as EventoGoogle;
       if (g.link) window.open(g.link, "_blank", "noopener");
-      else toast("Horário ocupado no Google Agenda do corretor (detalhes são privados).");
+      else toast(`Horário ocupado no Google Agenda do ${prof} (detalhes são privados).`);
       return;
     }
     if (e.origem === "atividade") setAtividade({ a: e.bruto as Atividade });
@@ -441,7 +445,7 @@ export default function Agenda() {
             {membros.map((m, i) => (
               <EquipeItem key={m.usuario_id} m={m} cor={corDoMembro(m, i)} ativo={corretor === m.pessoa_id} onClick={() => escolherCorretor(m.pessoa_id)} />
             ))}
-            {!membros.length && <p className="px-2 py-4 text-xs text-muted-foreground">Cadastre corretores em Consultores para ver a agenda de cada um.</p>}
+            {!membros.length && <p className="px-2 py-4 text-xs text-muted-foreground">Cadastre {profs} em Equipe para ver a agenda de cada um.</p>}
           </div>
         </aside>
       )}
@@ -475,7 +479,7 @@ export default function Agenda() {
               className="h-8 rounded-md border bg-card px-2 text-sm md:hidden"
               value={corretor ?? ""}
               onChange={(e) => escolherCorretor(e.target.value || null)}
-              aria-label="Corretor"
+              aria-label={seg.termos.profissional}
             >
               <option value="">Toda a equipe</option>
               {membros.map((m) => (
@@ -508,12 +512,12 @@ export default function Agenda() {
               ))}
             </div>
             {isAdmin && (
-              <Button variant="ghost" size="sm" onClick={() => lembretes.mutate()} disabled={lembretes.isPending} title="Envia por e-mail as visitas de amanhã para corretores e clientes">
+              <Button variant="ghost" size="sm" onClick={() => lembretes.mutate()} disabled={lembretes.isPending} title={`Envia por e-mail os compromissos de amanhã para ${profs} e clientes`}>
                 <BellRing className="h-3.5 w-3.5" /> Lembretes
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setVisita({ v: null, data: visao === "dia" ? inicio : hoje, corretor })}>
-              <Home className="h-3.5 w-3.5" /> Visita
+              {seg.veiculos ? <Car className="h-3.5 w-3.5" /> : <Home className="h-3.5 w-3.5" />} {seg.veiculos ? "Test drive" : "Visita"}
             </Button>
             <Button size="sm" onClick={() => novo(visao === "dia" ? inicio : hoje, null)} data-testid="btn-nova-atividade">
               <Plus className="h-3.5 w-3.5" /> Atividade

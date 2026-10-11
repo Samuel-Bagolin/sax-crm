@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from lib.auth import Principal, principal_atual, require
 from lib.db import controle
-from lib.planos import ADICIONAIS, PLANOS, RECURSOS, TIPOS_ADICIONAL, carregar_catalogo, plano_atual, uso_atual
+from lib.planos import recursos_do_segmento, ADICIONAIS, PLANOS, RECURSOS, TIPOS_ADICIONAL, carregar_catalogo, plano_atual, uso_atual
 from models.config import MODULOS, TITULOS_PADRAO
 
 router = APIRouter(tags=["planos"])
@@ -134,7 +134,7 @@ async def catalogo(todos: bool = Query(False), segmento: str | None = None, prin
         planos=[_plano_saida(k, v) for k, v in PLANOS.items() if (mostrar_inativos or v.get("ativo", True))
                 and (not segmento or (v.get("segmento") or "imobiliaria") == segmento)],
         adicionais=[Adicional(**v) for v in ADICIONAIS.values() if mostrar_inativos or v.get("ativo", True)],
-        recursos=RECURSOS,
+        recursos=RECURSOS if principal.is_sysadmin and not segmento else recursos_do_segmento(segmento),
         modulos={m: TITULOS_PADRAO.get(m, m) for m in MODULOS},
         tipos_adicional=TIPOS_ADICIONAL,
     )

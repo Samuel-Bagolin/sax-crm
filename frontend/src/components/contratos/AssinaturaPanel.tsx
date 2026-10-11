@@ -22,6 +22,7 @@ import { apiDelete, apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
 import { PAPEL_SIGNATARIO, linkWhatsapp } from "@/lib/crm";
 import { useGoogle } from "@/lib/google";
 import { useAuth } from "@/lib/useAuth";
+import { useSegmento } from "@/lib/segmento";
 import type { ModeloContrato, PainelAssinatura, PapelSignatario, Signatario } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -57,6 +58,10 @@ function linkAssinatura(token: string | null) {
 export default function AssinaturaPanel({ contratoId, onClose }: { contratoId: string | null; onClose: () => void }) {
   const qc = useQueryClient();
   const { principal } = useAuth();
+  const loja = useSegmento().veiculos;
+  // Papéis de quem assina: na loja não há locador, fiador, imobiliária nem corretor.
+  const papeis = (Object.entries(PAPEL_SIGNATARIO) as [PapelSignatario, string][]).filter(([k]) =>
+    loja ? ["comprador", "vendedor", "loja", "testemunha", "outro"].includes(k) : k !== "loja");
   const [editando, setEditando] = useState(false);
   const [titulo, setTitulo] = useState("");
   const [texto, setTexto] = useState("");
@@ -326,7 +331,7 @@ export default function AssinaturaPanel({ contratoId, onClose }: { contratoId: s
                     <Input value={sig.email} onChange={(e) => setSig({ ...sig, email: e.target.value })} placeholder="E-mail" aria-label="E-mail" />
                     <div className="flex gap-2">
                       <select value={sig.papel} onChange={(e) => setSig({ ...sig, papel: e.target.value as PapelSignatario })} className="h-8 flex-1 rounded-lg border bg-card px-2 text-sm" aria-label="Papel">
-                        {Object.entries(PAPEL_SIGNATARIO).map(([k, v]) => (
+                        {papeis.map(([k, v]) => (
                           <option key={k} value={k}>
                             {v}
                           </option>

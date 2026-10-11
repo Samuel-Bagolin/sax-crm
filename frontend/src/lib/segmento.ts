@@ -16,6 +16,15 @@ export const TERMOS_PADRAO: TermosSegmento = {
   atendimentos: "Visitas",
 };
 
+/** Como chamar a empresa do cliente na tela (logo da imobiliária, site da loja, clínica...). */
+const EMPRESA: Record<SegmentoChave, string> = {
+  imobiliaria: "imobiliária", veiculos: "loja", odontologia: "clínica", terapia: "clínica", barbearia: "barbearia", estetica: "clínica",
+};
+/** Registro profissional do segmento. Loja e barbearia não têm. */
+const REGISTRO: Partial<Record<SegmentoChave, string>> = {
+  imobiliaria: "CRECI", odontologia: "CRO", terapia: "CRP ou CRFa", estetica: "Registro profissional",
+};
+
 export const SERVICOS: SegmentoChave[] = ["barbearia", "terapia", "odontologia", "estetica"];
 
 /** Segmento da empresa logada: chave, termos e o que ela usa (agenda online, prontuário). */
@@ -39,5 +48,11 @@ export function useSegmento() {
     vendas: chave === "imobiliaria" || chave === "veiculos",
     barbearia: chave === "barbearia",
     odonto: chave === "odontologia",
+    /** "imobiliária", "loja", "clínica" ou "barbearia" (minúsculo). */
+    empresa: EMPRESA[chave] ?? "empresa",
+    /** "CRECI", "CRO", "CRP ou CRFa"... ou null quando o segmento não tem registro. */
+    registro: REGISTRO[chave] ?? null,
+    /** Domínio de exemplo para os campos de e-mail e site. */
+    dominio: `sua${(EMPRESA[chave] ?? "empresa").normalize("NFD").replace(/[\u0300-\u036f]/g, "")}.com.br`,
   };
 }

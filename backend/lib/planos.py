@@ -35,6 +35,28 @@ RECURSOS = {
     "odontograma": "Odontograma 3D e plano de tratamento",
     "mapa_facial": "Mapa facial 3D de aplicação e orçamento",
 }
+# Recursos que fazem sentido em cada segmento (o resto não aparece na tela da empresa).
+RECURSOS_SEGMENTO = {
+    "imobiliaria": ["match", "automacoes", "propostas", "portais", "proprietario", "google", "assinatura", "chat", "site"],
+    "veiculos": ["automacoes", "propostas", "google", "assinatura", "chat", "site"],
+    "odontologia": ["agenda_online", "prontuario", "odontograma", "automacoes", "google", "assinatura", "chat"],
+    "terapia": ["agenda_online", "prontuario", "automacoes", "google", "assinatura", "chat"],
+    "barbearia": ["agenda_online", "automacoes", "google", "chat"],
+    "estetica": ["agenda_online", "prontuario", "mapa_facial", "automacoes", "google", "assinatura", "chat"],
+}
+_ROTULO_SEGMENTO = {
+    ("site", "imobiliaria"): "Site com os seus imóveis e WhatsApp",
+    ("site", "veiculos"): "Site da loja com o estoque e WhatsApp",
+}
+
+
+def recursos_do_segmento(segmento: str | None) -> dict[str, str]:
+    """Rótulos dos recursos que valem para o segmento, na ordem do segmento."""
+    seg = segmento or "imobiliaria"
+    chaves = RECURSOS_SEGMENTO.get(seg, list(RECURSOS))
+    return {k: _ROTULO_SEGMENTO.get((k, seg), RECURSOS[k]) for k in chaves if k in RECURSOS}
+
+
 # Recursos criados depois do catálogo semeado: entram uma única vez nos planos indicados.
 _MIGRACOES_RECURSO = {"site": ("profissional", "business", "enterprise")}
 

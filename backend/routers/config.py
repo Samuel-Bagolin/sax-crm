@@ -162,7 +162,7 @@ async def _registrar(usuario: str, mudancas: list[tuple[str, str | None, str | N
     if not mudancas:
         return
     await db.config_logs.insert_many(
-        [ConfigLog(campo=c, de="[protegido]" if c == "WhatsApp — token" else de, para="[protegido]" if c == "WhatsApp — token" else para, usuario=usuario).model_dump() for c, de, para in mudancas]
+        [ConfigLog(campo=c, de="[protegido]" if c == "WhatsApp (token)" else de, para="[protegido]" if c == "WhatsApp (token)" else para, usuario=usuario).model_dump() for c, de, para in mudancas]
     )
 
 
@@ -179,9 +179,9 @@ ROTULOS_CAMPO = {
     "imagem_fundo_login": "Imagem de fundo do login",
     "email_remetente_nome": "Nome do remetente",
     "email_resposta": "E-mail de resposta",
-    "whatsapp_numero": "WhatsApp — número",
-    "whatsapp_phone_id": "WhatsApp — Phone ID",
-    "whatsapp_token": "WhatsApp — token",
+    "whatsapp_numero": "WhatsApp (número)",
+    "whatsapp_phone_id": "WhatsApp (Phone ID)",
+    "whatsapp_token": "WhatsApp (token)",
     "site_url": "URL do site",
     "site_webhook_ativo": "Webhook do site",
 }

@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiDelete, apiPatch, apiPost, detalheErro } from "@/lib/api";
 import type { Imovel, Lead, Pessoa, Visita, VisitaStatus } from "@/lib/types";
+import { useSegmento } from "@/lib/segmento";
+import { useItemSegmento } from "@/lib/itemSegmento";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -39,6 +41,7 @@ interface FormState {
   lead_id: string;
   cliente_id: string;
   imovel_id: string;
+  veiculo_id: string;
   corretor_id: string;
   local: string;
   observacoes: string;
@@ -55,6 +58,7 @@ function vazio(data: string): FormState {
     lead_id: SEM,
     cliente_id: SEM,
     imovel_id: SEM,
+    veiculo_id: SEM,
     corretor_id: SEM,
     local: "",
     observacoes: "",
@@ -86,6 +90,14 @@ export default function VisitaModal({
   preset?: { titulo?: string; lead_id?: string | null; cliente_id?: string | null; imovel_id?: string | null; corretor_id?: string | null; hora?: string };
 }) {
   const qc = useQueryClient();
+  const loja = useSegmento().veiculos;
+  const item = useItemSegmento(open && loja);
+  // Palavras da tela: visita na imobiliária, test drive ou visita na loja de veículos.
+  const w = loja
+    ? { um: "agendamento", Um: "Agendamento", novo: "Agendar test drive ou visita", editar: "Editar agendamento", ok: "Agendamento salvo.", okNovo: "Agendamento criado!",
+        removido: "Agendamento removido da agenda.", resp: "Vendedor responsável", sem: "Sem vendedor", local: "Local", localEx: "Ex.: na loja", tituloEx: "Ex.: Test drive Compass, Fernanda Rocha" }
+    : { um: "visita", Um: "Visita", novo: "Agendar visita", editar: "Editar visita", ok: "Visita atualizada.", okNovo: "Visita agendada!",
+        removido: "Visita removida da agenda.", resp: "Corretor responsável", sem: "Sem corretor", local: "Ponto de encontro", localEx: "Ex.: portaria do edifício", tituloEx: "Ex.: Visita Fernanda Rocha" };
   const [form, setForm] = useState<FormState>(vazio(dataPadrao));
   const set = (k: keyof FormState, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -100,6 +112,7 @@ export default function VisitaModal({
         lead_id: visita.lead_id ?? SEM,
         cliente_id: visita.cliente_id ?? SEM,
         imovel_id: visita.imovel_id ?? SEM,
+        veiculo_id: visita.veiculo_id ?? SEM,
         corretor_id: visita.corretor_id ?? SEM,
         local: visita.local ?? "",
         observacoes: visita.observacoes ?? "",
@@ -136,11 +149,12 @@ export default function VisitaModal({
         duracao_min: Number(form.duracao_min) || 60,
         lead_id: form.lead_id === SEM ? null : form.lead_id,
         cliente_id: form.cliente_id === SEM ? null : form.cliente_id,
-        imovel_id: form.imovel_id === SEM ? null : form.imovel_id,
+        imovel_id: loja || form.imovel_id === SEM ? null : form.imovel_id,
+        veiculo_id: !loja || form.veiculo_id === SEM ? null : form.veiculo_id,
         corretor_id: form.corretor_id === SEM ? null : form.corretor_id,
         local: form.local.trim() || null,
         observacoes: form.observacoes.trim() || null,
-        feedback_proprietario: form.feedback_proprietario.trim() || null,
+        feedback_proprietario: loja ? null : form.feedback_proprietario.trim() || null,
         status: form.status,
       };
       return visita
@@ -149,25 +163,25 @@ export default function VisitaModal({
     },
     onSuccess: () => {
       invalidar();
-      toast.success(visita ? "Visita atualizada." : "Visita agendada!");
+      toast.success(visita ? w.ok : w.okNovo);
       onClose();
     },
-    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível salvar a visita."),
+    onError: (e) => toast.error(detalheErro(e) ?? `Não foi possível salvar o ${w.um}.`.replace("o visita", "a visita")),
   });
 
   const excluir = useMutation({
     mutationFn: () => apiDelete<void>(`/visitas/${visita!.id}`),
     onSuccess: () => {
       invalidar();
-      toast.success("Visita removida da agenda.");
+      toast.success(w.removido);
       onClose();
     },
-    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível remover a visita."),
+    onError: (e) => toast.error(detalheErro(e) ?? `Não foi possível remover o ${w.um}.`.replace("o visita", "a visita")),
   });
 
   const submeter = () => {
-    if (!form.titulo.trim()) return toast.error("Informe o título da visita.");
-    if (!form.data) return toast.error("Informe a data da visita.");
+    if (!form.titulo.trim()) return toast.error("Informe o título.");
+    if (!form.data) return toast.error("Informe a data.");
     salvar.mutate();
   };
 
@@ -177,10 +191,10 @@ export default function VisitaModal({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{visita ? "Editar visita" : "Agendar visita"}</DialogTitle>
+          <DialogTitle>{visita ? w.editar : w.novo}</DialogTitle>
           <DialogDescription>
-            A visita liga um lead e um imóvel ao corretor responsável. O aviso é enviado no dia
-            anterior.
+            {loja ? "O agendamento liga o cliente e o veículo ao vendedor responsável. O lembrete é enviado no dia anterior."
+              : "A visita liga um lead e um imóvel ao corretor responsável. O aviso é enviado no dia anterior."}
           </DialogDescription>
         </DialogHeader>
 
@@ -191,7 +205,7 @@ export default function VisitaModal({
               id="visita-titulo"
               value={form.titulo}
               onChange={(e) => set("titulo", e.target.value)}
-              placeholder="Ex.: Visita Fernanda Rocha"
+              placeholder={w.tituloEx}
               data-testid="visita-titulo-input"
             />
           </div>
@@ -272,6 +286,22 @@ export default function VisitaModal({
             </Select>
           </div>
 
+          {loja ? (
+          <div className="grid gap-2">
+            <Label>Veículo</Label>
+            <Select value={form.veiculo_id} onValueChange={(v) => set("veiculo_id", v)}>
+              <SelectTrigger className="w-full min-w-0" data-testid="visita-veiculo-select">
+                <SelectValue className="truncate">
+                  {form.veiculo_id === SEM ? "Sem veículo específico" : (item.opcoes.find((i) => i.id === form.veiculo_id)?.titulo ?? "Veículo")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SEM}>Sem veículo específico</SelectItem>
+                {item.opcoes.map((i) => <SelectItem key={i.id} value={i.id}>{i.titulo}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          ) : (
           <div className="grid gap-2">
             <Label>Imóvel</Label>
             <Select value={form.imovel_id} onValueChange={(v) => set("imovel_id", v)}>
@@ -292,20 +322,21 @@ export default function VisitaModal({
               </SelectContent>
             </Select>
           </div>
+          )}
 
           {isAdmin && (
             <div className="grid gap-2">
-              <Label>Corretor responsável</Label>
+              <Label>{w.resp}</Label>
               <Select value={form.corretor_id} onValueChange={(v) => set("corretor_id", v)}>
                 <SelectTrigger className="w-full min-w-0" data-testid="visita-corretor-select">
                   <SelectValue className="truncate">
                     {form.corretor_id === SEM
-                      ? "Sem corretor"
-                      : (corretores.find((p) => p.id === form.corretor_id)?.nome ?? "Corretor")}
+                      ? w.sem
+                      : (corretores.find((p) => p.id === form.corretor_id)?.nome ?? w.resp)}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={SEM}>Sem corretor</SelectItem>
+                  <SelectItem value={SEM}>{w.sem}</SelectItem>
                   {corretores.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.nome}
@@ -318,12 +349,12 @@ export default function VisitaModal({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="visita-local">Ponto de encontro</Label>
+              <Label htmlFor="visita-local">{w.local}</Label>
               <Input
                 id="visita-local"
                 value={form.local}
                 onChange={(e) => set("local", e.target.value)}
-                placeholder="Ex.: portaria do edifício"
+                placeholder={w.localEx}
                 data-testid="visita-local-input"
               />
             </div>
@@ -355,7 +386,7 @@ export default function VisitaModal({
             />
           </div>
 
-          {form.imovel_id !== SEM && (form.status === "realizada" || !!visita) && (
+          {!loja && form.imovel_id !== SEM && (form.status === "realizada" || !!visita) && (
             <div className="grid gap-2">
               <Label htmlFor="visita-retorno">Retorno para o proprietário</Label>
               <Textarea
@@ -385,7 +416,7 @@ export default function VisitaModal({
             Cancelar
           </Button>
           <Button onClick={submeter} disabled={salvar.isPending} data-testid="visita-submit-button">
-            {salvar.isPending ? "Salvando..." : visita ? "Salvar alterações" : "Agendar visita"}
+            {salvar.isPending ? "Salvando..." : visita ? "Salvar alterações" : loja ? "Agendar" : "Agendar visita"}
           </Button>
         </DialogFooter>
       </DialogContent>

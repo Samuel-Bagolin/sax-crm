@@ -314,7 +314,9 @@ export default function Empresas() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Uso rotulo="Usuários ativos" uso={e.usuarios_ativos} limite={e.limite_usuarios} />
-                  <Uso rotulo="Imóveis em carteira" uso={e.imoveis_carteira} limite={e.limite_imoveis} />
+                  {(!e.segmento || e.segmento === "imobiliaria" || e.segmento === "veiculos") && (
+                    <Uso rotulo={e.segmento === "veiculos" ? "Veículos em estoque" : "Imóveis em carteira"} uso={e.imoveis_carteira} limite={e.limite_imoveis} />
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-2 text-center">

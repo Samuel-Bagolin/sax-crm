@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Avatar from "@/components/shared/Avatar";
+import { useSegmento } from "@/lib/segmento";
 import FotoUploader from "@/components/shared/FotoUploader";
 import GoogleConexao from "@/components/shared/GoogleConexao";
 import { FormTrocarSenha } from "@/components/shared/TrocarSenha";
 
 export default function Perfil() {
+  const seg = useSegmento();
   const qc = useQueryClient();
   const { data: eu, isError, refetch } = useQuery({ queryKey: ["perfil"], queryFn: () => apiGet<UsuarioPublico>("/perfil"), retry: 1 });
   const [f, setF] = useState({ nome: "", telefone: "", cargo: "", creci: "" });
@@ -98,10 +100,12 @@ export default function Perfil() {
           <Label htmlFor="pf-tel">WhatsApp</Label>
           <Input id="pf-tel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: e.target.value })} />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="pf-creci">CRECI</Label>
-          <Input id="pf-creci" value={f.creci} onChange={(e) => setF({ ...f, creci: e.target.value })} />
-        </div>
+        {seg.registro && (
+          <div className="space-y-1.5">
+            <Label htmlFor="pf-creci">{seg.registro}</Label>
+            <Input id="pf-creci" value={f.creci} onChange={(e) => setF({ ...f, creci: e.target.value })} />
+          </div>
+        )}
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="pf-cargo">Cargo</Label>
           <Input id="pf-cargo" value={f.cargo} onChange={(e) => setF({ ...f, cargo: e.target.value })} />

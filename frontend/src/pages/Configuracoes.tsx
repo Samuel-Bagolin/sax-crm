@@ -12,16 +12,16 @@ import { cn } from "@/lib/utils";
 import { PALETAS_MENU, variaveisMenu } from "@/lib/coresMenu";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSegmento } from "@/lib/segmento";
+import { useConfig } from "@/lib/useConfig";
 
-const MODULOS = [
-  { chave: "dashboard", rotulo: "Visão Geral", fixo: true },
-  { chave: "imoveis", rotulo: "Imóveis", fixo: false },
-  { chave: "crm", rotulo: "CRM & Funil", fixo: false },
-  { chave: "agenda", rotulo: "Agenda de Visitas", fixo: false },
-  { chave: "contratos", rotulo: "Contratos", fixo: false },
-  { chave: "financeiro", rotulo: "Financeiro", fixo: false },
-  { chave: "usuarios", rotulo: "Consultores & Acessos", fixo: true },
-];
+// Módulos que cada segmento pode ligar ou desligar. Visão Geral e Equipe ficam sempre ligados.
+const FIXOS = ["dashboard", "usuarios"];
+const ROTULO_MODULO: Record<string, string> = {
+  dashboard: "Visão Geral", imoveis: "Imóveis", veiculos: "Estoque de veículos", crm: "CRM e funil", agenda: "Agenda",
+  atendimentos: "Agenda", contratos: "Contratos", financeiro: "Financeiro", usuarios: "Equipe e acessos",
+};
+const MODULOS_PADRAO = ["dashboard", "imoveis", "crm", "agenda", "contratos", "financeiro", "usuarios"];
 
 export default function Configuracoes() {
   const qc = useQueryClient();
@@ -36,6 +36,11 @@ export default function Configuracoes() {
   const chave = form?.site_api_key ?? "";
   const chaveMascarada = chave ? `${chave.slice(0, 4)}${"•".repeat(Math.max(8, chave.length - 8))}${chave.slice(-4)}` : "";
   const temLogo = !!data?.logo_mime;
+  const seg = useSegmento();
+  const { config } = useConfig();
+  const MODULOS = (config.segmento?.modulos ?? MODULOS_PADRAO).map((m) => ({
+    chave: m, rotulo: m === "pacientes" ? seg.termos.clientes : ROTULO_MODULO[m] ?? m, fixo: FIXOS.includes(m),
+  }));
 
   const invalidarConfig = () => {
     qc.invalidateQueries({ queryKey: ["config"] });
@@ -263,7 +268,7 @@ export default function Configuracoes() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="config-logo">Logotipo da imobiliária (PNG, JPG ou WEBP · até 512 KB)</Label>
+                <Label htmlFor="config-logo">Logotipo da {seg.empresa} (PNG, JPG ou WEBP · até 512 KB)</Label>
                 <div className="flex flex-wrap items-center gap-3">
                   {temLogo && (
                     <img
@@ -299,7 +304,7 @@ export default function Configuracoes() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Aparece no menu lateral, na tela de login e no topo dos e-mails enviados aos
-                  clientes e corretores.
+                  {" "}{seg.termos.clientes.toLowerCase()} e à equipe.
                 </p>
               </div>
 
@@ -381,15 +386,15 @@ export default function Configuracoes() {
                 <Label htmlFor="config-resposta">E-mail de resposta</Label>
                 <Input
                   id="config-resposta"
-                  placeholder="contato@suaimobiliaria.com.br"
+                  placeholder={`contato@${seg.dominio}`}
                   value={form.email_resposta ?? ""}
                   onChange={(e) => set("email_resposta", e.target.value)}
                   data-testid="config-resposta-input"
                 />
               </div>
               <p className="text-xs text-muted-foreground sm:col-span-2">
-                O envio usa a infraestrutura gerenciada da Emergent: o endereço de origem é fixo e o
-                nome acima é o que o cliente vê.
+                O envio usa o servidor de e-mail do SAX: o endereço de origem é fixo e o nome acima é
+                o que o cliente vê.
               </p>
             </CardContent>
           </Card>
@@ -431,7 +436,7 @@ export default function Configuracoes() {
                 />
               </div>
               <p className="text-xs text-muted-foreground sm:col-span-3">
-                Nesta etapa os dados ficam guardados para a integração — nenhuma mensagem de
+                Nesta etapa os dados ficam guardados para a integração. Nenhuma mensagem de
                 WhatsApp é enviada ainda.
               </p>
             </CardContent>
@@ -448,7 +453,7 @@ export default function Configuracoes() {
                 <Label htmlFor="config-site-url">URL do site</Label>
                 <Input
                   id="config-site-url"
-                  placeholder="https://suaimobiliaria.com.br"
+                  placeholder={`https://${seg.dominio}`}
                   value={form.site_url ?? ""}
                   onChange={(e) => set("site_url", e.target.value)}
                   data-testid="config-site-url-input"
@@ -516,11 +521,11 @@ export default function Configuracoes() {
 {`curl -X POST ${webhook} \\
   -H "X-API-Key: ${mostrarChave ? chave : "SUA_CHAVE"}" \\
   -H "Content-Type: application/json" \\
-  -d '{"nome":"Fulano","email":"fulano@email.com","telefone":"11999990000","codigo_imovel":"AP-0001","mensagem":"Quero visitar"}'`}
+  -d '{"nome":"Fulano","email":"fulano@email.com","telefone":"11999990000",${seg.imobiliaria ? '"codigo_imovel":"AP-0001",' : ""}"mensagem":"${seg.imobiliaria ? "Quero visitar" : seg.veiculos ? "Quero ver o carro" : "Quero agendar"}"}'`}
               </pre>
               <p className="text-xs text-muted-foreground">
-                Cada chamada cria o cliente no cadastro único e um lead no estágio "Novo", já
-                vinculado ao imóvel quando o código é informado.
+                Cada chamada cria o cliente no cadastro único e um lead no estágio "Novo"
+                {seg.imobiliaria ? ", já vinculado ao imóvel quando o código é informado." : "."}
               </p>
             </CardContent>
           </Card>

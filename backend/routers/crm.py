@@ -351,7 +351,7 @@ async def converter_entrada(entrada_id: str, input: ConverterEntrada, principal:
         corretor = principal.pessoa_id
 
     lead = Lead(
-        nome=(input.titulo or "").strip() or f"{doc['nome']} — {'Locação' if doc.get('interesse') == 'locacao' else 'Compra'}",
+        nome=(input.titulo or "").strip() or (f"{doc['nome']}, {'Locação' if doc.get('interesse') == 'locacao' else 'Compra'}" if principal.segmento == "imobiliaria" else doc["nome"]),
         cliente_id=cliente_id, imovel_id=doc.get("imovel_id"), veiculo_id=doc.get("veiculo_id"), corretor_id=corretor, origem=doc.get("origem") or "Manual",
         valor_estimado=input.valor_estimado if input.valor_estimado is not None else doc.get("valor_estimado"),
         observacoes=doc.get("mensagem"), funil_id=funil["id"], etapa_id=etapa["id"], status="aberto",

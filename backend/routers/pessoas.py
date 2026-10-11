@@ -120,7 +120,7 @@ async def delete_pessoa(pessoa_id: str, principal: Principal = Depends(require("
     if vinculado:
         raise HTTPException(
             status_code=409,
-            detail="Pessoa vinculada a imóveis, leads, lançamentos ou usuários — remova os vínculos primeiro",
+            detail="Esta pessoa tem negócios, lançamentos ou outros cadastros vinculados. Remova os vínculos primeiro.",
         )
     await db.pessoas.delete_one({"id": pessoa_id})
     return None

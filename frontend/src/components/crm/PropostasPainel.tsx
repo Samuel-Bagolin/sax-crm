@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSegmento } from "@/lib/segmento";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -38,6 +39,8 @@ function emDias(dias: number): string {
 
 /** Propostas e contrapropostas do negócio, em cadeia. */
 export default function PropostasPainel({ negocioId, aberto, valorAnunciado }: { negocioId: string; aberto: boolean; valorAnunciado?: number | null }) {
+  // A outra parte da negociação: o proprietário do imóvel ou a própria loja de veículos.
+  const outra = useSegmento().veiculos ? { nome: "Loja", da: "da loja" } : { nome: "Proprietário", da: "do proprietário" };
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [dialogo, setDialogo] = useState<{ base: Proposta | null } | null>(null);
@@ -166,7 +169,7 @@ export default function PropostasPainel({ negocioId, aberto, valorAnunciado }: {
                     <div className={cn("min-w-0 flex-1 rounded-md border p-3", p.autor === "proprietario" ? "ml-6 bg-muted/30" : "bg-card")}>
                       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                         <span className="text-xs font-medium text-muted-foreground">
-                          {p.numero} · {p.autor === "cliente" ? "Cliente" : "Proprietário"} · {dataHoraBR(p.created_at)}
+                          {p.numero} · {p.autor === "cliente" ? "Cliente" : outra.nome} · {dataHoraBR(p.created_at)}
                         </span>
                         <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-semibold", st.classe)}>{st.rotulo}</span>
                       </div>
@@ -226,7 +229,7 @@ export default function PropostasPainel({ negocioId, aberto, valorAnunciado }: {
       <Dialog open={!!dialogo} onOpenChange={(v) => !v && setDialogo(null)}>
         <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{dialogo?.base ? `Contraproposta ${f.autor === "proprietario" ? "do proprietário" : "do cliente"}` : "Nova proposta"}</DialogTitle>
+            <DialogTitle>{dialogo?.base ? `Contraproposta ${f.autor === "proprietario" ? outra.da : "do cliente"}` : "Nova proposta"}</DialogTitle>
             <DialogDescription>
               {dialogo?.base ? `Respondendo a ${dialogo.base.numero} (${brl(dialogo.base.valor)}).` : valorAnunciado ? `Valor anunciado: ${brl(valorAnunciado)}.` : "Registre os termos que o cliente ofereceu."}
             </DialogDescription>
@@ -236,7 +239,7 @@ export default function PropostasPainel({ negocioId, aberto, valorAnunciado }: {
               <div className="flex gap-1 rounded-md bg-muted p-1">
                 {(["cliente", "proprietario"] as const).map((a) => (
                   <button key={a} type="button" onClick={() => setF({ ...f, autor: a })} className={cn("h-8 flex-1 rounded text-sm font-medium", f.autor === a ? "bg-card shadow-sm" : "text-muted-foreground")}>
-                    {a === "cliente" ? "Do cliente" : "Do proprietário"}
+                    {a === "cliente" ? "Do cliente" : outra.da.replace(/^d/, "D")}
                   </button>
                 ))}
               </div>

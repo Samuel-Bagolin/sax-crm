@@ -13,7 +13,7 @@ from lib import asaas
 from lib.assinatura import resumo_publico, so_digitos, validar_cartao, eh_cartao_demo
 from lib.auth import Principal, require
 from lib.db import controle
-from lib.planos import PLANOS, RECURSOS, carregar_catalogo, plano_de, planos_do_segmento, uso_atual, valores_comerciais
+from lib.planos import recursos_do_segmento, PLANOS, RECURSOS, carregar_catalogo, plano_de, planos_do_segmento, uso_atual, valores_comerciais
 from lib.segmentos import info, segmento_de
 from models.common import now_utc
 
@@ -45,7 +45,7 @@ async def minha_assinatura(principal: Principal = Depends(require("assinatura_pl
     planos = [
         {"chave": k, "nome": p["nome"], "resumo": p.get("resumo", ""), "preco_mensal": p.get("preco_mensal"),
          "preco_anual": p.get("preco_anual"), "usuarios": p.get("usuarios"), "imoveis": p.get("imoveis"), "unidades": p.get("unidades"),
-         "recursos": [RECURSOS[r] for r in p.get("recursos", []) if r in RECURSOS]}
+         "recursos": [rot for r, rot in recursos_do_segmento(seg).items() if r in p.get("recursos", [])]}
         for k, p in sorted(planos_do_segmento(seg).items(), key=lambda kv: kv[1].get("ordem", 50))
     ]
     return {

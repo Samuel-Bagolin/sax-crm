@@ -22,6 +22,8 @@ type EtapaForm = Omit<Etapa, "id" | "cor"> & { id: string | null; cor: string | 
 
 function EditorFunil({ funil, onSalvo, onCancelar }: { funil: Funil | null; onSalvo: () => void; onCancelar: () => void }) {
   const qc = useQueryClient();
+  const segF = useSegmento();
+  const exemploFunil = segF.imobiliaria ? "Ex.: Lançamentos, Captação" : segF.veiculos ? "Ex.: Seminovos, Zero km" : segF.barbearia ? "Ex.: Clube de assinantes" : segF.odonto ? "Ex.: Ortodontia, Implantes" : "Ex.: Primeira consulta, Retorno";
   const [nome, setNome] = useState(funil?.nome ?? "");
   const [padrao, setPadrao] = useState(funil?.padrao ?? false);
   const [etapas, setEtapas] = useState<EtapaForm[]>(
@@ -63,7 +65,7 @@ function EditorFunil({ funil, onSalvo, onCancelar }: { funil: Funil | null; onSa
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-48 flex-1 space-y-1.5">
           <Label htmlFor="fn-nome">Nome do funil</Label>
-          <Input id="fn-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Lançamentos, Captação" />
+          <Input id="fn-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder={exemploFunil} />
         </div>
         <label className="flex h-8 items-center gap-2 text-sm">
           <Checkbox checked={padrao} onCheckedChange={(v) => setPadrao(!!v)} /> Funil padrão
@@ -182,6 +184,7 @@ function ListaEditavel({ titulo, descricao, itens, onChange }: { titulo: string;
 
 function Modelos() {
   const qc = useQueryClient();
+  const segM = useSegmento();
   const { data: modelos = [] } = useQuery({ queryKey: ["modelos-contrato"], queryFn: () => apiGet<ModeloContrato[]>("/modelos-contrato") });
   const { data: variaveis = [] } = useQuery({ queryKey: ["modelos-variaveis"], queryFn: () => apiGet<{ chave: string; descricao: string }[]>("/modelos-contrato/variaveis") });
   const [sel, setSel] = useState<ModeloContrato | "novo" | null>(null);
@@ -263,7 +266,7 @@ function Modelos() {
               <Label htmlFor="md-tipo">Uso</Label>
               <select id="md-tipo" value={tipo} onChange={(e) => setTipo(e.target.value as ModeloContrato["tipo"])} className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm">
                 <option value="venda">Venda</option>
-                <option value="locacao">Locação</option>
+                {segM.imobiliaria && <option value="locacao">Locação</option>}
                 <option value="outro">Geral</option>
               </select>
             </div>
@@ -331,7 +334,8 @@ export default function CrmConfig() {
     { v: "listas", rotulo: "Origens, motivos e etiquetas", icone: ListChecks },
     { v: "distribuicao", rotulo: "Distribuição de leads", icone: Shuffle },
     ...(tem("automacoes") ? [{ v: "automacoes" as Aba, rotulo: "Automações e SLA", icone: Zap }] : []),
-    ...(seg.imobiliaria ? [{ v: "portais" as Aba, rotulo: "Portais", icone: Globe }, { v: "modelos" as Aba, rotulo: "Modelos de contrato", icone: FileText }] : []),
+    ...(seg.imobiliaria ? [{ v: "portais" as Aba, rotulo: "Portais", icone: Globe }] : []),
+    ...(seg.vendas ? [{ v: "modelos" as Aba, rotulo: "Modelos de contrato", icone: FileText }] : []),
     { v: "plano", rotulo: "Plano", icone: BadgeCheck },
   ];
 

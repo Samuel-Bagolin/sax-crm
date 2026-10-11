@@ -175,12 +175,28 @@ async def _logo_html(app_url: str) -> str:
     )
 
 
+async def _termos() -> dict:
+    """Palavras do e-mail conforme o segmento da empresa: visita (imobiliária) ou test drive (loja)."""
+    from lib.segmentos import segmento_de
+
+    empresa = await controle.empresas.find_one({"db_name": empresa_atual_db()}, {"segmento": 1}) if empresa_atual_db() else None
+    if segmento_de(empresa) == "veiculos":
+        return {"um": "agendamento", "varios": "agendamento(s)", "sua": "seu agendamento", "resp": "Vendedor responsável"}
+    return {"um": "visita", "varios": "visita(s)", "sua": "sua visita", "resp": "Corretor responsável"}
+
+
 async def _rotulo_visita(v: dict) -> str:
     partes = [f"{v['data'][8:10]}/{v['data'][5:7]} às {v.get('hora', '')}", v.get("titulo", "Visita")]
     if v.get("imovel_id"):
         imovel = await db.imoveis.find_one({"id": v["imovel_id"]})
         if imovel:
-            partes.append(f"{imovel['titulo']} — {imovel.get('endereco', '')}")
+            partes.append(", ".join(x for x in (imovel["titulo"], imovel.get("endereco")) if x))
+    if v.get("veiculo_id"):
+        veiculo = await db.veiculos.find_one({"id": v["veiculo_id"]})
+        if veiculo:
+            from routers.veiculos import titulo
+
+            partes.append(f"{veiculo.get('codigo') or ''} {titulo(veiculo)}".strip())
     if v.get("local"):
         partes.append(v["local"])
     return " · ".join(p for p in partes if p)
@@ -199,13 +215,14 @@ async def enviar_lembretes(data_alvo: str) -> LembreteResultado:
 
     from lib.invites import app_url as configured_url
     app_url = configured_url()
+    t = await _termos()
 
     enviados, detalhes = 0, []
     for corretor_id, visitas in por_corretor.items():
         # Destinatário vem do banco (conta do corretor), nunca do chamador (G4).
         usuario = await db.usuarios.find_one({"pessoa_id": corretor_id, "ativo": True})
         if not usuario or not usuario.get("email"):
-            detalhes.append(f"{corretor_id}: sem conta de usuário ativa — e-mail não enviado")
+            detalhes.append(f"{corretor_id}: sem conta de usuário ativa, e-mail não enviado")
             continue
 
         itens = []
@@ -216,8 +233,8 @@ async def enviar_lembretes(data_alvo: str) -> LembreteResultado:
             "<table role='presentation' width='100%'><tr><td style=\"padding:24px;"
             "font-family:Arial,sans-serif;color:#1c1c1c\">"
             + await _logo_html(app_url)
-            + f"<h2 style='margin:0 0 12px'>Suas visitas de amanhã ({data_alvo[8:10]}/{data_alvo[5:7]})</h2>"
-            f"<p>Olá {escape(usuario['nome'])}, você tem {len(visitas)} visita(s) agendada(s) para amanhã:</p>"
+            + f"<h2 style='margin:0 0 12px'>Sua agenda de amanhã ({data_alvo[8:10]}/{data_alvo[5:7]})</h2>"
+            f"<p>Olá {escape(usuario['nome'])}, você tem {len(visitas)} {t['varios']} para amanhã:</p>"
             f"<ul style='padding-left:18px'>{linhas}</ul>"
             f"<p><a href='{app_url}/agenda' style='color:#4a03a2'>Abrir a agenda no SAX</a></p>"
             "<p style='font-size:12px;color:#888'>Enviado pelo SAX. "
@@ -227,19 +244,19 @@ async def enviar_lembretes(data_alvo: str) -> LembreteResultado:
         try:
             await send_email(
                 to=usuario["email"],
-                subject=f"Lembrete: {len(visitas)} visita(s) amanhã — SAX",
+                subject=f"Lembrete: {len(visitas)} {t['varios']} amanhã, SAX",
                 html=html,
             )
         except Exception as e:  # um e-mail inválido não pode derrubar o lote inteiro
             logger.error(f"lembrete não enviado para {usuario['email']}: {e}")
-            detalhes.append(f"{usuario['email']}: falha no envio (verifique o e-mail do corretor)")
+            detalhes.append(f"{usuario['email']}: falha no envio (verifique o e-mail do responsável)")
             continue
         agora = now_utc()
         await db.visitas.update_many(
             {"id": {"$in": [v["id"] for v in visitas]}}, {"$set": {"lembrete_enviado_em": agora}}
         )
         enviados += 1
-        detalhes.append(f"{usuario['email']}: {len(visitas)} visita(s)")
+        detalhes.append(f"{usuario['email']}: {len(visitas)} {t['varios']}")
 
     enviados_cliente, detalhes_cliente = await _lembretes_clientes(data_alvo, app_url)
     return LembreteResultado(
@@ -256,6 +273,7 @@ async def _lembretes_clientes(data_alvo: str, app_url: str) -> tuple[int, list[s
         {"data": data_alvo, "status": "agendada", "lembrete_cliente_em": None}
     ).sort("hora", 1).to_list(None)
 
+    t = await _termos()
     enviados, detalhes = 0, []
     for v in docs:
         if not v.get("cliente_id"):
@@ -274,10 +292,10 @@ async def _lembretes_clientes(data_alvo: str, app_url: str) -> tuple[int, list[s
             "<table role='presentation' width='100%'><tr><td style=\"padding:24px;"
             "font-family:Arial,sans-serif;color:#1c1c1c\">"
             + await _logo_html(app_url)
-            + "<h2 style='margin:0 0 12px'>Confirmação da sua visita de amanhã</h2>"
-            f"<p>Olá {escape(pessoa['nome'])}, lembrete da visita agendada para amanhã:</p>"
+            + f"<h2 style='margin:0 0 12px'>Confirmação de {t['sua']} de amanhã</h2>"
+            f"<p>Olá {escape(pessoa['nome'])}, lembrete de {t['sua']} para amanhã:</p>"
             f"<p style='font-size:15px'><strong>{detalhe}</strong></p>"
-            + (f"<p>Corretor responsável: {escape(corretor_nome)}</p>" if corretor_nome else "")
+            + (f"<p>{t['resp']}: {escape(corretor_nome)}</p>" if corretor_nome else "")
             + f"<p><a href='{app_url}' style='color:#4a03a2'>SAX</a></p>"
             "<p style='font-size:12px;color:#888'>Enviado pelo SAX. "
             "Nunca pedimos senhas ou dados de cartão por e-mail.</p>"
@@ -286,7 +304,7 @@ async def _lembretes_clientes(data_alvo: str, app_url: str) -> tuple[int, list[s
         try:
             await send_email(
                 to=pessoa["email"],
-                subject=f"Sua visita amanhã às {v.get('hora', '')} — SAX",
+                subject=f"Lembrete: {t['sua']} amanhã às {v.get('hora', '')}",
                 html=html,
             )
         except Exception as e:
@@ -295,7 +313,7 @@ async def _lembretes_clientes(data_alvo: str, app_url: str) -> tuple[int, list[s
             continue
         await db.visitas.update_one({"id": v["id"]}, {"$set": {"lembrete_cliente_em": now_utc()}})
         enviados += 1
-        detalhes.append(f"cliente {pessoa['email']}: visita confirmada")
+        detalhes.append(f"cliente {pessoa['email']}: {t['um']} confirmado(a)")
 
     return enviados, detalhes
 
@@ -351,6 +369,7 @@ async def cron_lembretes_visitas(
 async def _validar_visita(data: dict, principal: Principal, visita_id=None):
     await reference("leads", data.get("lead_id"), principal, "lead:read")
     await reference("imoveis", data.get("imovel_id"))
+    await reference("veiculos", data.get("veiculo_id"))
     await reference("pessoas", data.get("cliente_id"), principal)
     await reference("pessoas", data.get("corretor_id"), principal)
     if data.get("status") != "agendada" or not data.get("corretor_id"): return

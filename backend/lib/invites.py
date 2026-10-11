@@ -27,6 +27,6 @@ async def invite(bank, user: dict, company_name: str) -> str:
     # Existing password/session remain valid until the one-time link is consumed.
     if not email_configurado():
         return url  # sem e-mail configurado: quem chamou mostra o link para enviar por outro meio
-    await send_email(to=user["email"], subject=f"Ative seu acesso — {company_name}",
+    await send_email(to=user["email"], subject=f"Ative seu acesso: {company_name}",
         html=f"<p>Olá {escape(user['nome'])}.</p><p><a href='{url}'>Definir senha de acesso</a></p><p>O link é de uso único e vence em 24 horas.</p>")
     return url

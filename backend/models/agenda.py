@@ -19,6 +19,7 @@ class Visita(BaseModel):
     duracao_min: int = Field(default=60, ge=1, le=1440)
     lead_id: str | None = None
     imovel_id: str | None = None
+    veiculo_id: str | None = None  # loja de veículos: test drive ou visita a um carro
     cliente_id: str | None = None
     corretor_id: str | None = None  # dono do registro (pessoa_id do corretor)
     local: str | None = None
@@ -38,6 +39,7 @@ class VisitaCreate(BaseModel):
     duracao_min: int = Field(default=60, ge=1, le=1440)
     lead_id: str | None = None
     imovel_id: str | None = None
+    veiculo_id: str | None = None
     cliente_id: str | None = None
     corretor_id: str | None = None
     local: str | None = None
@@ -53,6 +55,7 @@ class VisitaUpdate(BaseModel):
     duracao_min: int | None = Field(default=None, ge=1, le=1440)
     lead_id: str | None = None
     imovel_id: str | None = None
+    veiculo_id: str | None = None
     cliente_id: str | None = None
     corretor_id: str | None = None
     local: str | None = None

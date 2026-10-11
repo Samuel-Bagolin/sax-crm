@@ -226,7 +226,7 @@ async def delete_imovel(imovel_id: str, principal: Principal = Depends(require("
     if vinculado:
         raise HTTPException(
             status_code=409,
-            detail="Imóvel possui leads ou lançamentos vinculados — remova-os primeiro",
+            detail="Imóvel possui leads ou lançamentos vinculados. Remova os vínculos primeiro.",
         )
     await db.imoveis.delete_one({"id": imovel_id})
     from routers.fotos_imovel import remover_todas
