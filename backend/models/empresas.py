@@ -4,14 +4,30 @@ import re
 from datetime import datetime
 from typing import List, Literal
 
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import field_validator, BaseModel, Field, EmailStr
 
 from models.common import new_id, now_utc
 
 
 def slugificar(texto: str) -> str:
-    base = re.sub(r"[^a-z0-9]+", "", texto.lower().replace(" ", ""))
+    import unicodedata
+
+    # Troca os acentos (Imóveis -> imoveis) em vez de apagar a letra.
+    sem_acento = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode()
+    base = re.sub(r"[^a-z0-9]+", "", sem_acento.lower())
     return base[:24] or "empresa"
+
+
+def _cnpj_ou_cpf(v: str | None) -> str | None:
+    """Documento da empresa: só dígitos, CNPJ (14) ou CPF (11) com dígitos verificadores válidos."""
+    if v is None or not str(v).strip():
+        return None
+    from models.pessoas import cnpj_valido, cpf_valido
+
+    d = re.sub(r"\D", "", str(v))
+    if (len(d) == 14 and cnpj_valido(d)) or (len(d) == 11 and cpf_valido(d)):
+        return d
+    raise ValueError("CNPJ ou CPF inválido. Confira os números.")
 
 
 class Empresa(BaseModel):
@@ -20,7 +36,7 @@ class Empresa(BaseModel):
     slug: str  # identificador técnico; compõe o nome do banco
     db_name: str
     cnpj: str | None = None
-    segmento: str = "imobiliaria"  # lib/segmentos.py
+    segmento: str = "imobiliaria"
     plano: str = "essencial"
     plano_aplicado: bool = False  # False = empresa anterior aos planos (sem limites)
     limites_personalizados: dict | None = None  # {"usuarios": int|None, "imoveis": int|None, "recursos_extras": [...]}
@@ -49,6 +65,11 @@ class EmpresaCreate(BaseModel):
     enviar_convite: bool = True
     dados_demonstracao: bool = False  # só permitido fora de produção
 
+    @field_validator("cnpj")
+    @classmethod
+    def validar_documento(cls, v: str | None) -> str | None:
+        return _cnpj_ou_cpf(v)
+
 
 class LimitesPersonalizados(BaseModel):
     usuarios: int | None = Field(default=None, ge=1, le=10000)
@@ -60,6 +81,11 @@ class EmpresaUpdate(BaseModel):
     nome: str | None = Field(default=None, min_length=2)
     cnpj: str | None = None
     plano: str | None = None
+
+    @field_validator("cnpj")
+    @classmethod
+    def validar_documento(cls, v: str | None) -> str | None:
+        return _cnpj_ou_cpf(v)
     limites_personalizados: LimitesPersonalizados | None = None
     remover_limites_personalizados: bool | None = None
     ativo: bool | None = None

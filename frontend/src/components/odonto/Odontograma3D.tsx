@@ -279,6 +279,7 @@ export default function Odontograma3D({
 
     const controles = new OrbitControls(camera, render.domElement);
     controles.enablePan = false;
+    controles.enableZoom = false; // a roda do mouse rola a página (QA-20)
     controles.enableDamping = true;
     controles.minDistance = 9;
     controles.maxDistance = 26;

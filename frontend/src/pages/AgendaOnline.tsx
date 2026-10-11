@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Copy, ExternalLink, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { apiDelete, apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
-import { brl } from "@/lib/format";
+import { brl, primeiroNome } from "@/lib/format";
 import { DIAS_SEMANA, useProfissionais, useServicos, type AgendaConfig, type Profissional, type Servico } from "@/lib/atendimentos";
 import { useSegmento } from "@/lib/segmento";
 import { useAuth } from "@/lib/useAuth";
@@ -296,7 +296,7 @@ export function LinkAgenda() {
           <>
             <LinhaLink rotulo="Agenda completa" url={base} copiar={copiar} />
             {(profs.data ?? []).filter((p) => p.slug && p.online).map((p) => (
-              <LinhaLink key={p.id} rotulo={`Só ${p.nome.split(" ")[0]}`} url={`${base}/${p.slug}`} copiar={copiar} />
+              <LinhaLink key={p.id} rotulo={`Só ${primeiroNome(p.nome)}`} url={`${base}/${p.slug}`} copiar={copiar} />
             ))}
             <p className="text-xs text-muted-foreground">Coloque o link na bio do Instagram e no WhatsApp Business. Cada {seg.termos.profissional.toLowerCase()} pode divulgar o próprio.</p>
           </>

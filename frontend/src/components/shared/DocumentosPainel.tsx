@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+import { primeiroNome } from "@/lib/format";
+import { urlApi } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CloudUpload, ExternalLink, FileText, HardDrive, Image as ImageIcon, Link2, Loader2, MessageCircle, Paperclip, Send, Trash2 } from "lucide-react";
@@ -96,7 +98,7 @@ export default function DocumentosPainel({
 
   const abrirEnvio = (d: Documento) => {
     setEmail(clienteEmail ?? "");
-    setMensagem(`Olá${clienteNome ? ` ${clienteNome.split(" ")[0]}` : ""}, segue o documento ${d.nome}.`);
+    setMensagem(`Olá${clienteNome ? ` ${primeiroNome(clienteNome)}` : ""}, segue o documento ${d.nome}.`);
     setEnvio(d);
   };
 
@@ -152,7 +154,7 @@ export default function DocumentosPainel({
               <li key={d.id} className="flex items-center gap-3 px-4 py-2.5">
                 <Icone className="h-5 w-5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
-                  <a href={`/api/documentos/${d.id}/abrir`} target="_blank" rel="noreferrer" className="block truncate text-sm font-medium hover:text-primary hover:underline">
+                  <a href={urlApi(`/api/documentos/${d.id}/abrir`)} target="_blank" rel="noreferrer" className="block truncate text-sm font-medium hover:text-primary hover:underline">
                     {d.nome}
                   </a>
                   <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
@@ -164,7 +166,7 @@ export default function DocumentosPainel({
                       <span>No CRM</span>
                     )}
                     {tamanhoLegivel(d.tamanho) && <span>{tamanhoLegivel(d.tamanho)}</span>}
-                    {d.criado_por_nome && <span>por {d.criado_por_nome.split(" ")[0]}</span>}
+                    {d.criado_por_nome && <span>por {primeiroNome(d.criado_por_nome)}</span>}
                     {d.compartilhado_com.length > 0 && <span>enviado a {d.compartilhado_com.join(", ")}</span>}
                   </p>
                 </div>
@@ -179,7 +181,7 @@ export default function DocumentosPainel({
                       <Send className="h-3.5 w-3.5" />
                     </Button>
                   )}
-                  <a href={`/api/documentos/${d.id}/abrir`} target="_blank" rel="noreferrer" className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted" title="Abrir">
+                  <a href={urlApi(`/api/documentos/${d.id}/abrir`)} target="_blank" rel="noreferrer" className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted" title="Abrir">
                     <ExternalLink className="h-3.5 w-3.5" />
                   </a>
                   {podeRemover && (

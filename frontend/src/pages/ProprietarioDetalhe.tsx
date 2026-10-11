@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Building2, Link2, Mail, MessageCircle, Pencil, Phone, Unlink, User } from "lucide-react";
 import { apiDelete, apiGet, apiPut, detalheErro } from "@/lib/api";
-import { brl, dataBR } from "@/lib/format";
+import { brl, dataBR, primeiroNome } from "@/lib/format";
 import { linkWhatsapp } from "@/lib/crm";
 import { IMOVEL_FINALIDADE, IMOVEL_TIPO } from "@/lib/constants";
 import { useAuth } from "@/lib/useAuth";
@@ -193,7 +193,7 @@ export default function ProprietarioDetalhe() {
 
   const p = data.proprietario;
   const pj = p.tipo_pessoa === "pj";
-  const whats = linkWhatsapp(p.telefone, `Olá ${p.nome.split(" ")[0]}!`);
+  const whats = linkWhatsapp(p.telefone, `Olá ${primeiroNome(p.nome)}!`);
   const atual = imovelEscolhido ? imoveis.find((i) => i.id === imovelEscolhido) : null;
 
   return (
@@ -282,7 +282,7 @@ export default function ProprietarioDetalhe() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Vincular imóvel</DialogTitle>
-            <DialogDescription>Escolha um imóvel já cadastrado. Se ele tiver outro proprietário, o vínculo passa para {p.nome.split(" ")[0]}.</DialogDescription>
+            <DialogDescription>Escolha um imóvel já cadastrado. Se ele tiver outro proprietário, o vínculo passa para {primeiroNome(p.nome)}.</DialogDescription>
           </DialogHeader>
           <Combo
             opcoes={imoveis.filter((i) => i.proprietario_id !== id).map((i) => ({ valor: i.id, rotulo: `${i.codigo} ${i.titulo}`, detalhe: [i.bairro, i.cidade, i.proprietario_id ? "já tem proprietário" : "sem proprietário"].filter(Boolean).join(", ") }))}

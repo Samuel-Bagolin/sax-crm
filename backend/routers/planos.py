@@ -4,7 +4,7 @@ import re
 from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import model_validator, BaseModel, Field, field_validator
 
 from lib.auth import Principal, principal_atual, require
 from lib.db import controle
@@ -98,6 +98,18 @@ class PlanoIn(BaseModel):
             raise ValueError("Funcionalidade inválida")
         return [r for r in RECURSOS if r in v]
 
+    @model_validator(mode="after")
+    def _anual(self):
+        _conferir_anual(self.preco_mensal, self.preco_anual)
+        return self
+
+
+def _conferir_anual(mensal: float | None, anual: float | None) -> None:
+    """O preço anual é o valor do ano inteiro: não pode ser menor que o de um mês."""
+    if anual is not None and mensal and anual < mensal:
+        br = lambda x: f"R$ {x:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+        raise ValueError(f"O preço anual é o valor do ano inteiro. {br(anual)} é menos que um mês ({br(mensal)}).")
+
 
 class AdicionalIn(BaseModel):
     nome: str = Field(min_length=2, max_length=80)
@@ -108,6 +120,11 @@ class AdicionalIn(BaseModel):
     preco_mensal: float = Field(ge=0, le=10_000_000)
     preco_anual: Optional[float] = Dinheiro
     ativo: bool = True
+
+    @model_validator(mode="after")
+    def _anual(self):
+        _conferir_anual(self.preco_mensal, self.preco_anual)
+        return self
 
 
 def _chave(nome: str) -> str:

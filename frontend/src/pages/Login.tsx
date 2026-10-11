@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { primeiroNome } from "@/lib/format";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Link as LinkRR } from "react-router-dom";
@@ -28,7 +29,7 @@ export default function Login() {
     onSuccess: (principal) => {
       beginSession();
       qc.setQueryData(["auth", "me"], principal);
-      toast.success(`Bem-vindo, ${principal.nome.split(" ")[0]}!`);
+      toast.success(`Bem-vindo, ${primeiroNome(principal.nome)}!`);
       navigate("/", { replace: true });
     },
     onError: (erro) => {

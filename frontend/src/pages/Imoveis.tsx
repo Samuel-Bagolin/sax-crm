@@ -267,7 +267,7 @@ export default function Imoveis() {
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           render={
-                            <Button variant="ghost" size="icon-xs" data-testid={`imovel-actions-${i.id}`} />
+                            <Button variant="ghost" size="icon-xs" aria-label={`Ações de ${i.titulo}`} data-testid={`imovel-actions-${i.id}`} />
                           }
                         >
                           <MoreHorizontal className="h-4 w-4" />

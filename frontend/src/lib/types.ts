@@ -513,7 +513,7 @@ export interface ContratoBase {
 
 export type AssinaturaStatus = "rascunho" | "aguardando" | "assinado" | "recusado";
 
-export type ContratoTipo = "venda" | "locacao";
+export type ContratoTipo = "venda" | "locacao" | "consignacao";
 export type ContratoStatus = "ativo" | "encerrado" | "cancelado";
 
 export interface ContratoDetalhe extends ContratoBase {
@@ -747,7 +747,7 @@ export interface ResultadoBusca {
   subtitulo: string | null;
 }
 
-export type PapelSignatario = "comprador" | "vendedor" | "locatario" | "locador" | "fiador" | "testemunha" | "imobiliaria" | "loja" | "corretor" | "outro";
+export type PapelSignatario = "comprador" | "vendedor" | "locatario" | "locador" | "fiador" | "testemunha" | "imobiliaria" | "loja" | "consignante" | "corretor" | "outro";
 
 export interface Signatario {
   id: string;

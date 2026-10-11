@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { Bath, BedDouble, Building2, CalendarCheck, Car, Heart, Loader2, MessageCircle, Ruler, X, XCircle } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
-import { brl } from "@/lib/format";
+import { brl, primeiroNome } from "@/lib/format";
 import { linkWhatsapp } from "@/lib/crm";
 import type { Reacao } from "@/lib/diferenciais";
 import { cn } from "@/lib/utils";
@@ -213,7 +213,7 @@ export default function Vitrine() {
       qc.setQueryData<VitrinePublica>(["vitrine", token], (d) => (d ? { ...d, imoveis: d.imoveis.map((i) => (i.id === v.id ? { ...i, reacao: v.r } : i)) } : d));
       setAviso(
         v.r === "quero_visitar"
-          ? `Pedido enviado. ${data?.corretor_nome?.split(" ")[0] ?? "O corretor"} vai combinar o horário com você.`
+          ? `Pedido enviado. ${primeiroNome(data?.corretor_nome) || "O corretor"} vai combinar o horário com você.`
           : v.r === "gostei"
             ? "Anotado! Isso ajuda a encontrar opções parecidas."
             : "Tudo bem, vamos tirar esse da lista.",
@@ -240,7 +240,7 @@ export default function Vitrine() {
     );
 
   const cor = data.cor_primaria;
-  const whats = linkWhatsapp(data.corretor_telefone, `Olá${data.corretor_nome ? ` ${data.corretor_nome.split(" ")[0]}` : ""}, vi a seleção de imóveis que você me mandou.`);
+  const whats = linkWhatsapp(data.corretor_telefone, `Olá${data.corretor_nome ? ` ${primeiroNome(data.corretor_nome)}` : ""}, vi a seleção de imóveis que você me mandou.`);
   const respondidos = data.imoveis.filter((i) => i.reacao).length;
 
   return (
@@ -287,7 +287,7 @@ export default function Vitrine() {
       {whats && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 p-3 backdrop-blur">
           <a href={whats} target="_blank" rel="noreferrer" className="mx-auto flex h-12 max-w-2xl items-center justify-center gap-2 rounded-xl bg-[#25d366] text-sm font-semibold text-[#073b1e]">
-            <MessageCircle className="h-5 w-5" /> Falar com {data.corretor_nome?.split(" ")[0] ?? "o corretor"}
+            <MessageCircle className="h-5 w-5" /> Falar com {primeiroNome(data.corretor_nome) || "o corretor"}
           </a>
         </div>
       )}

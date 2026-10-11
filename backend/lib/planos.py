@@ -237,6 +237,15 @@ def _preco(item: dict, periodicidade: str) -> float:
     return mensal
 
 
+def adicional_incluso(ad: dict, plano: dict) -> bool:
+    """O plano já entrega o que o adicional vende (recurso incluso ou limite sem teto)."""
+    if ad.get("tipo") == "recurso":
+        return bool(ad.get("recurso")) and ad["recurso"] in (plano.get("recursos") or [])
+    if ad.get("tipo") in ("usuarios", "imoveis", "unidades"):
+        return plano.get(ad["tipo"], 0) is None
+    return False
+
+
 def valores_comerciais(empresa: dict) -> dict | None:
     """Quanto a empresa paga, com base no plano, adicionais, periodicidade e desconto negociado."""
     if not empresa.get("plano_aplicado"):
@@ -253,6 +262,10 @@ def valores_comerciais(empresa: dict) -> dict | None:
         if not ad:
             continue
         qtd = max(1, int(item.get("quantidade") or 1))
+        if adicional_incluso(ad, plano):
+            # Subiu para um plano que já tem o recurso ou o limite livre: o adicional deixa de ser cobrado.
+            linhas.append({"descricao": f"{ad['nome']} (incluso no plano)", "quantidade": qtd, "unitario": 0.0, "total": 0.0})
+            continue
         unit = _preco(ad, periodo)
         linhas.append({"descricao": ad["nome"], "quantidade": qtd, "unitario": unit, "total": round(unit * qtd, 2)})
     subtotal = round(sum(l["total"] for l in linhas), 2)

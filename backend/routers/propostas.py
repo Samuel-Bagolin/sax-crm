@@ -231,7 +231,8 @@ async def pdf(proposta_id: str, principal: Principal = Depends(require("lead:rea
     pedido = (ve or {}).get("preco_venda") if loja else (im or {}).get("valor_aluguel" if finalidade == "locação" else "valor_venda")
     if pedido:
         linhas.append(("Valor anunciado", _brl(pedido)))
-    linhas.append(("Forma de pagamento", ", ".join(FORMA_LABEL.get(f, f) for f in d.get("formas_pagamento", []))))
+    rotulos = {**FORMA_LABEL, "permuta": "Veículo na troca", "parcelado": "Parcelado direto com a loja"} if loja else FORMA_LABEL
+    linhas.append(("Forma de pagamento", ", ".join(rotulos.get(f, f) for f in d.get("formas_pagamento", []))))
     if d.get("sinal"):
         linhas.append(("Sinal / entrada", _brl(d["sinal"])))
     if d.get("valor_financiado"):

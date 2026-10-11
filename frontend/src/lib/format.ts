@@ -10,7 +10,9 @@ export function brl(valor: number | null | undefined): string {
 export function brlCompacto(valor: number | null | undefined): string {
   if (valor == null) return "—";
   if (Math.abs(valor) >= 1000000) return `R$ ${(valor / 1000000).toFixed(1).replace(".", ",")} mi`;
-  if (Math.abs(valor) >= 1000) return `R$ ${Math.round(valor / 1000)} mil`;
+  // Até 100 mil mostra uma casa (R$ 9,5 mil); arredondar para inteiro fazia R$ 9.500 virar "R$ 10 mil".
+  if (Math.abs(valor) >= 100000) return `R$ ${Math.round(valor / 1000)} mil`;
+  if (Math.abs(valor) >= 1000) return `R$ ${(Math.round(valor / 100) / 10).toLocaleString("pt-BR")} mil`;
   return brl(valor);
 }
 
@@ -54,4 +56,30 @@ const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "o
 export function mesLabel(yyyymm: string): string {
   const [y, m] = yyyymm.split("-").map(Number);
   return `${MESES[(m || 1) - 1]}/${String(y).slice(2)}`;
+}
+
+/** Telefone brasileiro para exibir: (41) 99155-0001, (41) 3333-4444. Outros formatos ficam como vieram. */
+export function telefoneBR(valor: string | null | undefined): string {
+  const d = (valor ?? "").replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return valor ?? "";
+}
+
+/** Máscara enquanto digita: (41) 99155-0001. */
+export function mascaraTelefone(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d ? `(${d}` : "";
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+/** Primeiro nome para saudação: pula prefixos como "[DEMO]" e o que não tem letra. Vazio quando não há. */
+export function primeiroNome(nome: string | null | undefined): string {
+  for (const parte of (nome ?? "").trim().split(/\s+/)) {
+    if (/^[[(]/.test(parte) || !/\p{L}/u.test(parte)) continue;
+    return parte;
+  }
+  return "";
 }

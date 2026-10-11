@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -37,6 +38,9 @@ def conferir_senha(senha: str, hash_armazenado: str) -> bool:
         return _pwd.verify(senha, hash_armazenado)
     except Exception:  # hash corrompido nunca deve autenticar
         return False
+
+
+_ID_EMPRESA = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 
 
 def criar_token(usuario_id: str, empresa_id: str | None = None, session_version: int = 0) -> str:
@@ -232,6 +236,13 @@ async def _principal_do_request(request: Request) -> Principal | None:
     empresa_nome = None
     empresa = None
     sysadmin_global = await controle.usuarios.find_one({"id": usuario_id, "papel": "sysadmin"})
+    if not empresa_id and sysadmin_global:
+        # Suporte em outra aba: só o Administrador de Sistema, que já pode entrar em qualquer empresa,
+        # escolhe a empresa por aba (cabeçalho nas chamadas; parâmetro só em GET de imagem e arquivo).
+        # A aba do plano de controle continua sem empresa.
+        pedida = request.headers.get("x-sax-empresa") or (request.query_params.get("_emp") if request.method == "GET" else None)
+        if pedida and _ID_EMPRESA.match(pedida):
+            empresa_id = pedida
     if empresa_id:
         empresa = await controle.empresas.find_one({"id": empresa_id})
         if not empresa or not empresa.get("ativo", True):

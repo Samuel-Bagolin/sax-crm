@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { abrirEmpresaEmNovaAba } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { BarChart3, Building, Download, LogIn, Mail, Plus, ShieldCheck, Upload } from "lucide-react";
@@ -136,15 +137,8 @@ export default function Empresas() {
     onError: (err) => toast.error(detalheErro(err) ?? "Não foi possível excluir."),
   });
 
-  const acessar = useMutation({
-    mutationFn: (e: EmpresaResumo) => apiPost(`/empresas/${e.id}/acessar`),
-    onSuccess: async () => {
-      await qc.invalidateQueries();
-      toast.success("Você entrou na empresa (modo suporte).");
-      window.location.href = "/";
-    },
-    onError: (err) => toast.error(detalheErro(err) ?? "Não foi possível entrar na empresa."),
-  });
+  // Entrar abre a empresa numa aba nova, com acesso completo; esta aba continua no plano de controle.
+  const acessar = { mutate: (e: EmpresaResumo) => abrirEmpresaEmNovaAba(e.id), isPending: false };
 
   const reenviar = useMutation({
     mutationFn: (e: EmpresaResumo) =>
@@ -469,7 +463,7 @@ export default function Empresas() {
         <CardContent className="space-y-1 text-sm text-muted-foreground">
           <p>Cada empresa tem um banco de dados próprio. Nenhuma consulta cruza empresas.</p>
           <p>A empresa vem do token de sessão, nunca de um campo da tela.</p>
-          <p>O acesso de suporte fica registrado e exibe uma faixa de aviso enquanto está ativo.</p>
+          <p>Entrar abre a empresa numa aba nova, com acesso completo. A aba do plano de controle continua aberta, e a de suporte mostra uma faixa de aviso.</p>
           <p>Excluir uma empresa apaga o banco dela, mediante confirmação do identificador.</p>
         </CardContent>
       </Card>
@@ -559,7 +553,9 @@ export default function Empresas() {
                       {p.preco ? <span className="text-xs font-normal text-muted-foreground">/mês</span> : null}
                     </p>
                     <p className="text-[11px] leading-snug text-muted-foreground [overflow-wrap:anywhere]">
-                      {p.usuarios ? `${p.usuarios} usuário${p.usuarios > 1 ? "s" : ""}` : "Usuários ilimitados"}, {p.imoveis ? `${p.imoveis} no estoque` : "estoque sem limite"}
+                      {p.usuarios ? `${p.usuarios} usuário${p.usuarios > 1 ? "s" : ""}` : "Usuários ilimitados"}
+                      {form.segmento === "imobiliaria" ? `, ${p.imoveis ? `${p.imoveis} imóveis` : "imóveis sem limite"}`
+                        : form.segmento === "veiculos" ? `, ${p.imoveis ? `${p.imoveis} veículos no estoque` : "estoque sem limite"}` : ""}
                     </p>
                   </button>
                 ))}

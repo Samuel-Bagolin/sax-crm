@@ -76,9 +76,9 @@ export default function Proprietarios() {
           )}
         </div>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="lista-proprietarios">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0" data-testid="lista-proprietarios">
           {lista.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} className="min-w-0">
               <Link to={`/proprietarios/${p.id}`} className="flex h-full flex-col gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/50 hover:bg-accent/30">
                 <div className="flex items-start gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
@@ -97,7 +97,7 @@ export default function Proprietarios() {
                     <Phone className="h-3.5 w-3.5" /> {p.telefone}
                   </p>
                 )}
-                <div className="mt-auto grid grid-cols-3 gap-2 border-t pt-3 text-center">
+                <div className="mt-auto grid grid-cols-3 gap-2 border-t pt-3 text-center [&>*]:min-w-0">
                   <div>
                     <p className="num text-lg font-bold">{p.qtd_imoveis}</p>
                     <p className="text-[11px] text-muted-foreground">Imóveis</p>

@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from pydantic import field_validator, BaseModel, Field
 
 from lib.agenda_online import agora_local
 from lib.auth import Principal, require
@@ -64,6 +64,16 @@ async def _atende(principal: Principal, paciente_id: str) -> bool:
     return False
 
 
+SUPORTE_SEM_PRONTUARIO = "O acesso de suporte não abre prontuário nem anamnese (dado de saúde, LGPD). Peça ao gestor da clínica."
+
+
+async def _acessa_saude(principal: Principal, paciente_id: str) -> bool:
+    """Prontuário e anamnese: dado sensível de saúde. O Administrador de Sistema em suporte não lê nem grava."""
+    if principal.suporte:
+        return False
+    return await _atende(principal, paciente_id)
+
+
 async def _exigir_atende(principal: Principal, paciente_id: str) -> None:
     if not await _atende(principal, paciente_id):
         raise HTTPException(403, "Só o profissional que atende este paciente ou o gestor faz isso")
@@ -98,6 +108,13 @@ class PacienteIn(BaseModel):
     cidade: str | None = Field(default=None, max_length=120)
     estado: str | None = Field(default=None, max_length=2)
     observacoes: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("data_nascimento")
+    @classmethod
+    def _nascimento(cls, v: str | None) -> str | None:
+        from models.pessoas import _DadosPessoa
+
+        return _DadosPessoa._data(v)
 
 
 @router.post("", status_code=201)
@@ -237,7 +254,7 @@ async def ficha(paciente_id: str, principal: Principal = Depends(require("pacien
     trat.sort(key=lambda t: t.get("created_at") or now_utc(), reverse=True)
     from lib.segmentos import COM_PRONTUARIO
 
-    pode = await _atende(principal, paciente_id)
+    pode = await _acessa_saude(principal, paciente_id)
     # Em clínicas, anamnese, alertas, odontograma e planos de tratamento são dado de saúde: só quem atende.
     clinico_liberado = pode or principal.segmento not in COM_PRONTUARIO
     ficha_doc = (await db.fichas.find_one({"paciente_id": paciente_id}) or {}) if clinico_liberado else {}
@@ -276,8 +293,8 @@ class AnamneseIn(BaseModel):
 @router.put("/{paciente_id}/anamnese")
 async def salvar_anamnese(paciente_id: str, input: AnamneseIn, principal: Principal = Depends(require("prontuario:write"))):
     await _paciente(paciente_id)
-    if not await _atende(principal, paciente_id):
-        raise HTTPException(403, "Só o profissional que atende este paciente ou o gestor altera a anamnese")
+    if not await _acessa_saude(principal, paciente_id):
+        raise HTTPException(403, SUPORTE_SEM_PRONTUARIO if principal.suporte else "Só o profissional que atende este paciente ou o gestor altera a anamnese")
     respostas = {k[:60]: (v[:2000] if isinstance(v, str) else v) for k, v in list(input.respostas.items())[:80]}
     await db.fichas.update_one({"paciente_id": paciente_id}, {"$set": {
         "paciente_id": paciente_id, "anamnese": respostas, "alertas": [a[:80] for a in input.alertas],
@@ -298,8 +315,8 @@ class EvolucaoIn(BaseModel):
 @router.get("/{paciente_id}/prontuario")
 async def prontuario(paciente_id: str, principal: Principal = Depends(require("prontuario:read"))):
     await _paciente(paciente_id)
-    if not await _atende(principal, paciente_id):
-        raise HTTPException(403, "Prontuário restrito ao profissional que atende o paciente e ao gestor")
+    if not await _acessa_saude(principal, paciente_id):
+        raise HTTPException(403, SUPORTE_SEM_PRONTUARIO if principal.suporte else "Prontuário restrito ao profissional que atende o paciente e ao gestor")
     await db.prontuario_acessos.insert_one({"id": new_id(), "paciente_id": paciente_id, "usuario_id": principal.usuario_id,
                                             "usuario_nome": principal.nome, "em": now_utc()})
     docs = await db.prontuario.find({"paciente_id": paciente_id}).to_list(2000)
@@ -312,8 +329,8 @@ async def prontuario(paciente_id: str, principal: Principal = Depends(require("p
 @router.post("/{paciente_id}/prontuario", status_code=201)
 async def nova_evolucao(paciente_id: str, input: EvolucaoIn, principal: Principal = Depends(require("prontuario:write"))):
     await _paciente(paciente_id)
-    if not await _atende(principal, paciente_id):
-        raise HTTPException(403, "Só o profissional que atende este paciente ou o gestor escreve no prontuário")
+    if not await _acessa_saude(principal, paciente_id):
+        raise HTTPException(403, SUPORTE_SEM_PRONTUARIO if principal.suporte else "Só o profissional que atende este paciente ou o gestor escreve no prontuário")
     d = {"id": new_id(), "paciente_id": paciente_id, "tipo": input.tipo, "texto": input.texto.strip(), "agendamento_id": input.agendamento_id,
          "data": input.data or agora_local().date().isoformat(), "autor_id": principal.usuario_id, "autor_nome": principal.nome,
          "adendos": [], "created_at": now_utc()}
@@ -341,8 +358,8 @@ async def corrigir_evolucao(paciente_id: str, evolucao_id: str, input: AdendoIn,
 
 @router.post("/{paciente_id}/prontuario/{evolucao_id}/adendo", status_code=201)
 async def adendo(paciente_id: str, evolucao_id: str, input: AdendoIn, principal: Principal = Depends(require("prontuario:write"))):
-    if not await _atende(principal, paciente_id):
-        raise HTTPException(403, "Prontuário restrito")
+    if not await _acessa_saude(principal, paciente_id):
+        raise HTTPException(403, SUPORTE_SEM_PRONTUARIO if principal.suporte else "Prontuário restrito")
     d = await db.prontuario.find_one({"id": evolucao_id, "paciente_id": paciente_id})
     if not d:
         raise HTTPException(404, "Registro não encontrado")

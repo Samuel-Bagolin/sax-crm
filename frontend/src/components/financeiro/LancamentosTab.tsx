@@ -1,4 +1,5 @@
 import { useSegmento } from "@/lib/segmento";
+import { urlApi } from "@/lib/suporte";
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -291,7 +292,7 @@ export default function LancamentosTab({
                         <Button
                           variant="outline"
                           size="icon-xs"
-                          onClick={() => window.open(`/api/transacoes/${t.id}/recibo`, "_blank")}
+                          onClick={() => window.open(urlApi(`/api/transacoes/${t.id}/recibo`), "_blank")}
                           data-testid={`transacao-recibo-${t.id}`}
                           title="Baixar recibo em PDF"
                         >
@@ -312,7 +313,7 @@ export default function LancamentosTab({
                       {!somenteLeitura && (
                         <DropdownMenu>
                           <DropdownMenuTrigger
-                            render={<Button variant="ghost" size="icon-xs" data-testid={`transacao-menu-${t.id}`} />}
+                            render={<Button variant="ghost" size="icon-xs" aria-label={`Ações de ${t.descricao}`} data-testid={`transacao-menu-${t.id}`} />}
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>

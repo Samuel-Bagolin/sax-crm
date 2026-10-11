@@ -192,6 +192,13 @@ async def create_contrato(input: ContratoCreate, principal: Principal = Depends(
     except PyMongoError:
         raise HTTPException(409, "Não foi possível garantir unicidade dos contratos; concilie os registros antigos antes de criar outro")
     loja = principal.segmento == "veiculos"
+    # O produto do contrato vem do negócio escolhido (imóvel ou veículo), em qualquer segmento.
+    if input.lead_id:
+        do_negocio = await db.leads.find_one({"id": input.lead_id}, {"imovel_id": 1, "veiculo_id": 1}) or {}
+        if loja and not input.veiculo_id and do_negocio.get("veiculo_id"):
+            input.veiculo_id = do_negocio["veiculo_id"]
+        if not loja and not input.imovel_id and do_negocio.get("imovel_id"):
+            input.imovel_id = do_negocio["imovel_id"]
     imovel = veiculo = None
     if loja:
         if not input.veiculo_id:
@@ -201,7 +208,7 @@ async def create_contrato(input: ContratoCreate, principal: Principal = Depends(
         veiculo = await db.veiculos.find_one({"id": input.veiculo_id})
         if not veiculo:
             raise HTTPException(status_code=404, detail="Veículo não encontrado")
-        ativo = await db.contratos.find_one({"veiculo_id": input.veiculo_id, "status": "ativo"}, {"numero": 1, "request_id": 1})
+        ativo = await db.contratos.find_one({"veiculo_id": input.veiculo_id, "status": "ativo", "tipo": "venda"}, {"numero": 1, "request_id": 1})
         if ativo and not (input.request_id and ativo.get("request_id") == input.request_id):
             raise HTTPException(409, f"Este veículo já tem o contrato {ativo.get('numero')} ativo. Abra o contrato existente.")
     else:
@@ -213,7 +220,9 @@ async def create_contrato(input: ContratoCreate, principal: Principal = Depends(
 
     data = input.model_dump(exclude={"request_id"})
     if loja:
-        data.update(imovel_id=None, proprietario_id=None, comissao_pct=0, taxa_admin_pct=0, fim=None, parcelas=1)
+        # Carro consignado: quem vende é o dono (consignante); a loja intermedeia.
+        data.update(imovel_id=None, proprietario_id=veiculo.get("consignante_id") if veiculo.get("consignado") else None,
+                    comissao_pct=0, taxa_admin_pct=0, fim=None, parcelas=1)
     else:
         data.update(veiculo_id=None, forma_pagamento=None)
     for field in ("cliente_id", "proprietario_id", "corretor_id"):
@@ -244,8 +253,10 @@ async def create_contrato(input: ContratoCreate, principal: Principal = Depends(
         data["cliente_id"] = data.get("cliente_id") or lead.get("cliente_id")
         data["corretor_id"] = data.get("corretor_id") or lead.get("corretor_id")
 
-    # Dono vem do principal quando é corretor — nunca do corpo.
+    # Dono vem do principal quando é corretor, nunca do corpo. Gestor escolhe (inclusive a si mesmo).
     if not principal.is_admin:
+        data["corretor_id"] = principal.pessoa_id
+    elif not data.get("corretor_id"):
         data["corretor_id"] = principal.pessoa_id
     if imovel:
         data["proprietario_id"] = data.get("proprietario_id") or imovel.get("proprietario_id")
@@ -297,7 +308,7 @@ async def _concluir(doc: dict, principal: Principal):
     if doc.get("status") != "ativo": raise HTTPException(409, "Contrato não está ativo")
     if "financeiro_status" not in doc:
         raise HTTPException(409, "Contrato anterior à migração: concilie os títulos existentes antes de reprocessar")
-    if doc.get("financeiro_status") != "concluido" and doc.get("veiculo_id"):
+    if doc.get("financeiro_status") != "concluido" and doc.get("veiculo_id") and doc.get("tipo") != "consignacao":
         await _concluir_venda_veiculo(doc, principal)
     elif doc.get("financeiro_status") != "concluido":
         try:
@@ -370,7 +381,11 @@ async def update_contrato(contrato_id: str, input: ContratoUpdate, principal: Pr
     if data.get("status") in {"encerrado", "cancelado"}:
         filter_ = {"contrato_id": contrato_id, "status": "pendente"}
         if data["status"] == "encerrado": filter_["vencimento"] = {"$gt": today_iso()}
-        if doc.get("veiculo_id") and data["status"] == "cancelado":
+        if doc.get("veiculo_id") and data["status"] == "cancelado" and doc.get("tipo") == "consignacao":
+            # Consignação cancelada: o carro deixa de ser consignado (se ainda não foi vendido).
+            await db.veiculos.update_one({"id": doc["veiculo_id"], "status": {"$ne": "vendido"}},
+                                         {"$set": {"consignado": False, "updated_at": now_utc()}})
+        elif doc.get("veiculo_id") and data["status"] == "cancelado":
             from routers.veiculos import desfazer_venda
 
             await desfazer_venda(doc["veiculo_id"], contrato_id)

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { primeiroNome } from "@/lib/format";
+import { urlApi } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -423,7 +425,7 @@ export default function Chat() {
                       )}
                     >
                       {c.ultima_msg_texto
-                        ? `${c.tipo === "canal" && c.ultima_msg_autor ? c.ultima_msg_autor.split(" ")[0] + ": " : ""}${c.ultima_msg_texto}`
+                        ? `${c.tipo === "canal" && c.ultima_msg_autor ? primeiroNome(c.ultima_msg_autor) + ": " : ""}${c.ultima_msg_texto}`
                         : c.todos
                           ? "Canal de toda a equipe"
                           : "Sem mensagens"}
@@ -492,7 +494,7 @@ export default function Chat() {
               {ativa?.todos
                 ? "Canal de toda a equipe"
                 : ativa?.tipo === "canal"
-                  ? ativa.membros.map((m) => m.nome.split(" ")[0]).join(", ")
+                  ? ativa.membros.map((m) => primeiroNome(m.nome)).join(", ")
                   : "Conversa privada"}
             </p>
           </div>
@@ -587,19 +589,19 @@ export default function Chat() {
                           {m.anexo_nome &&
                             (m.anexo_mime?.startsWith("image/") ? (
                               <a
-                                href={`/api/chat/mensagens/${m.id}/anexo`}
+                                href={urlApi(`/api/chat/mensagens/${m.id}/anexo`)}
                                 target="_blank"
                                 rel="noreferrer"
                               >
                                 <img
-                                  src={`/api/chat/mensagens/${m.id}/anexo`}
+                                  src={urlApi(`/api/chat/mensagens/${m.id}/anexo`)}
                                   alt={m.anexo_nome}
                                   className="mb-1 max-h-56 rounded-lg object-cover"
                                 />
                               </a>
                             ) : (
                               <a
-                                href={`/api/chat/mensagens/${m.id}/anexo`}
+                                href={urlApi(`/api/chat/mensagens/${m.id}/anexo`)}
                                 target="_blank"
                                 rel="noreferrer"
                                 className={cn(

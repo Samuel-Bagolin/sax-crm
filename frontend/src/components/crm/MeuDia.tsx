@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Check, Inbox, Plus, Timer, Trophy } from "lucide-react";
 import { apiGet, apiPatch } from "@/lib/api";
-import { brlCompacto } from "@/lib/format";
+import { brlCompacto, primeiroNome } from "@/lib/format";
 import { ATIVIDADE, corDoMembro, dataCurta, isoLocal, useEquipe } from "@/lib/crm";
 import { useAuth } from "@/lib/useAuth";
 import type { Atividade, Entrada, NegocioResumo } from "@/lib/types";
@@ -55,7 +55,7 @@ export default function MeuDia() {
         <header className="flex items-center gap-3 border-b px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold tracking-tight">
-              {saudacao()}, {principal?.nome.split(" ")[0]}
+              {saudacao()}, {primeiroNome(principal?.nome)}
             </h2>
             <p className="text-sm text-muted-foreground">
               {deHoje.length} atividade(s) para hoje

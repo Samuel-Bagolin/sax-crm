@@ -157,3 +157,65 @@ def test_contrato_de_veiculo_vende_uma_vez_e_assina(cartao_demo):
     assert c.delete(f"/contratos/{ct['id']}").status_code == 204
     assert c.get(f"/veiculos/{v['id']}").json()["status"] == "disponivel"
     assert not [t for t in c.get("/transacoes").json() if t.get("veiculo_id") == v["id"] and t["status"] != "cancelado"]
+
+
+def test_consignacao_e_contrato_pelo_negocio(cartao_demo):
+    c, _ = _cadastrar("veiculos", cartao_demo)
+    # Gestor aparece na equipe com Pessoa: pode ser responsável por negócio e contrato.
+    me = c.get("/auth/me").json()
+    gestor = next(m for m in c.get("/equipe").json() if m["usuario_id"] == me["usuario_id"])
+    assert gestor["pessoa_id"], "gestor sem pessoa da equipe"
+    dono = c.post("/pessoas", json={"nome": "Marcos Dono", "papeis": ["cliente"], "cpf_cnpj": "52998224725"}).json()
+    comprador = c.post("/pessoas", json={"nome": "Paula Compradora", "papeis": ["cliente"]}).json()
+    base = {"marca": "Toyota", "modelo": "Corolla", "ano_fabricacao": 2021, "ano_modelo": 2022, "preco_venda": 120000}
+    # Consignado exige dono e repasse.
+    assert c.post("/veiculos", json={**base, "consignado": True}).status_code == 422
+    v = c.post("/veiculos", json={**base, "consignado": True, "consignante_id": dono["id"], "repasse_valor": 100000,
+                                   "consignacao_comissao_pct": 8, "consignacao_fim": "2027-01-31"}).json()
+    ficha = c.get(f"/veiculos/{v['id']}").json()
+    consig = [x for x in ficha["contratos"] if x["tipo"] == "consignacao"]
+    assert len(consig) == 1 and consig[0]["status"] == "ativo" and ficha["consignante"]["nome"] == "Marcos Dono"
+    # Editar o repasse atualiza o mesmo contrato (não cria outro).
+    c.put(f"/veiculos/{v['id']}", json={**base, "consignado": True, "consignante_id": dono["id"], "repasse_valor": 98000})
+    ct_consig = c.get(f"/contratos/{consig[0]['id']}").json()
+    assert ct_consig["valor"] == 98000 and len([x for x in c.get(f"/veiculos/{v['id']}").json()["contratos"] if x["tipo"] == "consignacao"]) == 1
+    # Negócio com o veículo, gestor como responsável. O contrato só informa o negócio: o veículo vem dele.
+    neg = c.post("/leads", json={"nome": "Paula, Corolla", "cliente_id": comprador["id"], "veiculo_id": v["id"], "valor_estimado": 115000,
+                                 "corretor_id": gestor["pessoa_id"]})
+    assert neg.status_code == 201, neg.text
+    ct = c.post("/contratos", json={"tipo": "venda", "lead_id": neg.json()["id"], "cliente_id": comprador["id"], "valor": 115000,
+                                    "inicio": date.today().isoformat(), "corretor_id": gestor["pessoa_id"]})
+    assert ct.status_code == 201, ct.text
+    ct = ct.json()
+    assert ct["veiculo_id"] == v["id"] and ct["proprietario_nome"] == "Marcos Dono" and ct["corretor_nome"]
+    trans = [t for t in c.get("/transacoes").json() if t.get("veiculo_id") == v["id"] and t["status"] != "cancelado"]
+    assert {(t["tipo"], t["valor"]) for t in trans} == {("receber", 115000), ("pagar", 98000)}
+    assert c.get(f"/contratos/{consig[0]['id']}").json()["status"] == "encerrado"
+    modelos = {m["nome"]: m for m in c.get("/modelos-contrato").json()}
+    assert {"Compra e venda de veículo consignado", "Consignação de veículo"} <= set(modelos)
+    doc = c.post(f"/contratos/{ct['id']}/documento/gerar", json={"modelo_id": modelos["Compra e venda de veículo consignado"]["id"]}).json()
+    assert "Marcos Dono" in doc["documento"]["texto"] and "Paula Compradora" in doc["documento"]["texto"]
+    papeis = {s["papel"] for s in c.post(f"/contratos/{ct['id']}/signatarios/partes").json()["signatarios"]}
+    assert {"comprador", "vendedor"} <= papeis
+    # Venda cancelada antes de receber: carro volta, repasse sai e a consignação reabre.
+    assert c.delete(f"/contratos/{ct['id']}").status_code == 204
+    assert c.get(f"/veiculos/{v['id']}").json()["status"] == "disponivel"
+    assert not [t for t in c.get("/transacoes").json() if t.get("veiculo_id") == v["id"] and t["status"] != "cancelado"]
+    assert c.get(f"/contratos/{consig[0]['id']}").json()["status"] == "ativo"
+
+
+def test_suporte_em_aba_separada(cartao_demo, sysadmin):
+    c, _ = _cadastrar("odontologia", cartao_demo)
+    empresa_id = c.get("/auth/me").json()["empresa_id"]
+    assert sysadmin.get("/auth/me").json()["empresa_id"] is None
+    na_aba = sysadmin.get("/auth/me", headers={"X-Sax-Empresa": empresa_id}).json()
+    assert na_aba["empresa_id"] == empresa_id and na_aba["suporte"] is True
+    assert sysadmin.get("/atendimentos/servicos", headers={"X-Sax-Empresa": empresa_id}).status_code == 200
+    # A aba do plano de controle continua sem empresa.
+    assert sysadmin.get("/auth/me").json()["empresa_id"] is None
+    # Usuário de empresa não troca de empresa pelo cabeçalho.
+    outra, _ = _cadastrar("barbearia", cartao_demo)
+    outra_id = outra.get("/auth/me").json()["empresa_id"]
+    assert c.get("/auth/me", headers={"X-Sax-Empresa": outra_id}).json()["empresa_id"] == empresa_id
+    # Parâmetro na URL só vale em GET (imagens e arquivos).
+    assert sysadmin.get("/auth/me", params={"_emp": empresa_id}).json()["empresa_id"] == empresa_id

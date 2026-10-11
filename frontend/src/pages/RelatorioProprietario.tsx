@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { Building2, CalendarCheck, CalendarClock, Globe, Heart, Loader2, MessageCircle, Send, Users, XCircle } from "lucide-react";
 import { apiGet } from "@/lib/api";
-import { brl, dataBR } from "@/lib/format";
+import { brl, dataBR, primeiroNome } from "@/lib/format";
 import { linkWhatsapp } from "@/lib/crm";
 
 interface Relatorio {
@@ -69,7 +69,7 @@ export default function RelatorioProprietario() {
     );
 
   const cor = data.cor_primaria;
-  const whats = linkWhatsapp(data.corretor_telefone, `Olá${data.corretor_nome ? ` ${data.corretor_nome.split(" ")[0]}` : ""}, vi o relatório do imóvel ${data.codigo}.`);
+  const whats = linkWhatsapp(data.corretor_telefone, `Olá${data.corretor_nome ? ` ${primeiroNome(data.corretor_nome)}` : ""}, vi o relatório do imóvel ${data.codigo}.`);
   const pl = (n: number, um: string, varios: string) => (n === 1 ? um : varios);
   const indicadores = [
     { icone: CalendarCheck, valor: data.visitas_realizadas, rotulo: pl(data.visitas_realizadas, "visita realizada", "visitas realizadas") },
@@ -148,7 +148,7 @@ export default function RelatorioProprietario() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold tabular-nums">
                       {brl(p.valor)}
-                      {p.valor === maior && data.propostas.length > 1 && <span className="ml-2 rounded bg-emerald-50 px-1.5 text-[11px] font-semibold text-emerald-700">maior</span>}
+                      {p.valor === maior && data.propostas.length > 1 && <>{" "}<span className="ml-2 rounded bg-emerald-50 px-1.5 text-[11px] font-semibold text-emerald-700">maior</span></>}
                     </p>
                     <p className="text-xs text-slate-500">
                       {dataBR(p.data)} · {p.autor}
@@ -190,7 +190,7 @@ export default function RelatorioProprietario() {
       {whats && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 p-3 backdrop-blur">
           <a href={whats} target="_blank" rel="noreferrer" className="mx-auto flex h-12 max-w-2xl items-center justify-center gap-2 rounded-xl bg-[#25d366] text-sm font-semibold text-[#073b1e]">
-            <MessageCircle className="h-5 w-5" /> Falar com {data.corretor_nome?.split(" ")[0] ?? "o corretor"}
+            <MessageCircle className="h-5 w-5" /> Falar com {primeiroNome(data.corretor_nome) || "o corretor"}
           </a>
         </div>
       )}

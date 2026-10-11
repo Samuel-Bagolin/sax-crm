@@ -93,6 +93,17 @@ class _DadosPessoa(BaseModel):
     def _data(cls, v: str | None) -> str | None:
         if v and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
             raise ValueError("Data de nascimento no formato AAAA-MM-DD")
+        if v:
+            from datetime import date
+
+            try:
+                nasc = date.fromisoformat(v)
+            except ValueError:
+                raise ValueError("Data de nascimento inválida")
+            if nasc > date.today():
+                raise ValueError("A data de nascimento não pode ser no futuro")
+            if nasc.year < 1900:
+                raise ValueError("Confira o ano de nascimento")
         return v or None
 
 

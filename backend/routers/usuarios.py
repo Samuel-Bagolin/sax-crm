@@ -79,8 +79,8 @@ async def create_usuario(input: UsuarioCreate, principal: Principal = Depends(re
         raise HTTPException(409, "Este e-mail já é usado por outra empresa")
 
     pessoa_id: str | None = None
-    if input.papel == "corretor":
-        # Todo corretor precisa de uma Pessoa correspondente: é ela que carrega a carteira.
+    if input.papel in ("corretor", "admin"):
+        # Gestor e corretor precisam de uma Pessoa da equipe: é ela que aparece como responsável.
         pessoa = Pessoa(nome=input.nome.strip(), papeis=["corretor"], email=email, telefone=input.telefone)
         await db.pessoas.insert_one(pessoa.model_dump())
         pessoa_id = pessoa.id
@@ -147,7 +147,7 @@ async def update_usuario(
     if "telefone" in data and doc.get("pessoa_id"):
         await db.pessoas.update_one({"id": doc["pessoa_id"]}, {"$set": {"telefone": data["telefone"]}})
 
-    if input.papel == "corretor" and not doc.get("pessoa_id"):
+    if (input.papel or doc.get("papel")) in ("corretor", "admin") and not doc.get("pessoa_id"):
         pessoa = Pessoa(nome=data.get("nome", doc["nome"]), papeis=["corretor"], email=doc["email"])
         await db.pessoas.insert_one(pessoa.model_dump())
         data["pessoa_id"] = pessoa.id

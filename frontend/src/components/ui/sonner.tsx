@@ -22,8 +22,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme}
-      // bottom-right: top positions sit on the header nav and swallow clicks; bottom-left is the preview bug button
-      position="bottom-right"
+      // Topo, abaixo do cabeçalho: no canto de baixo o aviso cobria o botão principal dos diálogos
+      // (Salvar, Cadastrar) e o clique caía nele. Some sozinho em 4 s e tem botão de fechar.
+      position="top-center"
+      offset={72}
+      mobileOffset={64}
+      duration={4000}
+      visibleToasts={3}
+      closeButton
       className="toaster group"
       icons={{
         success: (

@@ -89,3 +89,14 @@ def operation_lock(collection_name):
                 await collection.update_one({"id": rid, "operation_token": token}, {"$unset": {"operation_until": "", "operation_token": ""}})
         return wrapped
     return decorate
+
+
+def primeiro_nome(nome: str | None) -> str | None:
+    """Primeiro nome para saudação, pulando prefixos como "[DEMO]" e o que não tem letra."""
+    import re
+
+    for parte in (nome or "").split():
+        if parte[:1] in "[(" or not re.search(r"[^\W\d_]", parte):
+            continue
+        return parte
+    return None

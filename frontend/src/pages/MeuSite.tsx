@@ -505,18 +505,21 @@ function ImoveisDoSite({ lista, carregando, pode }: { lista: ImovelNoSite[]; car
     },
   });
 
+  // "No site" conta só o que aparece de fato: vendido ou alugado sai do site mesmo marcado (igual ao card do topo).
+  const noFiltro = (i: { site_status: SiteStatus; status: string }, f: SiteStatus) =>
+    i.site_status === f && (f !== "ativo" || !["vendido", "alugado"].includes(i.status));
   const filtrada = useMemo(() => {
     const t = busca.trim().toLowerCase();
     return lista.filter(
       (i) =>
-        (filtro === "todos" || i.site_status === filtro) &&
+        (filtro === "todos" || noFiltro(i, filtro)) &&
         (!t || `${i.codigo} ${i.titulo} ${i.bairro ?? ""} ${i.cidade}`.toLowerCase().includes(t)),
     );
   }, [lista, busca, filtro]);
 
   if (carregando) return <div className="h-40 animate-pulse rounded-xl bg-muted" />;
   const todosSel = filtrada.length > 0 && filtrada.every((i) => sel.has(i.id));
-  const contagem = (s: SiteStatus) => lista.filter((i) => i.site_status === s).length;
+  const contagem = (s: SiteStatus) => lista.filter((i) => noFiltro(i, s)).length;
 
   return (
     <div className="grid gap-3">

@@ -27,7 +27,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
-import { brl, dataBR, dataHoraBR } from "@/lib/format";
+import { brl, dataBR, dataHoraBR, primeiroNome } from "@/lib/format";
 import { ATIVIDADE, dataCurta, diasDesde, isoLocal, linkWhatsapp, useEquipe } from "@/lib/crm";
 import { useAuth } from "@/lib/useAuth";
 import type { Atividade, EventoHistorico, ImovelDetalhe, Lead, NegocioDetalhe as Detalhe, Pessoa, Visita } from "@/lib/types";
@@ -201,7 +201,7 @@ export default function NegocioDetalhe() {
   const feitas = atividades.filter((a) => a.concluida);
   const fixadas = historico.filter((h) => h.fixado);
   const hoje = isoLocal(new Date());
-  const whats = linkWhatsapp(cliente?.telefone, `Olá ${cliente?.nome?.split(" ")[0] ?? ""}, tudo bem?`);
+  const whats = linkWhatsapp(cliente?.telefone, `Olá ${primeiroNome(cliente?.nome) || ""}, tudo bem?`);
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-4">
@@ -346,7 +346,7 @@ export default function NegocioDetalhe() {
                       variant="outline"
                       size="sm"
                       className="h-8 flex-1"
-                      onClick={() => setAtividade({ a: null, padrao: { tipo: "ligacao", negocio_id: id, corretor_id: n.corretor_id, data: hoje, assunto: `Ligar para ${cliente.nome.split(" ")[0]}` } })}
+                      onClick={() => setAtividade({ a: null, padrao: { tipo: "ligacao", negocio_id: id, corretor_id: n.corretor_id, data: hoje, assunto: `Ligar para ${primeiroNome(cliente.nome)}` } })}
                     >
                       <Phone className="h-3.5 w-3.5" /> Registrar ligação
                     </Button>

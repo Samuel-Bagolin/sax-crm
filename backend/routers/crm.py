@@ -502,9 +502,13 @@ async def equipe(principal: Principal = Depends(require("equipe:read"))):
     ini_sem, fim_sem = _semana(hoje)
     inicio_mes = now_utc().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     saida = []
+    from lib.tenant import garantir_pessoa_da_equipe
+
     for u in usuarios:
         if u.get("papel") == "sysadmin":
             continue
+        if not u.get("pessoa_id") and u.get("ativo", True):
+            await garantir_pessoa_da_equipe(db, u)  # gestores antigos sem Pessoa passam a aparecer como responsáveis
         pid = u.get("pessoa_id")
         pessoa = await db.pessoas.find_one({"id": pid}) if pid else None
         m = MembroEquipe(

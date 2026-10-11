@@ -9,13 +9,13 @@ from pydantic import BaseModel, Field
 from models.common import new_id, now_utc
 from models.financeiro import TransacaoFinanceira
 
-TIPOS_CONTRATO = ["venda", "locacao"]
+TIPOS_CONTRATO = ["venda", "locacao", "consignacao"]
 
 
 class Contrato(BaseModel):
     id: str = Field(default_factory=new_id)
     numero: str  # legível: CT-2026-0001
-    tipo: Literal["venda", "locacao"]
+    tipo: Literal["venda", "locacao", "consignacao"]  # consignação: loja de veículos, criada pela ficha do carro
     lead_id: str | None = None
     imovel_id: str | None = None  # imobiliária
     veiculo_id: str | None = None  # loja de veículos

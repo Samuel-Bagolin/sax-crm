@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { primeiroNome } from "@/lib/format";
+import { urlApi } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -61,7 +63,7 @@ export default function AssinaturaPanel({ contratoId, onClose }: { contratoId: s
   const loja = useSegmento().veiculos;
   // Papéis de quem assina: na loja não há locador, fiador, imobiliária nem corretor.
   const papeis = (Object.entries(PAPEL_SIGNATARIO) as [PapelSignatario, string][]).filter(([k]) =>
-    loja ? ["comprador", "vendedor", "loja", "testemunha", "outro"].includes(k) : k !== "loja");
+    loja ? ["comprador", "vendedor", "consignante", "loja", "testemunha", "outro"].includes(k) : k !== "loja" && k !== "consignante");
   const [editando, setEditando] = useState(false);
   const [titulo, setTitulo] = useState("");
   const [texto, setTexto] = useState("");
@@ -172,14 +174,14 @@ export default function AssinaturaPanel({ contratoId, onClose }: { contratoId: s
     const url = linkAssinatura(s.token);
     try {
       await navigator.clipboard.writeText(url);
-      toast.success(`Link de ${s.nome.split(" ")[0]} copiado`);
+      toast.success(`Link de ${primeiroNome(s.nome)} copiado`);
     } catch {
       window.prompt("Copie o link:", url);
     }
     marcar.mutate({ id: s.id, canal: "link" });
   };
   const whatsapp = (s: Signatario) => {
-    const msg = `Olá ${s.nome.split(" ")[0]}, tudo bem? Segue o link para ler e assinar o contrato ${painel?.numero}${principal?.empresa_nome ? ` da ${principal.empresa_nome}` : ""}: ${linkAssinatura(s.token)}`;
+    const msg = `Olá ${primeiroNome(s.nome)}, tudo bem? Segue o link para ler e assinar o contrato ${painel?.numero}${principal?.empresa_nome ? ` da ${principal.empresa_nome}` : ""}: ${linkAssinatura(s.token)}`;
     const url = linkWhatsapp(s.telefone, msg) ?? `https://wa.me/?text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank", "noopener");
     marcar.mutate({ id: s.id, canal: "whatsapp" });
@@ -205,7 +207,7 @@ export default function AssinaturaPanel({ contratoId, onClose }: { contratoId: s
             </Button>
           )}
           {temDoc && (
-            <Button variant="outline" size="sm" onClick={() => window.open(`/api/contratos/${contratoId}/documento.pdf`, "_blank")} data-testid="assinatura-pdf">
+            <Button variant="outline" size="sm" onClick={() => window.open(urlApi(`/api/contratos/${contratoId}/documento.pdf`), "_blank")} data-testid="assinatura-pdf">
               <Download className="h-3.5 w-3.5" /> PDF
             </Button>
           )}

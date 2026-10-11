@@ -79,7 +79,7 @@ export default function PlanoContasTab({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Estrutura hierárquica dinâmica — contas sintéticas agrupam, contas analíticas recebem lançamentos.
+          Estrutura hierárquica: contas sintéticas agrupam, contas analíticas recebem lançamentos.
         </p>
         <Button onClick={() => setModal({ aberto: true, conta: null, pai: null })} data-testid="btn-new-plano-conta">
           <Plus className="h-4 w-4" /> Nova Conta
@@ -90,7 +90,7 @@ export default function PlanoContasTab({
         {carregando && <p className="text-sm text-muted-foreground">Carregando plano de contas…</p>}
         {!carregando && linhas.length === 0 && (
           <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            Nenhuma conta cadastrada — crie a primeira conta raiz.
+            Nenhuma conta cadastrada. Crie a primeira conta raiz.
           </p>
         )}
         {linhas.map(({ conta, nivel, filhos }) => (

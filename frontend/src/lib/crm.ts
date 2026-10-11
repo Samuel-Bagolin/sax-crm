@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { urlApi } from "@/lib/suporte";
 import {
   Briefcase,
   CalendarCheck,
@@ -38,6 +39,7 @@ export const PAPEL_SIGNATARIO: Record<PapelSignatario, string> = {
   testemunha: "Testemunha",
   imobiliaria: "Imobiliária",
   loja: "Loja",
+  consignante: "Consignante",
   corretor: "Corretor(a)",
   outro: "Outro",
 };
@@ -54,7 +56,7 @@ export function corDoMembro(m: { cor?: string | null; usuario_id?: string; pesso
 }
 
 export function fotoUrl(usuarioId: string | null | undefined, versao = 0): string | null {
-  return usuarioId ? `/api/usuarios/${usuarioId}/foto?v=${versao}` : null;
+  return usuarioId ? urlApi(`/api/usuarios/${usuarioId}/foto?v=${versao}`) : null;
 }
 
 export function useFunis() {
@@ -70,13 +72,10 @@ export function useEquipe() {
 }
 
 export function iniciais(nome: string | null | undefined): string {
-  return (nome ?? "?")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0])
-    .join("")
-    .toUpperCase();
+  // Só letras: "[DEMO] Sorriso Pleno" vira "SP", não "[".
+  const partes = (nome ?? "").trim().split(/\s+/).filter((p) => !/^[[(]/.test(p) && /\p{L}/u.test(p));
+  const letra = (p?: string) => (p?.match(/\p{L}/u)?.[0] ?? "").toUpperCase();
+  return (letra(partes[0]) + (partes.length > 1 ? letra(partes[partes.length - 1]) : "")) || "?";
 }
 
 export function diasDesde(iso: string | null | undefined): number {

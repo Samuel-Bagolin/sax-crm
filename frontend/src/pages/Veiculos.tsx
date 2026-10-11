@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Car, FileText, ImagePlus, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Car, FileText, Handshake, ImagePlus, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { apiGet, apiPost, apiPut, apiDelete, detalheErro } from "@/lib/api";
 import { brl, brlCompacto } from "@/lib/format";
 import { useAuth } from "@/lib/useAuth";
@@ -58,6 +59,13 @@ interface Veiculo {
   forma_pagamento?: string | null;
   vendido_em?: string;
   fotos?: { id: string; url: string }[];
+  consignado?: boolean;
+  consignante_id?: string | null;
+  repasse_valor?: number | null;
+  consignacao_comissao_pct?: number | null;
+  consignacao_fim?: string | null;
+  consignante?: { nome: string; telefone?: string | null; cpf_cnpj?: string | null } | null;
+  contratos?: { id: string; numero: string; tipo: string; status: string; assinatura_status?: string; valor: number }[];
 }
 interface Resumo {
   em_estoque: number;
@@ -123,6 +131,7 @@ export default function Veiculos() {
                     <div className="relative aspect-[16/10] bg-muted">
                       {v.foto_url ? <img src={v.foto_url} alt="" className="h-full w-full object-cover" loading="lazy" /> : <Car className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground" />}
                       <span className={cn("absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-semibold", STATUS[v.status].classe)}>{STATUS[v.status].rotulo}</span>
+                      {v.consignado && <span className="absolute right-2 top-2 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-900 dark:bg-violet-950 dark:text-violet-200">Consignado</span>}
                       {v.alerta_giro && <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white"><AlertTriangle className="h-3 w-3" /> {v.dias_estoque} dias</span>}
                     </div>
                     <div className="grid gap-1 p-3">
@@ -167,19 +176,23 @@ function Kpi({ rotulo, valor, detalhe, alerta }: { rotulo: string; valor: string
   );
 }
 
-const VAZIO = { marca: "", modelo: "", versao: "", ano_fabricacao: String(new Date().getFullYear() - 3), ano_modelo: String(new Date().getFullYear() - 3), km: "", cor: "", cambio: "manual", combustivel: "flex", categoria: "hatch", portas: "4", placa: "", opcionais: [] as string[], descricao: "", preco_venda: "", preco_fipe: "", custo_aquisicao: "", despesas: [] as { descricao: string; valor: string }[], status: "disponivel" as StatusV, site_status: "inativo" as SiteStatus, site_destaque: false, aceita_troca: true, unico_dono: false, ipva_pago: false, garantia: "" };
+const VAZIO = { marca: "", modelo: "", versao: "", ano_fabricacao: String(new Date().getFullYear() - 3), ano_modelo: String(new Date().getFullYear() - 3), km: "", cor: "", cambio: "manual", combustivel: "flex", categoria: "hatch", portas: "4", placa: "", opcionais: [] as string[], descricao: "", preco_venda: "", preco_fipe: "", custo_aquisicao: "", despesas: [] as { descricao: string; valor: string }[], status: "disponivel" as StatusV, site_status: "inativo" as SiteStatus, site_destaque: false, aceita_troca: true, unico_dono: false, ipva_pago: false, garantia: "",
+  consignado: false, consignante_id: "", repasse_valor: "", consignacao_comissao_pct: "", consignacao_fim: "" };
 
 function VeiculoDialog({ veiculo, onClose, onSalvo }: { veiculo: Veiculo | "novo" | null; onClose: () => void; onSalvo: () => void }) {
   const { isAdmin, podeSite } = useAuth();
   const [f, setF] = useState(VAZIO);
   const id = veiculo && veiculo !== "novo" ? veiculo.id : null;
   const det = useQuery({ queryKey: ["veiculo", id], queryFn: () => apiGet<Veiculo>(`/veiculos/${id}`), enabled: !!id });
+  const pessoas = useQuery({ queryKey: ["pessoas"], queryFn: () => apiGet<Pessoa[]>("/pessoas"), enabled: !!veiculo && f.consignado });
   const arquivo = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (veiculo === "novo") setF(VAZIO);
     else if (veiculo) {
       const v = veiculo;
-      setF({ marca: v.marca, modelo: v.modelo, versao: v.versao ?? "", ano_fabricacao: String(v.ano_fabricacao), ano_modelo: String(v.ano_modelo), km: String(v.km), cor: v.cor ?? "", cambio: v.cambio, combustivel: v.combustivel, categoria: v.categoria, portas: String(v.portas ?? ""), placa: v.placa ?? "", opcionais: v.opcionais, descricao: v.descricao ?? "", preco_venda: v.preco_venda?.toString() ?? "", preco_fipe: v.preco_fipe?.toString() ?? "", custo_aquisicao: v.custo_aquisicao?.toString() ?? "", despesas: (v.despesas ?? []).map((d) => ({ descricao: d.descricao, valor: String(d.valor) })), status: v.status, site_status: v.site_status, site_destaque: v.site_destaque, aceita_troca: v.aceita_troca, unico_dono: v.unico_dono, ipva_pago: v.ipva_pago, garantia: v.garantia ?? "" });
+      setF({ marca: v.marca, modelo: v.modelo, versao: v.versao ?? "", ano_fabricacao: String(v.ano_fabricacao), ano_modelo: String(v.ano_modelo), km: String(v.km), cor: v.cor ?? "", cambio: v.cambio, combustivel: v.combustivel, categoria: v.categoria, portas: String(v.portas ?? ""), placa: v.placa ?? "", opcionais: v.opcionais, descricao: v.descricao ?? "", preco_venda: v.preco_venda?.toString() ?? "", preco_fipe: v.preco_fipe?.toString() ?? "", custo_aquisicao: v.custo_aquisicao?.toString() ?? "", despesas: (v.despesas ?? []).map((d) => ({ descricao: d.descricao, valor: String(d.valor) })), status: v.status, site_status: v.site_status, site_destaque: v.site_destaque, aceita_troca: v.aceita_troca, unico_dono: v.unico_dono, ipva_pago: v.ipva_pago, garantia: v.garantia ?? "",
+        consignado: !!v.consignado, consignante_id: v.consignante_id ?? "", repasse_valor: v.repasse_valor?.toString() ?? "",
+        consignacao_comissao_pct: v.consignacao_comissao_pct?.toString() ?? "", consignacao_fim: v.consignacao_fim ?? "" });
     }
   }, [veiculo]);
   const n = (s: string) => (s ? Number(s.replace(/\./g, "").replace(",", ".")) : null);
@@ -188,11 +201,18 @@ function VeiculoDialog({ veiculo, onClose, onSalvo }: { veiculo: Veiculo | "novo
       const corpo = { ...f, versao: f.versao || null, cor: f.cor || null, placa: f.placa || null, descricao: f.descricao || null, garantia: f.garantia || null,
         ano_fabricacao: Number(f.ano_fabricacao), ano_modelo: Number(f.ano_modelo), km: Number(f.km.replace(/\D/g, "")) || 0, portas: f.portas ? Number(f.portas) : null,
         preco_venda: n(f.preco_venda), preco_fipe: n(f.preco_fipe), custo_aquisicao: n(f.custo_aquisicao),
-        despesas: f.despesas.filter((d) => d.descricao.trim().length > 1).map((d) => ({ descricao: d.descricao, valor: n(d.valor) ?? 0 })) };
+        despesas: f.despesas.filter((d) => d.descricao.trim().length > 1).map((d) => ({ descricao: d.descricao, valor: n(d.valor) ?? 0 })),
+        consignante_id: f.consignado ? f.consignante_id || null : null, repasse_valor: f.consignado ? n(f.repasse_valor) : null,
+        consignacao_comissao_pct: f.consignado ? n(f.consignacao_comissao_pct) : null, consignacao_fim: f.consignado ? f.consignacao_fim || null : null };
+      for (const [rotulo, v] of [["Preço de venda", corpo.preco_venda], ["FIPE", corpo.preco_fipe], ["Custo de aquisição", corpo.custo_aquisicao], ["Repasse ao dono", corpo.repasse_valor]] as const) {
+        if (v != null && (Number.isNaN(v) || v < 0)) throw new Error(`${rotulo}: informe um valor igual ou maior que zero.`);
+      }
+      if (f.consignado && !corpo.consignante_id) throw new Error("Escolha o dono do veículo consignado.");
+      if (f.consignado && !corpo.repasse_valor) throw new Error("Informe quanto o dono recebe na venda (repasse).");
       return id ? apiPut(`/veiculos/${id}`, corpo) : apiPost("/veiculos", corpo);
     },
-    onSuccess: () => { onSalvo(); toast.success("Veículo salvo"); onClose(); },
-    onError: (e) => toast.error(detalheErro(e) ?? "Confira os dados"),
+    onSuccess: () => { onSalvo(); toast.success(f.consignado ? "Veículo salvo. O contrato de consignação está em Contratos." : "Veículo salvo"); onClose(); },
+    onError: (e) => toast.error(detalheErro(e) ?? (e instanceof Error ? e.message : "Confira os dados")),
   });
   const fotos = useMutation({
     mutationFn: async (lista: FileList) => {
@@ -260,6 +280,39 @@ function VeiculoDialog({ veiculo, onClose, onSalvo }: { veiculo: Veiculo | "novo
           {([["aceita_troca", "Aceita troca"], ["unico_dono", "Único dono"], ["ipva_pago", "IPVA pago"]] as const).map(([k, r]) => (
             <label key={k} className="flex items-center gap-2"><input type="checkbox" checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} className="accent-[var(--primary)]" /> {r}</label>
           ))}
+        </div>
+        <div className="grid gap-3 rounded-lg border p-3" data-testid="consignacao">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" checked={f.consignado} onChange={(e) => setF({ ...f, consignado: e.target.checked })} className="accent-[var(--primary)]" data-testid="v-consignado" />
+            <Handshake className="h-4 w-4 text-primary" /> Veículo em consignação (o carro é de um cliente e a loja vende por ele)
+          </label>
+          {f.consignado && (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5 sm:col-span-2"><Label>Dono do veículo</Label>
+                  <Combo opcoes={(pessoas.data ?? []).filter((p) => !p.papeis.includes("corretor")).map((p) => ({ valor: p.id, rotulo: p.nome, detalhe: p.cpf_cnpj || p.telefone }))}
+                    valor={f.consignante_id} onChange={(v) => setF({ ...f, consignante_id: v ?? "" })} placeholder="Buscar o dono no cadastro" testid="v-consignante" />
+                </div>
+                {txt("repasse_valor", "Repasse ao dono na venda (R$)", { inputMode: "decimal" })}
+                {txt("consignacao_comissao_pct", "Comissão da loja (%)", { inputMode: "decimal", placeholder: "Opcional" })}
+                <div className="grid gap-1.5"><Label htmlFor="v-consig-fim">Consignado até</Label><Input id="v-consig-fim" type="date" value={f.consignacao_fim} onChange={(e) => setF({ ...f, consignacao_fim: e.target.value })} /></div>
+              </div>
+              <p className="text-xs text-muted-foreground">Ao salvar, o contrato de consignação é criado e fica aqui na ficha e em Contratos, pronto para o dono assinar. Na venda, o repasse entra no Financeiro como conta a pagar.</p>
+            </>
+          )}
+          {(det.data?.contratos ?? []).length > 0 && (
+            <div className="grid gap-1.5">
+              <p className="text-xs font-semibold text-muted-foreground">Contratos deste veículo</p>
+              {det.data!.contratos!.map((c) => (
+                <Link key={c.id} to={`/contratos?id=${c.id}`} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted" data-testid={`v-contrato-${c.tipo}`}>
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="font-mono text-xs font-semibold">{c.numero}</span>
+                  <span>{c.tipo === "consignacao" ? "Consignação" : "Venda"}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">{c.status === "ativo" ? "Ativo" : c.status === "encerrado" ? "Encerrado" : "Cancelado"}</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
         <div className="grid gap-1.5"><Label htmlFor="v-desc">Descrição para o site</Label><Textarea id="v-desc" rows={3} value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} /></div>
         <div className="grid gap-1.5">

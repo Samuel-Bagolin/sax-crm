@@ -150,6 +150,12 @@ export const FORMAS_PAGAMENTO: { valor: FormaPagamento; rotulo: string }[] = [
   { valor: "consorcio", rotulo: "Consórcio" },
 ];
 
+/** Formas de pagamento da proposta no segmento: na loja não há FGTS e a permuta é a troca do carro. */
+export function formasDoSegmento(veiculos: boolean): { valor: FormaPagamento; rotulo: string }[] {
+  if (!veiculos) return FORMAS_PAGAMENTO;
+  return FORMAS_PAGAMENTO.filter((f) => f.valor !== "fgts").map((f) => (f.valor === "permuta" ? { ...f, rotulo: "Veículo na troca" } : f));
+}
+
 export type StatusProposta = "enviada" | "aceita" | "recusada" | "contraproposta" | "expirada" | "cancelada";
 
 export const STATUS_PROPOSTA: Record<StatusProposta, { rotulo: string; classe: string }> = {

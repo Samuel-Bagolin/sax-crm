@@ -63,6 +63,12 @@ class VeiculoIn(BaseModel):
     unico_dono: bool = False
     ipva_pago: bool = False
     garantia: str | None = Field(default=None, max_length=80)
+    # Consignação: o carro é de um cliente e a loja vende em nome dele.
+    consignado: bool = False
+    consignante_id: str | None = None  # Pessoa dona do veículo
+    repasse_valor: float | None = Field(default=None, gt=0, le=100_000_000)  # quanto o dono recebe na venda
+    consignacao_comissao_pct: float | None = Field(default=None, ge=0, le=100)
+    consignacao_fim: str | None = None  # prazo da consignação (AAAA-MM-DD)
 
 
 class Venda(BaseModel):
@@ -116,7 +122,44 @@ def _normalizar(input: VeiculoIn) -> dict:
         raise HTTPException(422, "Use Registrar venda para marcar o veículo como vendido")
     if d["status"] == "reservado" and d["site_status"] == "ativo":
         d["site_status"] = "reservado"
+    if d["consignado"]:
+        if not d.get("consignante_id"):
+            raise HTTPException(422, "Informe o dono do veículo consignado")
+        if not d.get("repasse_valor"):
+            raise HTTPException(422, "Informe o valor de repasse ao dono do veículo")
+        if d.get("consignacao_fim"):
+            from lib.agenda_online import validar_data
+
+            d["consignacao_fim"] = validar_data(d["consignacao_fim"]).isoformat()
+    else:
+        d.update(consignante_id=None, repasse_valor=None, consignacao_comissao_pct=None, consignacao_fim=None)
     return d
+
+
+async def sincronizar_consignacao(v: dict, principal: Principal) -> dict | None:
+    """Mantém o contrato de consignação do veículo: cria quando o carro passa a ser consignado,
+    atualiza repasse, comissão e prazo enquanto ninguém assinou e cancela quando deixa de ser."""
+    from models.contratos import Contrato
+    from routers.contratos import _proximo_numero
+
+    ativo = await db.contratos.find_one({"veiculo_id": v["id"], "tipo": "consignacao", "status": "ativo"})
+    if not v.get("consignado"):
+        if ativo:
+            await db.contratos.update_one({"id": ativo["id"]}, {"$set": {"status": "cancelado", "updated_at": now_utc()}})
+        return None
+    if not await db.pessoas.find_one({"id": v["consignante_id"]}, {"id": 1}):
+        raise HTTPException(422, "Dono do veículo não encontrado no cadastro")
+    campos = {"proprietario_id": v["consignante_id"], "valor": round(float(v["repasse_valor"]), 2),
+              "comissao_pct": float(v.get("consignacao_comissao_pct") or 0), "fim": v.get("consignacao_fim")}
+    if ativo:
+        assinado = any(s.get("status") == "assinado" for s in ativo.get("signatarios") or [])
+        if not assinado and any(ativo.get(k) != val for k, val in campos.items()):
+            await db.contratos.update_one({"id": ativo["id"]}, {"$set": {**campos, "updated_at": now_utc()}})
+        return {**ativo, **campos}
+    c = Contrato(numero=await _proximo_numero(), tipo="consignacao", veiculo_id=v["id"], inicio=agora_local().date().isoformat(),
+                 corretor_id=principal.pessoa_id, financeiro_status="concluido", parcelas=1, taxa_admin_pct=0, **campos).model_dump()
+    await db.contratos.insert_one(c)
+    return c
 
 
 async def _proximo_codigo() -> str:
@@ -185,6 +228,11 @@ async def obter(veiculo_id: str, principal: Principal = Depends(require("veiculo
     v["fotos"] = [{"id": f["id"], "url": url_publica(f["id"])} for f in await listar_fotos(veiculo_id)]
     v["leads"] = [{k: n.get(k) for k in ("id", "nome", "status", "valor_estimado", "created_at")}
                   for n in await db.leads.find({"veiculo_id": veiculo_id}).to_list(100)]
+    v["contratos"] = [{k: c.get(k) for k in ("id", "numero", "tipo", "status", "assinatura_status", "valor")}
+                      for c in await db.contratos.find({"veiculo_id": veiculo_id}).to_list(50)]
+    if v.get("consignante_id"):
+        dono = await db.pessoas.find_one({"id": v["consignante_id"]}, {"nome": 1, "telefone": 1, "cpf_cnpj": 1})
+        v["consignante"] = {k: (dono or {}).get(k) for k in ("nome", "telefone", "cpf_cnpj")} if dono else None
     return v
 
 
@@ -200,7 +248,10 @@ async def criar(input: VeiculoIn, principal: Principal = Depends(require("veicul
         raise HTTPException(409, "Já existe um veículo em estoque com esta placa")
     v = {"id": new_id(), "codigo": await _proximo_codigo(), **d, "data_entrada": d.get("data_entrada") or agora_local().date().isoformat(),
          "foto_url": None, "criado_por": principal.nome, "created_at": now_utc(), "updated_at": now_utc()}
+    if v["consignado"] and not await db.pessoas.find_one({"id": v["consignante_id"]}, {"id": 1}):
+        raise HTTPException(422, "Dono do veículo não encontrado no cadastro")
     await db.veiculos.insert_one(v)
+    await sincronizar_consignacao(v, principal)
     from routers.site_imobiliaria import limpar_cache
 
     limpar_cache()
@@ -220,7 +271,10 @@ async def editar(veiculo_id: str, input: VeiculoIn, principal: Principal = Depen
     if d.get("placa") and await db.veiculos.find_one({"placa": d["placa"], "status": {"$ne": "vendido"}, "id": {"$ne": veiculo_id}}, {"id": 1}):
         raise HTTPException(409, "Já existe outro veículo em estoque com esta placa")
     d["updated_at"] = now_utc()
+    if d["consignado"] and not await db.pessoas.find_one({"id": d["consignante_id"]}, {"id": 1}):
+        raise HTTPException(422, "Dono do veículo não encontrado no cadastro")
     await db.veiculos.update_one({"id": veiculo_id}, {"$set": d})
+    await sincronizar_consignacao({**antes, **d}, principal)
     from routers.site_imobiliaria import limpar_cache
 
     limpar_cache()
@@ -268,6 +322,8 @@ async def registrar_venda(veiculo_id: str, input: Venda, principal: Principal, c
         except Exception:
             await db.veiculos.update_one({"id": veiculo_id}, {"$set": {k: v.get(k) for k in dados}})
             raise
+    if v.get("consignado") and v.get("consignante_id"):
+        await _lancar_repasse(v, input.valor, dia, contrato_id)
     if negocio:
         await db.leads.update_one({"id": negocio["id"]}, {"$set": {"status": "ganho", "estagio": "ganho", "valor_estimado": round(input.valor, 2),
                                                                   "closed_at": now_utc(), "updated_at": now_utc()}})
@@ -275,6 +331,35 @@ async def registrar_venda(veiculo_id: str, input: Venda, principal: Principal, c
 
     limpar_cache()
     return {**v, **dados}
+
+
+async def _conta_repasse() -> str | None:
+    """Conta 2.4.4 (repasse de consignados). Lojas antigas ganham a conta na primeira venda consignada."""
+    conta = await db.plano_contas.find_one({"codigo": "2.4.4"})
+    if conta:
+        return conta["id"]
+    pai = await db.plano_contas.find_one({"codigo": "2.4"}) or await db.plano_contas.find_one({"tipo": "despesa"})
+    if not pai:
+        return None
+    doc = {"id": new_id(), "codigo": "2.4.4", "nome": "Repasse de veículos consignados", "tipo": "despesa",
+           "conta_pai_id": pai["id"] if pai.get("codigo") == "2.4" else None, "ativo": True, "created_at": now_utc()}
+    await db.plano_contas.insert_one(doc)
+    return doc["id"]
+
+
+async def _lancar_repasse(v: dict, valor_venda: float, dia: str, contrato_id: str | None) -> None:
+    """Venda de carro consignado: conta a pagar ao dono, com id fixo por veículo (não duplica)."""
+    repasse = v.get("repasse_valor")
+    if not repasse:
+        repasse = valor_venda * (1 - float(v.get("consignacao_comissao_pct") or 0) / 100)
+    evento = f"repasse:{v['id']}:{v.get('vendido_em') or dia}"
+    await db.transacoes.update_one({"_id": evento}, {"$setOnInsert": {
+        "id": new_id(), "descricao": f"Repasse ao dono, {v.get('codigo')} {titulo(v)}"[:300], "tipo": "pagar",
+        "valor": round(float(repasse), 2), "plano_conta_id": await _conta_repasse(), "imovel_id": None, "veiculo_id": v["id"],
+        "pessoa_id": v.get("consignante_id"), "corretor_id": None, "evento_id": evento, "contrato_id": contrato_id, "vencimento": dia,
+        "pagamento": None, "status": "pendente", "forma_pagamento": None, "vencido": False, "cancelado_em": None, "created_at": now_utc()}}, upsert=True)
+    await db.contratos.update_many({"veiculo_id": v["id"], "tipo": "consignacao", "status": "ativo"},
+                                   {"$set": {"status": "encerrado", "encerrado_por_venda": True, "updated_at": now_utc()}})
 
 
 async def desfazer_venda(veiculo_id: str, contrato_id: str) -> bool:
@@ -285,6 +370,11 @@ async def desfazer_venda(veiculo_id: str, contrato_id: str) -> bool:
                                      {"$set": {"status": "disponivel", "vendido_em": None, "valor_vendido": None, "comprador_id": None,
                                                "vendedor_nome": None, "contrato_id": None, "updated_at": now_utc()}})
     if r.modified_count == 1:
+        # Consignado volta a ficar à venda: o contrato de consignação reabre e o repasse pendente sai.
+        await db.transacoes.update_many({"veiculo_id": veiculo_id, "tipo": "pagar", "status": "pendente", "evento_id": {"$regex": "^repasse:"}},
+                                        {"$set": {"status": "cancelado", "cancelado_em": now_utc()}})
+        await db.contratos.update_many({"veiculo_id": veiculo_id, "tipo": "consignacao", "status": "encerrado", "encerrado_por_venda": True},
+                                       {"$set": {"status": "ativo", "encerrado_por_venda": False, "updated_at": now_utc()}})
         from routers.site_imobiliaria import limpar_cache
 
         limpar_cache()

@@ -174,6 +174,7 @@ export default function Rosto3D({
 
     const controles = new OrbitControls(camera, render.domElement);
     controles.enablePan = false;
+    controles.enableZoom = false; // a roda do mouse rola a página (QA-20)
     controles.enableDamping = true;
     controles.minDistance = 3.6;
     controles.maxDistance = 8;

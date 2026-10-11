@@ -27,7 +27,7 @@ export default function AvisoVisitasBanner() {
         {data.total_amanha > 0 && (
           <p className="font-semibold" data-testid="aviso-visitas-amanha">
             Você tem {data.total_amanha} visita(s) amanhã (
-            {data.amanha.slice(8, 10)}/{data.amanha.slice(5, 7)}) — avisamos também por e-mail.
+            {data.amanha.slice(8, 10)}/{data.amanha.slice(5, 7)}). Avisamos também por e-mail.
           </p>
         )}
         {data.total_hoje > 0 && (

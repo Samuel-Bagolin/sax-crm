@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
-import { brl } from "@/lib/format";
+import { brl, primeiroNome } from "@/lib/format";
 import { isoLocal } from "@/lib/crm";
 import {
   STATUS_AG,
@@ -131,7 +131,7 @@ export default function Atendimentos() {
                 {todos.map((p) => (
                   <Chip key={p.id} ativo={profSel === p.id} onClick={() => setProfSel(profSel === p.id ? null : p.id)} testid={`chip-prof-${p.id}`}>
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">{p.nome.charAt(0)}</span>
-                    {p.nome.split(" ")[0]}
+                    {primeiroNome(p.nome)}
                   </Chip>
                 ))}
               </div>
@@ -144,12 +144,12 @@ export default function Atendimentos() {
             {selecionado && (
               <div className="flex flex-col gap-2 rounded-lg bg-muted/50 p-3 sm:flex-row sm:items-center" data-testid="faixa-link">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">Link de agendamento de {selecionado.nome.split(" ")[0]}</p>
+                  <p className="text-sm font-semibold">Link de agendamento de {primeiroNome(selecionado.nome)}</p>
                   {linkNoAr && selecionado.slug && selecionado.online ? (
                     <p className="truncate text-sm text-muted-foreground" title={`${urlBase}/${selecionado.slug}`}>{`${urlBase}/${selecionado.slug}`}</p>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      {!linkNoAr ? "O link de agendamento da empresa ainda não está no ar." : `${selecionado.nome.split(" ")[0]} não recebe agendamento online. Ative em Horários.`}
+                      {!linkNoAr ? "O link de agendamento da empresa ainda não está no ar." : `${primeiroNome(selecionado.nome)} não recebe agendamento online. Ative em Horários.`}
                     </p>
                   )}
                 </div>
@@ -158,7 +158,7 @@ export default function Atendimentos() {
                     <>
                       <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(`${urlBase}/${selecionado.slug}`).then(() => toast.success("Link copiado"))} data-testid="copiar-link-prof"><Copy className="h-3.5 w-3.5" /> Copiar</Button>
                       <a className={buttonVariants({ size: "sm", variant: "outline" })} target="_blank" rel="noopener noreferrer"
-                        href={`https://wa.me/?text=${encodeURIComponent(`Agende seu horário com ${selecionado.nome.split(" ")[0]}: ${urlBase}/${selecionado.slug}`)}`}><MessageCircle className="h-3.5 w-3.5" /> Enviar</a>
+                        href={`https://wa.me/?text=${encodeURIComponent(`Agende seu horário com ${primeiroNome(selecionado.nome)}: ${urlBase}/${selecionado.slug}`)}`}><MessageCircle className="h-3.5 w-3.5" /> Enviar</a>
                       <a className={buttonVariants({ size: "sm", variant: "outline" })} href={`${urlBase}/${selecionado.slug}`} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5" /> Abrir</a>
                     </>
                   ) : !linkNoAr && isAdmin ? (
@@ -182,7 +182,7 @@ export default function Atendimentos() {
               <Button variant="outline" size="icon" onClick={() => setDia(somarDias(dia, 1))} aria-label="Próximo dia"><ChevronRight className="h-4 w-4" /></Button>
               <Input type="date" value={dia} onChange={(e) => e.target.value && setDia(e.target.value)} className="ml-1 w-40" aria-label="Escolher data" />
             </div>
-            <p className="font-semibold capitalize sm:ml-2">{rotuloDia(dia)}</p>
+            <p className="font-semibold sm:ml-2">{rotuloDia(dia).replace(/^./, (c) => c.toUpperCase())}</p>
             <Button className="sm:ml-auto" onClick={() => setNovo(profSel ? { profissional_id: profSel } : {})} data-testid="novo-agendamento">
               <Plus className="h-4 w-4" /> Agendar
             </Button>

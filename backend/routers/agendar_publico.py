@@ -51,6 +51,14 @@ def _prof_publico(u: dict, slug: str) -> dict:
             "unidade_ids": u.get("unidade_ids") or []}
 
 
+def _dias_abertos(u: dict, cfg: dict) -> list[int]:
+    """Dias da semana (0 = domingo) em que o profissional tem jornada: os outros aparecem fechados na página."""
+    from lib.agenda_online import jornada_do
+
+    jornada = jornada_do(u, cfg)
+    return sorted(int(k) for k, faixas in jornada.items() if faixas)
+
+
 async def _profissionais(servico: dict | None = None) -> list[dict]:
     docs = [u for u in await db.usuarios.find({"ativo": {"$ne": False}, "papel": {"$ne": "sysadmin"}}).to_list(300)
             if u.get("atende") and u.get("agenda_online", True)]
@@ -67,6 +75,7 @@ async def pagina(slug: str):
     servicos = [s for s in await db.servicos.find({"ativo": {"$ne": False}, "online": {"$ne": False}}).to_list(300)]
     servicos.sort(key=lambda s: (s.get("categoria") or "", s["nome"]))
     unidades = await db.unidades.find({"ativa": {"$ne": False}}).to_list(50)
+    unidades.sort(key=lambda u: (not u.get("principal"), u.get("nome", "")))  # a principal vem primeiro (endereço da página)
     from lib.segmentos import info, segmento_de
 
     seg = info(segmento_de(empresa))
@@ -77,7 +86,7 @@ async def pagina(slug: str):
         "termos": seg["termos"], "segmento": seg["chave"],
         "servicos": [{"id": s["id"], "nome": s["nome"], "duracao_min": s["duracao_min"], "preco": s["preco"], "categoria": s.get("categoria"),
                       "descricao": s.get("descricao"), "profissionais": s.get("profissionais") or []} for s in servicos],
-        "profissionais": [_prof_publico(u, slug) for u in await _profissionais()],
+        "profissionais": [{**_prof_publico(u, slug), "dias": _dias_abertos(u, cfg)} for u in await _profissionais()],
         "unidades": [{"id": u["id"], "nome": u["nome"], "endereco": u.get("endereco"), "cidade": u.get("cidade")} for u in unidades],
     }
 

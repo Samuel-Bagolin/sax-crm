@@ -38,7 +38,7 @@ publico_router = APIRouter(prefix="/assinatura", tags=["assinaturas-publico"])
 
 PAPEL_LABEL = {
     "comprador": "Comprador(a)", "vendedor": "Vendedor(a)", "locatario": "Locatário(a)", "locador": "Locador(a)",
-    "fiador": "Fiador(a)", "testemunha": "Testemunha", "imobiliaria": "Imobiliária", "loja": "Loja", "corretor": "Corretor(a)", "outro": "Signatário(a)",
+    "fiador": "Fiador(a)", "testemunha": "Testemunha", "imobiliaria": "Imobiliária", "loja": "Loja", "consignante": "Consignante", "corretor": "Corretor(a)", "outro": "Signatário(a)",
 }
 
 
@@ -226,7 +226,7 @@ async def _variaveis_contrato(contrato: dict) -> dict[str, str]:
 
 def _variaveis_veiculo(v: dict) -> dict[str, str]:
     if not v:
-        return {k: "—" for k in ("veiculo_codigo", "veiculo_titulo", "veiculo_placa", "veiculo_ano", "veiculo_cor", "veiculo_km", "veiculo_combustivel")}
+        return {k: "—" for k in ("veiculo_codigo", "veiculo_titulo", "veiculo_placa", "veiculo_ano", "veiculo_cor", "veiculo_km", "veiculo_combustivel", "veiculo_preco")}
     from routers.veiculos import titulo
 
     km = f"{int(v.get('km') or 0):,}".replace(",", ".") + " km"
@@ -238,6 +238,7 @@ def _variaveis_veiculo(v: dict) -> dict[str, str]:
         "veiculo_cor": v.get("cor") or "____________",
         "veiculo_km": km,
         "veiculo_combustivel": (v.get("combustivel") or "—").capitalize(),
+        "veiculo_preco": _brl(v.get("preco_venda")),
     }
 
 
@@ -304,11 +305,14 @@ async def adicionar_partes(contrato_id: str, principal: Principal = Depends(requ
     existentes = {(s.get("nome") or "").lower() for s in contrato.get("signatarios") or []}
     venda = contrato.get("tipo") == "venda"
     if contrato.get("veiculo_id"):
-        # Loja: quem assina é o comprador e a própria loja (representada por quem vendeu).
-        cliente = await db.pessoas.find_one({"id": contrato.get("cliente_id")}) if contrato.get("cliente_id") else None
-        if cliente and cliente["nome"].lower() not in existentes:
-            await adicionar_signatario(contrato_id, SignatarioInput(nome=cliente["nome"], email=cliente.get("email"), telefone=cliente.get("telefone"),
-                                                                    cpf=cliente.get("cpf_cnpj"), papel="comprador"), principal)
+        # Loja: comprador, dono do carro consignado (vendedor ou consignante) e a loja (quem vendeu).
+        partes = [("cliente_id", "comprador"), ("proprietario_id", "consignante" if contrato.get("tipo") == "consignacao" else "vendedor")]
+        for campo, papel in partes:
+            pessoa = await db.pessoas.find_one({"id": contrato.get(campo)}) if contrato.get(campo) else None
+            if pessoa and pessoa["nome"].lower() not in existentes:
+                existentes.add(pessoa["nome"].lower())
+                await adicionar_signatario(contrato_id, SignatarioInput(nome=pessoa["nome"], email=pessoa.get("email"), telefone=pessoa.get("telefone"),
+                                                                        cpf=pessoa.get("cpf_cnpj"), papel=papel), principal)
         vendedor = await db.pessoas.find_one({"id": contrato.get("corretor_id")}) if contrato.get("corretor_id") else None
         if vendedor and vendedor["nome"].lower() not in existentes:
             await adicionar_signatario(contrato_id, SignatarioInput(nome=vendedor["nome"], email=vendedor.get("email"), telefone=vendedor.get("telefone"),

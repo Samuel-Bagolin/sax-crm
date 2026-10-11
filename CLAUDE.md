@@ -47,6 +47,10 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
 1. **Multiempresa.** A empresa vem do token de sessão (`lib/auth.py`), nunca de um campo enviado pela
    tela. Use `db` (banco da empresa do request) nas rotas; `controle` só para dados globais
    (empresas, administradores de sistema, catálogo de planos). Nenhuma consulta cruza empresas.
+   Exceção única: o Administrador de Sistema entra numa empresa por aba (`src/lib/suporte.ts`), que
+   manda o cabeçalho `X-Sax-Empresa` (ou `_emp` só em GET, para links e imagens). O cookie dele nunca
+   guarda empresa, e `_principal_do_request` só aceita isso de sysadmin global. Links de arquivo da
+   API na tela passam por `urlApi()`. Em suporte (`principal.suporte`) não se lê prontuário nem anamnese.
 2. **Permissão por papel.** Toda rota declara a ação com `Depends(require("recurso:acao"))`. Os papéis e
    ações ficam em `PERMISSOES` (`lib/auth.py`). Corretor só vê o que é dele: use
    `filtro_do_principal`. Para recurso de outro corretor, responda 404 (não 403).
@@ -80,6 +84,11 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    status com `update_one` condicional e só lançam no Financeiro se `modified_count == 1`.
    Contrato da loja de veículos (`veiculo_id` no lugar de `imovel_id`) registra a venda por
    `registrar_venda` em `routers/veiculos.py`; cancelado antes de receber, o carro volta ao estoque.
+   Carro consignado (`consignado`, `consignante_id`, `repasse_valor`): `sincronizar_consignacao` mantém
+   um contrato tipo `consignacao`; na venda o repasse vira conta a pagar (conta 2.4.4, id fixo, não
+   duplica) e o dono entra como vendedor no contrato. Contrato criado a partir de um negócio puxa o
+   produto (imóvel ou veículo) do negócio. Gestor e equipe têm `pessoa_id` (`garantir_pessoa_da_equipe`
+   em `lib/tenant.py`) para poder ser responsável por negócio e contrato.
 8. **Cartão e Asaas.** Número e CVV só passam pela memória a caminho do Asaas (`lib/asaas.py`): nunca
    gravar, logar ou devolver em erro. Guardamos final, bandeira e token. A chave do Asaas fica na tela
    Empresas > Pagamentos ou em `ASAAS_API_KEY`. O webhook (`/api/webhooks/asaas`) confere o token,

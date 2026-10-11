@@ -27,7 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { apiGet, apiPost, detalheErro } from "@/lib/api";
-import { brl } from "@/lib/format";
+import { brl, primeiroNome } from "@/lib/format";
 import { linkWhatsapp } from "@/lib/crm";
 import type { ImovelSitePublico, MarcaSite } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -73,6 +73,7 @@ function vocab(marca: MarcaSite) {
     Uns: v ? "Veículos" : "Imóveis",
     tipo: v ? "Categoria" : "Tipo de imóvel",
     profissional: v ? "vendedor" : "corretor",
+    busca: v ? "Marca, modelo ou código" : "Bairro, cidade ou código",
   };
 }
 
@@ -389,7 +390,7 @@ function FormContato({ marca, imovel, titulo, inicial }: { marca: MarcaSite; imo
   if (enviar.isSuccess) {
     return (
       <div className="rounded-2xl p-6 text-center" style={{ background: NEVOA }} role="status">
-        <p className="text-lg font-semibold" style={{ fontFamily: "var(--f-titulo)" }}>Recebemos seu contato, {nome.split(" ")[0]}.</p>
+        <p className="text-lg font-semibold" style={{ fontFamily: "var(--f-titulo)" }}>Recebemos seu contato, {primeiroNome(nome)}.</p>
         <p className="mt-1 text-sm" style={{ color: CINZA }}>Um corretor vai falar com você em breve. Se preferir, chame agora:</p>
         <BotaoWhats marca={marca} imovel={imovel} className="mt-4" />
       </div>
@@ -527,11 +528,11 @@ function PaginaInicial({ slug }: { slug: string }) {
             aria-label={`Buscar ${vocab(marca).uns}`}
           >
             <div className="mb-3 flex gap-1" role="tablist" aria-label="Finalidade">
-              {([
+              {(vocab(marca).veiculo ? ([["todos", "Todos"]] as const) : ([
                 ["todos", "Todos"],
                 ["venda", "Comprar"],
                 ["locacao", "Alugar"],
-              ] as const).map(([v, r]) => (
+              ] as const)).map(([v, r]) => (
                 <button
                   key={v}
                   type="button"
@@ -548,9 +549,9 @@ function PaginaInicial({ slug }: { slug: string }) {
             </div>
             <div className="grid gap-2 sm:grid-cols-[1.6fr_1fr_1fr_auto]">
               <label className="relative">
-                <span className="sr-only">Bairro, cidade ou código</span>
+                <span className="sr-only">{vocab(marca).busca}</span>
                 <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: CINZA }} />
-                <input value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Bairro, cidade ou código" className={cn(seletor, "pl-10")} style={{ borderColor: LINHA }} data-testid="site-busca" />
+                <input value={local} onChange={(e) => setLocal(e.target.value)} placeholder={vocab(marca).busca} className={cn(seletor, "pl-10")} style={{ borderColor: LINHA }} data-testid="site-busca" />
               </label>
               <select aria-label={vocab(marca).tipo} value={tipo} onChange={(e) => setTipo(e.target.value)} className={seletor} style={{ borderColor: LINHA }}>
                 <option value="">Todos os tipos</option>

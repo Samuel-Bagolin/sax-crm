@@ -113,6 +113,7 @@ async def provisionar_empresa(*, nome: str, db_name: str, admin: dict, segmento:
 
     if not await banco.usuarios.find_one({"email": admin["email"]}):
         await banco.usuarios.insert_one(admin)
+        await garantir_pessoa_da_equipe(banco, {**admin, "pessoa_id": admin.get("pessoa_id")})
 
     logger.info("empresa provisionada: %s (%s)", nome, db_name)
     return api_key
@@ -145,3 +146,21 @@ async def contadores(db_name: str) -> dict:
         "leads": await banco.leads.count_documents({}),
         "contratos": await banco.contratos.count_documents({}),
     }
+
+
+async def garantir_pessoa_da_equipe(banco, usuario: dict) -> str | None:
+    """Gestor e corretor/profissional precisam de uma Pessoa da equipe: é ela que aparece como
+    responsável em negócios, contratos e agenda. Cria e liga quando falta (idempotente)."""
+    if usuario.get("pessoa_id") or usuario.get("papel") not in ("admin", "corretor"):
+        return usuario.get("pessoa_id")
+    from models.pessoas import Pessoa
+
+    pessoa = Pessoa(nome=usuario["nome"], papeis=["corretor"], email=usuario.get("email"), telefone=usuario.get("telefone"))
+    # Liga só se ainda não tiver (dois requests ao mesmo tempo não criam duas pessoas ligadas).
+    r = await banco.usuarios.update_one({"id": usuario["id"], "pessoa_id": None}, {"$set": {"pessoa_id": pessoa.id}})
+    if r.modified_count != 1:
+        atual = await banco.usuarios.find_one({"id": usuario["id"]}, {"pessoa_id": 1}) or {}
+        return atual.get("pessoa_id")
+    await banco.pessoas.insert_one(pessoa.model_dump())
+    usuario["pessoa_id"] = pessoa.id
+    return pessoa.id

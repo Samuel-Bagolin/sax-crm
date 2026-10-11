@@ -259,6 +259,7 @@ PLANO_CONTAS_SEGMENTO: dict[str, list[tuple]] = {
         *_CONTAS_COMUNS_DESPESA,
         ("2.4", "Custo dos veículos", "despesa", "2"), ("2.4.1", "Compra de veículos", "despesa", "2.4"),
         ("2.4.2", "Preparação, funilaria e mecânica", "despesa", "2.4"), ("2.4.3", "Documentação e transferência", "despesa", "2.4"),
+        ("2.4.4", "Repasse de veículos consignados", "despesa", "2.4"),
     ],
     "_servicos": [
         ("1", "Receitas", "receita", None), ("1.1", "Atendimentos", "receita", "1"),

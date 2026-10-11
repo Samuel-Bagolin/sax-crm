@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { mascaraTelefone, telefoneBR, primeiroNome } from "@/lib/format";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -67,7 +68,7 @@ export default function Pacientes() {
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-primary"><UserRound className="h-4 w-4" /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{p.nome}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{[p.telefone, p.email].filter(Boolean).join(", ") || "Sem contato"}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{[telefoneBR(p.telefone), p.email].filter(Boolean).join(", ") || "Sem contato"}</span>
                   </span>
                   <span className="hidden text-right text-xs text-muted-foreground sm:block">última vez<br />{dataBR(p.ultimo_atendimento)}</span>
                 </Link>
@@ -81,7 +82,7 @@ export default function Pacientes() {
         {!retorno.data?.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Ninguém para chamar agora.</div> : (
           <ul className="divide-y overflow-hidden rounded-xl border bg-card">
             {retorno.data.map((r) => {
-              const link = whats(r.telefone, `Olá, ${r.cliente_nome.split(" ")[0]}! Faz ${r.dias} dias desde a sua última visita (${r.servicos.join(", ")}). Quer agendar o próximo horário?`);
+              const link = whats(r.telefone, `Olá, ${primeiroNome(r.cliente_nome)}! Faz ${r.dias} dias desde a sua última visita (${r.servicos.join(", ")}). Quer agendar o próximo horário?`);
               return (
                 <li key={r.cliente_id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
                   <Link to={`/pacientes/${r.cliente_id}`} className="min-w-0 flex-1">
@@ -123,7 +124,7 @@ function NovoPaciente({ aberto, onClose }: { aberto: boolean; onClose: () => voi
         <div className="grid gap-3">
           <div className="grid gap-1.5"><Label htmlFor="p-nome">Nome completo</Label><Input id="p-nome" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} data-testid="paciente-nome" /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5"><Label htmlFor="p-tel">WhatsApp</Label><Input id="p-tel" inputMode="tel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: e.target.value })} /></div>
+            <div className="grid gap-1.5"><Label htmlFor="p-tel">WhatsApp</Label><Input id="p-tel" inputMode="tel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: mascaraTelefone(e.target.value) })} /></div>
             <div className="grid gap-1.5"><Label htmlFor="p-nasc">Nascimento</Label><Input id="p-nasc" type="date" value={f.data_nascimento} onChange={(e) => setF({ ...f, data_nascimento: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, Building2, Check, Copy, Eye, Link2, MessageCircle, RefreshCw, Send, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { apiDelete, apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
-import { brlCompacto, dataHoraBR } from "@/lib/format";
+import { brlCompacto, dataHoraBR, primeiroNome } from "@/lib/format";
 import { linkWhatsapp } from "@/lib/crm";
 import { REACAO, urlCompleta, type Compativel, type PerfilBusca, type Vitrine } from "@/lib/diferenciais";
 import type { ImovelTipo } from "@/lib/types";
@@ -249,9 +249,9 @@ export default function CompativeisPainel({ negocioId, clienteNome, clienteTelef
   });
   const desativar = useMutation({ mutationFn: (id: string) => apiDelete(`/vitrines/${id}`), onSuccess: atualizar });
 
-  const primeiroNome = clienteNome?.split(" ")[0] ?? "";
+  const nomeCliente = primeiroNome(clienteNome);
   const textoWhats = (url: string) =>
-    `Olá${primeiroNome ? ` ${primeiroNome}` : ""}! Separei alguns imóveis com o seu perfil. Dá uma olhada e me diz quais você gostou: ${url}${corretorNome ? `\n${corretorNome.split(" ")[0]}` : ""}`;
+    `Olá${nomeCliente ? ` ${nomeCliente}` : ""}! Separei alguns imóveis com o seu perfil. Dá uma olhada e me diz quais você gostou: ${url}${corretorNome ? `\n${primeiroNome(corretorNome)}` : ""}`;
   const visiveis = verTodos ? lista : lista.slice(0, 6);
 
   return (

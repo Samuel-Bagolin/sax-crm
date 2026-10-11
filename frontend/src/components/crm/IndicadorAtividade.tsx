@@ -25,7 +25,7 @@ export default function IndicadorAtividade({
   const Icone = s === "nenhuma" ? AlertTriangle : meta?.icon ?? ChevronRight;
   const titulo =
     s === "nenhuma"
-      ? "Sem próxima atividade — agendar"
+      ? "Sem próxima atividade, agendar"
       : `${meta?.label ?? "Atividade"} ${s === "atrasada" ? "atrasada" : dataCurta(negocio.proxima_atividade).toLowerCase()}: ${negocio.proxima_atividade_assunto ?? ""}`;
   return (
     <button

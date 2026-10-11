@@ -182,7 +182,7 @@ function DashboardImobiliaria() {
         {isAdmin && (
           <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Fluxo de caixa — últimos 6 meses</CardTitle>
+            <CardTitle className="text-base">Fluxo de caixa dos últimos 6 meses</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-64" data-testid="dashboard-cashflow-chart">

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { CalendarDays, Camera, MoreHorizontal, Plus, Power, Trash2, Pencil } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut, detalheErro } from "@/lib/api";
-import { brlCompacto } from "@/lib/format";
+import { brlCompacto, primeiroNome } from "@/lib/format";
 import { CORES_EQUIPE, corDoMembro, useEquipe } from "@/lib/crm";
 import { useAuth } from "@/lib/useAuth";
 import type { Papel2, UsuarioPublico } from "@/lib/types";
@@ -88,7 +88,7 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
     <Dialog open={aberto} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{usuario ? `Editar ${usuario.nome.split(" ")[0]}` : "Novo consultor"}</DialogTitle>
+          <DialogTitle>{usuario ? `Editar ${primeiroNome(usuario.nome)}` : "Novo consultor"}</DialogTitle>
           <DialogDescription>{usuario ? "Dados de contato, perfil de acesso e cor na agenda." : `A pessoa entra com este e-mail e senha. ${seg.termos.profissional} vê apenas os próprios ${seg.vendas ? "negócios" : seg.termos.clientes.toLowerCase()}.`}</DialogDescription>
         </DialogHeader>
         <form

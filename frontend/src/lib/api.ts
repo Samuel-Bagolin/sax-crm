@@ -60,14 +60,52 @@ export function detalheErro(erro: unknown): string | undefined {
     if (corpo && Array.isArray(corpo.detail)) {
       const messages = corpo.detail.map((item: unknown) => {
         if (!item || typeof item !== "object") return "";
-        const detail = item as { loc?: unknown; msg?: unknown };
-        const field = Array.isArray(detail.loc) ? detail.loc.filter(x => x !== "body").join(".") : "campo";
-        return typeof detail.msg === "string" ? `${field}: ${detail.msg}` : "";
+        const detail = item as { loc?: unknown; msg?: unknown; type?: unknown; ctx?: Record<string, unknown> };
+        const campo = Array.isArray(detail.loc) ? String(detail.loc.filter((x) => x !== "body").slice(-1)[0] ?? "campo") : "campo";
+        return `${nomeCampo(campo)}: ${mensagemValidacao(detail)}`;
       }).filter(Boolean);
-      if (messages.length) return `Revise os dados: ${messages.join("; ")}`;
+      if (messages.length) return `Revise os dados. ${messages.join("; ")}`;
     }
     if (erro.status === 401) return "Sua sessão expirou. Entre novamente no ERP.";
     if (erro.status >= 500) return "O servidor não concluiu a operação. Atualize a lista antes de tentar novamente.";
   }
   return undefined;
+}
+
+// Nomes dos campos como aparecem na tela (o servidor manda o nome técnico).
+const CAMPOS: Record<string, string> = {
+  admin_email: "E-mail do gestor", admin_nome: "Nome do gestor", email: "E-mail", nome: "Nome", telefone: "Telefone",
+  senha: "Senha", documento: "CPF ou CNPJ", cpf_cnpj: "CPF ou CNPJ", preco_venda: "Preço de venda", preco_fipe: "FIPE",
+  custo_aquisicao: "Custo de aquisição", valor: "Valor", valor_estimado: "Valor", data: "Data", inicio: "Início", fim: "Fim",
+  data_nascimento: "Data de nascimento", km: "Quilometragem", ano_fabricacao: "Ano de fabricação", ano_modelo: "Ano do modelo",
+  placa: "Placa", cep: "CEP", slug: "Endereço", titulo: "Título", duracao_min: "Duração", hora: "Hora", repasse_valor: "Repasse",
+  comissao_pct: "Comissão", parcelas: "Parcelas", dia_vencimento: "Dia de vencimento", quantidade: "Quantidade",
+};
+
+function nomeCampo(campo: string): string {
+  if (CAMPOS[campo]) return CAMPOS[campo];
+  const t = campo.replace(/_id$/, "").replace(/_/g, " ");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** Erros de validação do Pydantic em português, sem jargão. */
+function mensagemValidacao(d: { msg?: unknown; type?: unknown; ctx?: Record<string, unknown> }): string {
+  const tipo = String(d.type ?? "");
+  const ctx = d.ctx ?? {};
+  const num = (v: unknown) => (typeof v === "number" ? v.toLocaleString("pt-BR") : String(v));
+  if (tipo === "missing") return "preencha este campo";
+  if (tipo.startsWith("value_error") && String(d.msg ?? "").includes("email")) return "informe um e-mail válido (ex.: nome@empresa.com.br)";
+  if (tipo === "greater_than_equal") return `informe um valor igual ou maior que ${num(ctx.ge)}`;
+  if (tipo === "greater_than") return `informe um valor maior que ${num(ctx.gt)}`;
+  if (tipo === "less_than_equal") return `informe um valor de até ${num(ctx.le)}`;
+  if (tipo === "less_than") return `informe um valor menor que ${num(ctx.lt)}`;
+  if (tipo === "string_too_short") return `use pelo menos ${num(ctx.min_length)} caracteres`;
+  if (tipo === "string_too_long") return `use no máximo ${num(ctx.max_length)} caracteres`;
+  if (tipo === "too_long") return `máximo de ${num(ctx.max_length)} itens`;
+  if (tipo.endsWith("_parsing") || tipo.endsWith("_type")) return "valor em formato inválido";
+  if (tipo === "literal_error" || tipo === "enum") return "escolha uma das opções da lista";
+  if (tipo === "string_pattern_mismatch") return "formato inválido";
+  const msg = String(d.msg ?? "valor inválido");
+  // Mensagens que nós mesmos escrevemos em português chegam como "Value error, ...".
+  return msg.replace(/^Value error, /, "");
 }

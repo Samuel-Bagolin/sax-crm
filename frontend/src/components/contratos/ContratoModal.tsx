@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ProdutoDoNegocio, ResponsavelContrato } from "@/components/contratos/CamposContrato";
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ interface FormState {
   parcelas: string;
   dia_vencimento: string;
   observacoes: string;
+  corretor_id: string;
 }
 
 function hoje(): string {
@@ -66,6 +68,7 @@ const VAZIO: FormState = {
   parcelas: "",
   dia_vencimento: "10",
   observacoes: "",
+  corretor_id: "",
 };
 
 
@@ -97,6 +100,7 @@ export default function ContratoModal({
   });
 
   const ganhos = leads.filter((l) => l.status === "ganho" || l.estagio === "ganho");
+  const leadEscolhido = form.lead_id === SEM ? null : ganhos.find((l) => l.id === form.lead_id) ?? null;
 
   useEffect(() => {
     if (open) { setForm({ ...VAZIO, inicio: hoje() }); requestId.current = crypto.randomUUID(); }
@@ -111,6 +115,7 @@ export default function ContratoModal({
       lead_id: id,
       imovel_id: lead?.imovel_id ?? f.imovel_id,
       cliente_id: lead?.cliente_id ?? f.cliente_id,
+      corretor_id: lead?.corretor_id ?? f.corretor_id,
       valor: lead?.valor_estimado != null ? String(lead.valor_estimado) : f.valor,
     }));
   };
@@ -153,6 +158,7 @@ export default function ContratoModal({
         parcelas: form.parcelas ? Number(form.parcelas) : null,
         dia_vencimento: Number(form.dia_vencimento) || 10,
         observacoes: form.observacoes.trim() || null,
+        corretor_id: form.corretor_id || null,
       }),
     onSuccess: (c) => {
       qc.invalidateQueries({ queryKey: ["contratos"] });
@@ -229,6 +235,9 @@ export default function ContratoModal({
             </div>
           </div>
 
+          {leadEscolhido?.imovel_id ? (
+            <ProdutoDoNegocio tipo="imovel" id={leadEscolhido.imovel_id} />
+          ) : (
           <div className="grid gap-2">
             <Label>Imóvel *</Label>
             <Select value={form.imovel_id} onValueChange={(v) => set("imovel_id", v)}>
@@ -249,6 +258,10 @@ export default function ContratoModal({
               </SelectContent>
             </Select>
           </div>
+
+          )}
+
+          <ResponsavelContrato valor={form.corretor_id} onChange={(v) => set("corretor_id", v)} />
 
           <div className="grid gap-2">
             <Label>Cliente (comprador/inquilino)</Label>

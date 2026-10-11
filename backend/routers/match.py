@@ -7,6 +7,7 @@
   para o histórico do negócio; "quero visitar" já cria a atividade para o corretor.
 """
 
+from lib.integrity import primeiro_nome
 from typing import List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -381,7 +382,7 @@ async def abrir_vitrine(token: str):
     if not corretor:
         usuario = await db.usuarios.find_one({"id": v.get("criado_por")}, {"nome": 1, "telefone": 1})
     return VitrinePublica(
-        **await links.marca_publica(), cliente_nome=((cliente or {}).get("nome") or "").split(" ")[0] or None,
+        **await links.marca_publica(), cliente_nome=primeiro_nome((cliente or {}).get("nome")),
         corretor_nome=(corretor or usuario or {}).get("nome"),
         corretor_telefone=(usuario or {}).get("telefone") or (corretor or {}).get("telefone"),
         mensagem=v.get("mensagem"), finalidade=finalidade, imoveis=imoveis,

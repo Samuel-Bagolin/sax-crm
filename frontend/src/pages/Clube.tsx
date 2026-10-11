@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertTriangle, Crown, MessageCircle, Plus, Receipt, Settings2 } from "lucide-react";
 import { apiGet, apiPatch, apiPost, apiPut, detalheErro } from "@/lib/api";
-import { brl, dataBR } from "@/lib/format";
+import { brl, dataBR, primeiroNome } from "@/lib/format";
 import { useServicos } from "@/lib/atendimentos";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
@@ -139,7 +139,7 @@ export default function Clube() {
                     <div className="flex justify-end gap-1">
                       {x.telefone && x.risco && (
                         <a className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs hover:bg-muted" target="_blank" rel="noopener noreferrer"
-                          href={`https://wa.me/55${x.telefone.replace(/\D/g, "")}?text=${encodeURIComponent(`Oi ${x.cliente_nome.split(" ")[0]}, sentimos sua falta! Seu plano ${x.plano_nome} está ativo, bora marcar o próximo corte?`)}`}>
+                          href={`https://wa.me/55${x.telefone.replace(/\D/g, "")}?text=${encodeURIComponent(`Oi ${primeiroNome(x.cliente_nome)}, sentimos sua falta! Seu plano ${x.plano_nome} está ativo, bora marcar o próximo corte?`)}`}>
                           <MessageCircle className="h-3.5 w-3.5" /> Chamar
                         </a>
                       )}

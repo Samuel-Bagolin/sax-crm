@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { urlApi } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Copy, Eye, EyeOff, History, KeyRound, Palette, Puzzle, Send, Smartphone } from "lucide-react";
@@ -272,7 +273,7 @@ export default function Configuracoes() {
                 <div className="flex flex-wrap items-center gap-3">
                   {temLogo && (
                     <img
-                      src={`/api/configuracoes/logo?v=${logoVersao}`}
+                      src={urlApi(`/api/configuracoes/logo?v=${logoVersao}`)}
                       alt="Logotipo atual"
                       className="h-14 w-14 rounded-md border object-contain p-1"
                       data-testid="config-logo-preview"

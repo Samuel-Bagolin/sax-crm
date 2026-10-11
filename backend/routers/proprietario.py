@@ -5,6 +5,7 @@ corretor escreveu para ele), interessados, vitrines enviadas, propostas recebida
 portais. Nunca mostra nome, telefone ou e-mail dos clientes interessados.
 """
 
+from lib.integrity import primeiro_nome
 from datetime import datetime
 from typing import List
 
@@ -149,7 +150,7 @@ async def relatorio(token: str):
     valor = im.get("valor_aluguel") if fin == "locacao" else im.get("valor_venda")
     criado = utc_aware(im.get("created_at")) or now_utc()
     return RelatorioProprietario(
-        **await links.marca_publica(), proprietario_nome=((dono or {}).get("nome") or "").split(" ")[0] or None,
+        **await links.marca_publica(), proprietario_nome=primeiro_nome((dono or {}).get("nome")),
         codigo=im.get("codigo") or "", titulo=im["titulo"], bairro=im.get("bairro"), cidade=im.get("cidade", ""), finalidade=fin,
         status=im.get("status", "captado"), valor=valor, foto_url=im.get("foto_url"),
         dias_no_mercado=max(0, (now_utc() - criado).days), visitas_realizadas=len(realizadas), visitas_agendadas=len(agendadas),

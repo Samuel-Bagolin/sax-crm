@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { empresaSuporte, sairDoSuporteNaAba } from "@/lib/suporte";
 import { AlertTriangle, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "@/lib/api";
@@ -17,8 +18,19 @@ export default function FaixaAmbiente() {
   });
 
   const sair = useMutation({
-    mutationFn: () => apiPost("/empresas/sair"),
-    onSuccess: async () => {
+    // Aba de suporte: limpa a empresa desta aba e fecha. Acesso antigo (cookie): volta ao plano de controle.
+    mutationFn: async () => {
+      if (empresaSuporte()) return "aba";
+      await apiPost("/empresas/sair");
+      return "cookie";
+    },
+    onSuccess: async (modo) => {
+      if (modo === "aba") {
+        sairDoSuporteNaAba();
+        window.close();
+        window.location.href = "/empresas";
+        return;
+      }
       await qc.invalidateQueries();
       toast.success("Você saiu do modo suporte.");
       window.location.href = "/empresas";
@@ -36,7 +48,7 @@ export default function FaixaAmbiente() {
           data-testid="faixa-ambiente"
         >
           <AlertTriangle className="h-3.5 w-3.5" />
-          Ambiente de {data?.rotulo} — dados aqui não são de produção
+          Ambiente de {data?.rotulo}: dados aqui não são de produção
         </div>
       )}
       {suporte && isSysadmin && (
@@ -53,7 +65,7 @@ export default function FaixaAmbiente() {
             disabled={sair.isPending}
             data-testid="faixa-suporte-sair"
           >
-            <LogOut className="h-3 w-3" /> Sair do suporte
+            <LogOut className="h-3 w-3" /> {empresaSuporte() ? "Fechar esta aba" : "Sair do suporte"}
           </Button>
         </div>
       )}

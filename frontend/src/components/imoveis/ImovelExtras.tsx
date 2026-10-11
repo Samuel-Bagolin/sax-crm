@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Copy, ExternalLink, ImagePlus, Loader2, MessageCircle, RefreshCw, Sparkles, Star, Trash2, Unlink } from "lucide-react";
 import { apiDelete, apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
-import { brl, dataHoraBR } from "@/lib/format";
+import { brl, dataHoraBR, primeiroNome } from "@/lib/format";
 import { linkWhatsapp } from "@/lib/crm";
 import { STATUS_PROPOSTA, reduzirFoto, urlCompleta, usePlano, type FotoImovel, type Interessado, type Proposta } from "@/lib/diferenciais";
 import { Button } from "@/components/ui/button";
@@ -206,7 +206,7 @@ export function RelatorioProprietarioCard({ imovelId, codigo }: { imovelId: stri
   });
   const revogar = useMutation({ mutationFn: () => apiDelete(`/imoveis/${imovelId}/relatorio-proprietario`), onSuccess: () => qc.invalidateQueries({ queryKey: chave }) });
   const url = urlCompleta(data?.url);
-  const primeiro = data?.proprietario_nome?.split(" ")[0] ?? "";
+  const primeiro = primeiroNome(data?.proprietario_nome) || "";
   const whats = url
     ? linkWhatsapp(data?.proprietario_telefone, `Olá${primeiro ? ` ${primeiro}` : ""}! Aqui você acompanha visitas, interessados e propostas do seu imóvel ${codigo}, sempre atualizado: ${url}`)
     : null;

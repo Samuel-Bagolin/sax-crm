@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { primeiroNome } from "@/lib/format";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -468,7 +469,7 @@ export default function Agenda() {
           {selecionado && (
             <span className="flex items-center gap-1.5 rounded-full border bg-card py-0.5 pl-0.5 pr-2 text-xs">
               <Avatar nome={selecionado.nome} usuarioId={selecionado.usuario_id} temFoto={selecionado.tem_foto} versao={selecionado.foto_v} tamanho="xs" cor={corDoMembro(selecionado)} />
-              Agenda de {selecionado.nome.split(" ")[0]}
+              Agenda de {primeiroNome(selecionado.nome)}
               <button onClick={() => escolherCorretor(null)} className="ml-1 text-muted-foreground hover:text-foreground" aria-label="Ver toda a equipe">
                 ×
               </button>

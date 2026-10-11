@@ -31,7 +31,7 @@ export default function PerderDialog({
 
   const perder = useMutation({
     mutationFn: () =>
-      apiPost(`/leads/${negocioId}/perder`, { motivo: [motivo, detalhe.trim()].filter(Boolean).join(" — ") || null }),
+      apiPost(`/leads/${negocioId}/perder`, { motivo: [motivo, detalhe.trim()].filter(Boolean).join(": ") || null }),
     onSuccess: () => {
       toast.success("Negócio marcado como perdido");
       qc.invalidateQueries({ queryKey: ["kanban"] });

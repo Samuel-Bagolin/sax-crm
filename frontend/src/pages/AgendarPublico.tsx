@@ -22,6 +22,7 @@ interface Profissional {
   especialidade: string | null;
   registro: string | null;
   foto_url: string | null;
+  dias?: number[]; // dias da semana com jornada (0 = domingo)
 }
 interface Pagina {
   empresa: string;
@@ -105,13 +106,19 @@ function Agendar({ slug, profSlug }: { slug: string; profSlug?: string }) {
     () => (p && servico ? p.profissionais.filter((x) => !servico.profissionais.length || servico.profissionais.includes(x.id)) : []),
     [p, servico],
   );
+  // Dias em que o profissional escolhido (ou qualquer um) tem jornada. Os outros aparecem fechados.
+  const abertos = useMemo(() => {
+    const lista = (p?.profissionais ?? []).filter((x) => !profissional || profissional === "qualquer" || x.id === profissional);
+    if (!lista.length || lista.some((x) => !x.dias)) return null;
+    return new Set(lista.flatMap((x) => x.dias ?? []));
+  }, [p?.profissionais, profissional]);
   const dias = useMemo(() => {
     const hoje = new Date();
     return Array.from({ length: Math.min(p?.janela_dias ?? 14, 21) }, (_, i) => {
       const d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + i);
-      return { iso: isoLocal(d), dia: d.getDate(), semana: DIAS[d.getDay()], mes: MESES[d.getMonth()] };
+      return { iso: isoLocal(d), dia: d.getDate(), semana: DIAS[d.getDay()], mes: MESES[d.getMonth()], fechado: !!abertos && !abertos.has(d.getDay()) };
     });
-  }, [p?.janela_dias]);
+  }, [p?.janela_dias, abertos]);
 
   const horarios = useQuery({
     queryKey: ["agenda-horarios", slug, servico?.id, profissional, dia],
@@ -259,8 +266,9 @@ function Agendar({ slug, profSlug }: { slug: string; profSlug?: string }) {
             <h1 id="t-dia" className="mb-3 text-xl font-bold">Escolha o dia e o horário</h1>
             <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2" role="listbox" aria-label="Dias">
               {dias.map((d) => (
-                <button key={d.iso} type="button" role="option" aria-selected={dia === d.iso} onClick={() => { setDia(d.iso); setHora(null); }}
-                  className={cn("flex w-16 shrink-0 flex-col items-center rounded-2xl py-2.5 text-sm", dia === d.iso ? "text-white" : "bg-white text-slate-700")}
+                <button key={d.iso} type="button" role="option" aria-selected={dia === d.iso} disabled={d.fechado} aria-disabled={d.fechado}
+                  title={d.fechado ? "Fechado neste dia" : undefined} onClick={() => { setDia(d.iso); setHora(null); }}
+                  className={cn("flex w-16 shrink-0 flex-col items-center rounded-2xl py-2.5 text-sm", dia === d.iso ? "text-white" : "bg-white text-slate-700", d.fechado && "cursor-not-allowed bg-slate-100 text-slate-400 line-through")}
                   style={dia === d.iso ? { background: cor } : undefined} data-testid={`ag-dia-${d.iso}`}>
                   <span className="text-xs capitalize opacity-80">{d.semana}</span>
                   <span className="text-xl font-bold leading-tight">{d.dia}</span>

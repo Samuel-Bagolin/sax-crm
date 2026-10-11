@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { mascaraTelefone, telefoneBR } from "@/lib/format";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -60,7 +61,7 @@ export default function PacienteDetalhe() {
         <Link to="/pacientes" className="text-muted-foreground hover:text-foreground" aria-label="Voltar"><ArrowLeft className="h-5 w-5" /></Link>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-xl font-bold">{p.nome}</h2>
-          <p className="text-sm text-muted-foreground">{[anos != null ? `${anos} anos` : null, p.telefone, p.email].filter(Boolean).join(", ") || "Sem contato"}</p>
+          <p className="text-sm text-muted-foreground">{[anos != null ? `${anos} anos` : null, telefoneBR(p.telefone), p.email].filter(Boolean).join(", ") || "Sem contato"}</p>
           {f.alertas.length > 0 && (
             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm font-semibold text-red-600 dark:text-red-400">
               <AlertTriangle className="h-4 w-4" /> {f.alertas.join(", ")}
@@ -219,18 +220,22 @@ export function NovoOrcamento({ tipo, pacienteId, itens, onClose, onCriado }: { 
   );
 }
 
+/** Escapa texto digitado pelo usuário antes de entrar no HTML de impressão (sem isso, um título ou
+    observação com <script> rodaria na janela de impressão). */
+const esc = (t: unknown) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
+
 function imprimir(t: Tratamento, paciente: string, empresa: string) {
   const w = window.open("", "_blank", "width=820,height=900");
   if (!w) return;
-  const linhas = t.itens.map((i) => `<tr><td>${i.dente ? `Dente ${i.dente} ` : ""}${i.descricao}${i.faces?.length ? ` (${i.faces.join("")})` : ""}</td><td style="text-align:right">${i.quantidade} ${i.unidade}</td><td style="text-align:right">${brl(i.valor ?? i.quantidade * i.valor_unitario)}</td></tr>`).join("");
-  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${t.titulo}</title><style>
+  const linhas = t.itens.map((i) => `<tr><td>${i.dente ? `Dente ${esc(i.dente)} ` : ""}${esc(i.descricao)}${i.faces?.length ? ` (${esc(i.faces.join(""))})` : ""}</td><td style="text-align:right">${esc(i.quantidade)} ${esc(i.unidade)}</td><td style="text-align:right">${brl(i.valor ?? i.quantidade * i.valor_unitario)}</td></tr>`).join("");
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(t.titulo)}</title><style>
     body{font-family:system-ui,sans-serif;color:#1d1530;max-width:720px;margin:40px auto;padding:0 20px}h1{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{border-bottom:1px solid #e5e2ec;padding:8px 4px;text-align:left}.tot{font-size:20px;font-weight:700;text-align:right;margin-top:16px}.mut{color:#6b5f86}</style></head><body>
-    <p class="mut">${empresa}</p><h1>${t.titulo}</h1><p>${paciente}<br><span class="mut">Emitido em ${new Date().toLocaleDateString("pt-BR")}, válido por ${t.validade_dias} dias. Profissional: ${t.profissional_nome}</span></p>
+    <p class="mut">${esc(empresa)}</p><h1>${esc(t.titulo)}</h1><p>${esc(paciente)}<br><span class="mut">Emitido em ${new Date().toLocaleDateString("pt-BR")}, válido por ${esc(t.validade_dias)} dias. Profissional: ${esc(t.profissional_nome)}</span></p>
     <table><thead><tr><th>Procedimento</th><th style="text-align:right">Qtde.</th><th style="text-align:right">Valor</th></tr></thead><tbody>${linhas}</tbody></table>
     ${t.desconto ? `<p style="text-align:right">Subtotal ${brl(t.subtotal)}<br>Desconto ${brl(t.desconto)}</p>` : ""}
     <p class="tot">Total ${brl(t.total)}${t.parcelas > 1 ? ` em ${t.parcelas}x de ${brl(t.total / t.parcelas)}` : ""}</p>
-    ${t.observacoes ? `<p class="mut">${t.observacoes}</p>` : ""}
-    <p style="margin-top:60px">______________________________<br>${paciente}</p><script>window.print()</script></body></html>`);
+    ${t.observacoes ? `<p class="mut">${esc(t.observacoes)}</p>` : ""}
+    <p style="margin-top:60px">______________________________<br>${esc(paciente)}</p><script>window.print()</script></body></html>`);
   w.document.close();
 }
 
@@ -383,7 +388,7 @@ function Cadastro({ ficha }: { ficha: FichaPaciente }) {
     onError: (e) => toast.error(detalheErro(e) ?? "Confira os dados"),
   });
   const campo = (k: keyof typeof f, rotulo: string, extra?: object) => (
-    <div className="grid gap-1.5"><Label htmlFor={`c-${k}`}>{rotulo}</Label><Input id={`c-${k}`} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} {...extra} /></div>
+    <div className="grid gap-1.5"><Label htmlFor={`c-${k}`}>{rotulo}</Label><Input id={`c-${k}`} value={f[k]} onChange={(e) => setF({ ...f, [k]: k === "telefone" ? mascaraTelefone(e.target.value) : e.target.value })} {...extra} /></div>
   );
   return (
     <div className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3">

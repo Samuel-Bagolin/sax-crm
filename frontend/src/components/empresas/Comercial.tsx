@@ -116,7 +116,7 @@ export function PlanoDialog({ plano, catalogo, open, onClose, segmento = "imobil
                 <Input id="pl-mensal" inputMode="decimal" value={f.preco_mensal} onChange={(e) => setF({ ...f, preco_mensal: e.target.value })} required data-testid="plano-mensal" />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="pl-anual">Anual (R$)</Label>
+                <Label htmlFor="pl-anual">Anual, valor do ano inteiro (R$)</Label>
                 <Input id="pl-anual" inputMode="decimal" value={f.preco_anual} onChange={(e) => setF({ ...f, preco_anual: e.target.value })} placeholder={mensal ? `12 × mensal = ${brl(mensal * 12)}` : ""} data-testid="plano-anual" />
                 {economia != null && <p className="text-xs text-muted-foreground">{economia > 0 ? `${economia}% mais barato que pagar mês a mês` : "Igual ou maior que 12 mensalidades"}</p>}
               </div>
@@ -246,7 +246,7 @@ export function AdicionalDialog({ adicional, catalogo, open, onClose }: { adicio
               <Input id="ad-m" inputMode="decimal" value={f.preco_mensal} onChange={(e) => setF({ ...f, preco_mensal: e.target.value })} required />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="ad-a">Preço anual (R$)</Label>
+              <Label htmlFor="ad-a">Preço anual, valor do ano inteiro (R$)</Label>
               <Input id="ad-a" inputMode="decimal" value={f.preco_anual} onChange={(e) => setF({ ...f, preco_anual: e.target.value })} placeholder="12 × mensal" />
             </div>
           </div>

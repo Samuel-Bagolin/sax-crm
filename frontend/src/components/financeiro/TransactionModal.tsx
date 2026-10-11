@@ -151,7 +151,7 @@ export default function TransactionModal({
               id="t-descricao"
               value={form.descricao}
               onChange={(e) => set("descricao", e.target.value)}
-              placeholder="Ex.: Comissão de venda — Apartamento Vila Mariana"
+              placeholder="Ex.: Comissão de venda, Apartamento Vila Mariana"
               data-testid="transacao-descricao-input"
             />
           </div>

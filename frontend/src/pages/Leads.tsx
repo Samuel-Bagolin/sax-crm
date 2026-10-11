@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRightLeft, Inbox, Mail, MessageCircle, Phone, Plus, Search, Trash2, X } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
-import { brl } from "@/lib/format";
+import { brl, primeiroNome } from "@/lib/format";
 import { diasDesde, linkWhatsapp, useCrmConfig, useEquipe, useFunis } from "@/lib/crm";
 import { parseNumber } from "@/lib/numbers";
 import { useAuth } from "@/lib/useAuth";
@@ -357,7 +357,7 @@ export default function Leads() {
   const pegar = useMutation({
     mutationFn: (id: string) => apiPost<Entrada>(`/entradas/${id}/pegar`),
     onSuccess: (e) => {
-      toast.success(`O lead ${e.nome.split(" ")[0]} agora é seu. Faça o primeiro contato.`);
+      toast.success(`O lead ${primeiroNome(e.nome)} agora é seu. Faça o primeiro contato.`);
       qc.invalidateQueries({ queryKey: ["entradas"] });
       setAba("ativos");
       setSelecionado(e.id);
@@ -394,7 +394,7 @@ export default function Leads() {
   const contatar = (e: Entrada, canal: "whatsapp" | "tel" | "mail") => {
     if (e.status === "novo") atualizar.mutate({ id: e.id, corpo: { status: "em_contato" } });
     if (canal === "whatsapp") {
-      const url = linkWhatsapp(e.telefone, `Olá ${e.nome.split(" ")[0]}, recebi seu contato. Posso te ajudar?`);
+      const url = linkWhatsapp(e.telefone, `Olá ${primeiroNome(e.nome)}, recebi seu contato. Posso te ajudar?`);
       if (url) window.open(url, "_blank", "noopener");
     } else if (canal === "tel" && e.telefone) window.location.href = `tel:${e.telefone}`;
     else if (canal === "mail" && e.email) window.location.href = `mailto:${e.email}`;
@@ -573,7 +573,7 @@ export default function Leads() {
               )}
               {atual.na_fila && (
                 <div className="space-y-2 rounded-lg border border-[#ff7a00]/40 bg-[#ff7a00]/5 p-3 text-sm">
-                  <p>Este lead ficou {config?.repescagem_horas ?? 24}h sem atendimento{atual.devolvido_de ? ` com ${pessoaDe(atual.devolvido_de)?.nome.split(" ")[0] ?? "o vendedor anterior"}` : ""} e está na fila livre. Quem pegar primeiro fica com ele.</p>
+                  <p>Este lead ficou {config?.repescagem_horas ?? 24}h sem atendimento{atual.devolvido_de ? ` com ${primeiroNome(pessoaDe(atual.devolvido_de)?.nome) || "o vendedor anterior"}` : ""} e está na fila livre. Quem pegar primeiro fica com ele.</p>
                   <Button className="w-full" onClick={() => pegar.mutate(atual.id)} disabled={pegar.isPending}>Pegar lead</Button>
                 </div>
               )}

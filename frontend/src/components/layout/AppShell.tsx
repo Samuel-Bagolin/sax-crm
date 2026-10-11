@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { primeiroNome } from "@/lib/format";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -183,13 +184,15 @@ function Navegacao({
   aoNavegar?: () => void;
   contadores: Record<string, number>;
 }) {
-  const { isAdmin, isSysadmin, noControle } = useAuth();
+  const { isAdmin, isSysadmin, noControle, principal } = useAuth();
   const { moduloAtivo, titulo } = useConfig();
   const seg = useSegmento();
   const visivel = (item: ItemNav) => {
     if (noControle) return item.modulo === "empresas";
     if (item.segmentos && !item.segmentos.includes(seg.chave)) return false;
     if (item.to === "/unidades" && seg.imobiliaria) return false;
+    // Dentro de uma empresa (suporte) a gestão das empresas fica só na aba do plano de controle.
+    if (item.modulo === "empresas") return isSysadmin && !principal?.suporte;
     if (item.nivel === "sysadmin") return isSysadmin;
     if (item.nivel === "admin" && !isAdmin) return false;
     if (item.modulo === "configuracoes" || item.modulo === "empresas" || item.modulo === "chat") return true;
@@ -332,11 +335,16 @@ export default function AppShell() {
   }, [config.cor_menu, config.cor_menu_destaque]);
 
   const caminho = location.pathname;
+  const segTitulo = useSegmento();
   const titulo = caminho.startsWith("/negocios/")
     ? "Negócio"
     : caminho.startsWith("/proprietarios/")
       ? "Proprietário"
-      : TITULOS[caminho] ?? (MODULO_POR_ROTA[caminho] ? rotulo(MODULO_POR_ROTA[caminho]) : config.nome_software);
+      : caminho === "/pacientes" || caminho.startsWith("/pacientes/")
+        ? (caminho === "/pacientes" ? segTitulo.termos.clientes : segTitulo.termos.cliente)
+        : caminho === "/unidades"
+          ? segTitulo.termos.unidades
+          : TITULOS[caminho] ?? (MODULO_POR_ROTA[caminho] ? rotulo(MODULO_POR_ROTA[caminho]) : config.nome_software);
   const larguraTotal = LARGURA_TOTAL.some((p) => (p.endsWith("/") ? caminho.startsWith(p) : caminho === p));
 
   return (
@@ -397,7 +405,7 @@ export default function AppShell() {
                     tamanho="sm"
                   />
                   <span className="hidden max-w-[120px] truncate text-sm font-medium xl:inline" data-testid="user-menu-nome">
-                    {principal?.nome.split(" ")[0]}
+                    {primeiroNome(principal?.nome)}
                   </span>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60">

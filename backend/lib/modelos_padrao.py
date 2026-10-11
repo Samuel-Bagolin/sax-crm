@@ -31,6 +31,7 @@ VARIAVEIS = [
     ("veiculo_km", "Quilometragem"),
     ("veiculo_combustivel", "Combustível"),
     ("forma_pagamento", "Forma de pagamento"),
+    ("veiculo_preco", "Preço de anúncio do veículo"),
 ]
 
 MODELO_VENDA = """# INSTRUMENTO PARTICULAR DE COMPROMISSO DE COMPRA E VENDA
@@ -146,6 +147,80 @@ As partes reconhecem a validade da assinatura eletrônica deste instrumento, com
 {{data_hoje}}.
 """
 
+MODELO_VEICULO_CONSIGNADO = """# CONTRATO DE COMPRA E VENDA DE VEÍCULO CONSIGNADO
+
+Contrato nº {{contrato_numero}}
+
+## 1. Das partes
+
+VENDEDOR(A): {{proprietario_nome}}, inscrito(a) no CPF/CNPJ sob nº {{proprietario_cpf}}, proprietário(a) do veículo.
+
+COMPRADOR(A): {{cliente_nome}}, inscrito(a) no CPF/CNPJ sob nº {{cliente_cpf}}, e-mail {{cliente_email}}, telefone {{cliente_telefone}}.
+
+INTERVENIENTE CONSIGNATÁRIA: {{empresa_nome}}, que intermedeia a venda, representada por {{corretor_nome}}.
+
+## 2. Do veículo
+
+{{veiculo_titulo}}, ano {{veiculo_ano}}, cor {{veiculo_cor}}, placa {{veiculo_placa}}, {{veiculo_km}}, combustível {{veiculo_combustivel}}, código de estoque {{veiculo_codigo}}.
+
+## 3. Do preço e do pagamento
+
+O preço total é de {{valor}}, pago na forma: {{forma_pagamento}}. O pagamento é recebido pela INTERVENIENTE, que repassa ao VENDEDOR o valor combinado no contrato de consignação. A posse e os documentos do veículo serão entregues ao COMPRADOR após a confirmação integral do pagamento.
+
+## 4. Do estado do veículo
+
+O COMPRADOR declara ter examinado o veículo e o recebe no estado em que se encontra, com a quilometragem informada acima.
+
+## 5. Da transferência
+
+O VENDEDOR assina o recibo de transferência (ATPV-e) em favor do COMPRADOR. As partes concluem a transferência junto ao DETRAN no prazo legal de 30 dias. Multas, tributos e encargos até a data da entrega são do VENDEDOR; os posteriores, do COMPRADOR.
+
+## 6. Das disposições gerais
+
+As partes reconhecem a validade da assinatura eletrônica deste instrumento, com registro de data, hora, IP e código de integridade do documento. Fica eleito o foro do domicílio do COMPRADOR.
+
+{{data_hoje}}.
+"""
+
+MODELO_CONSIGNACAO = """# CONTRATO DE CONSIGNAÇÃO DE VEÍCULO PARA VENDA
+
+Contrato nº {{contrato_numero}}
+
+## 1. Das partes
+
+CONSIGNANTE: {{proprietario_nome}}, inscrito(a) no CPF/CNPJ sob nº {{proprietario_cpf}}, proprietário(a) do veículo.
+
+CONSIGNATÁRIA: {{empresa_nome}}, representada por {{corretor_nome}}.
+
+## 2. Do veículo
+
+{{veiculo_titulo}}, ano {{veiculo_ano}}, cor {{veiculo_cor}}, placa {{veiculo_placa}}, {{veiculo_km}}, combustível {{veiculo_combustivel}}, código de estoque {{veiculo_codigo}}.
+
+## 3. Do objeto
+
+O CONSIGNANTE entrega o veículo à CONSIGNATÁRIA para que ela o exponha e venda em nome dele, pelo preço de anúncio de {{veiculo_preco}}, podendo negociar dentro das condições combinadas entre as partes.
+
+## 4. Do repasse e da remuneração
+
+Vendido o veículo, a CONSIGNATÁRIA repassa ao CONSIGNANTE o valor de {{valor}} em até 5 dias úteis após o recebimento integral do comprador. A diferença entre o preço de venda e o repasse remunera a CONSIGNATÁRIA (comissão de referência: {{comissao_pct}}%).
+
+## 5. Do prazo
+
+A consignação vale de {{inicio}} a {{fim}}. Encerrado o prazo sem venda, o veículo é devolvido ao CONSIGNANTE, salvo renovação por escrito.
+
+## 6. Das responsabilidades
+
+Enquanto o veículo estiver na loja, a CONSIGNATÁRIA zela pela sua guarda. Multas, tributos e débitos anteriores à entrega são do CONSIGNANTE, que declara o veículo livre de restrições e entrega o documento e as chaves.
+
+## 7. Das disposições gerais
+
+As partes reconhecem a validade da assinatura eletrônica deste instrumento, com registro de data, hora, IP e código de integridade do documento.
+
+{{data_hoje}}.
+"""
+
 MODELOS_VEICULOS = [
     ("Compra e venda de veículo", "venda", MODELO_VEICULO),
+    ("Compra e venda de veículo consignado", "venda", MODELO_VEICULO_CONSIGNADO),
+    ("Consignação de veículo", "outro", MODELO_CONSIGNACAO),
 ]

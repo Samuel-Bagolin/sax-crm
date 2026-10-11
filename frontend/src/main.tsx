@@ -6,6 +6,9 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { queryClient } from './lib/queryClient'
+import { iniciarSuporte } from './lib/suporte'
+
+iniciarSuporte()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

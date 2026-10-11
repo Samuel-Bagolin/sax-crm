@@ -144,7 +144,7 @@ export default function PlanoContasModal({
               <SelectTrigger data-testid="plano-pai-select">
                 <SelectValue>
                   {paiId === RAIZ
-                    ? "— Conta raiz (nível 1) —"
+                    ? "Conta raiz (nível 1)"
                     : (() => {
                         const p = contas.find((c) => c.id === paiId);
                         return p ? `${p.codigo} · ${p.nome}` : "Conta pai";
@@ -152,7 +152,7 @@ export default function PlanoContasModal({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={RAIZ}>— Conta raiz (nível 1) —</SelectItem>
+                <SelectItem value={RAIZ}>Conta raiz (nível 1)</SelectItem>
                 {contas
                   .filter((c) => !conta || c.id !== conta.id)
                   .map((c) => (

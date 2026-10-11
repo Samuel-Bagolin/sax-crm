@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { AlertTriangle, CalendarClock, Car, Globe, MessageCircle, Plus, TrendingUp, Users } from "lucide-react";
 import { apiGet } from "@/lib/api";
-import { brl, brlCompacto } from "@/lib/format";
+import { brl, brlCompacto, primeiroNome } from "@/lib/format";
 import { STATUS_AG, type Agendamento } from "@/lib/atendimentos";
 import { useSegmento } from "@/lib/segmento";
 import { useAuth } from "@/lib/useAuth";
@@ -35,19 +35,19 @@ export function PainelAtendimento() {
   const r = useQuery({ queryKey: ["atendimentos-resumo"], queryFn: () => apiGet<Resumo>("/atendimentos/resumo") });
   const retorno = useQuery({ queryKey: ["retorno"], queryFn: () => apiGet<unknown[]>("/atendimentos/retorno") });
   const d = r.data;
-  const primeiroNome = principal?.nome.split(" ")[0];
+  const nomeUsuario = primeiroNome(principal?.nome);
   return (
     <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-heading text-2xl font-bold tracking-tight">Olá, {primeiroNome}</h2>
+          <h2 className="font-heading text-2xl font-bold tracking-tight">Olá, {nomeUsuario}</h2>
           <p className="text-sm text-muted-foreground">{d ? `${d.hoje.length} ${seg.termos.atendimentos.toLowerCase()} hoje, ${d.proximos_7_dias} nos próximos 7 dias.` : "Carregando a agenda."}</p>
         </div>
         <Link to="/atendimentos" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"><Plus className="h-4 w-4" /> Abrir agenda</Link>
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi icone={TrendingUp} rotulo="Faturado no mês" valor={d ? brl(d.mes.faturado) : "-"} detalhe={d?.mes.ticket_medio ? `ticket médio ${brl(d.mes.ticket_medio)}` : undefined} />
-        <Kpi icone={CalendarClock} rotulo={`${seg.termos.atendimentos} concluídos`} valor={String(d?.mes.concluidos ?? "-")} detalhe={d ? `${d.mes.agendados} agendados no mês` : undefined} />
+        <Kpi icone={CalendarClock} rotulo={`${seg.termos.atendimentos} ${/^(Consultas|Sessões|Visitas)$/.test(seg.termos.atendimentos) ? "concluídas" : "concluídos"}`} valor={String(d?.mes.concluidos ?? "-")} detalhe={d ? `${d.mes.agendados} agendados no mês` : undefined} />
         <Kpi icone={AlertTriangle} rotulo="Faltas" valor={d ? `${d.mes.taxa_falta}%` : "-"} detalhe={d ? `${d.mes.faltas} no mês` : undefined} alerta={!!d && d.mes.taxa_falta > 10} />
         <Kpi icone={Globe} rotulo="Agendados pelo link" valor={String(d?.mes.online ?? "-")} detalhe="no mês" />
       </div>
@@ -103,7 +103,7 @@ export function PainelVeiculos() {
     <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-heading text-2xl font-bold tracking-tight">Olá, {principal?.nome.split(" ")[0]}</h2>
+          <h2 className="font-heading text-2xl font-bold tracking-tight">Olá, {primeiroNome(principal?.nome)}</h2>
           <p className="text-sm text-muted-foreground">{d ? `${d.em_estoque} veículos no estoque, ${d.vendidos_mes} vendidos no mês.` : "Carregando o estoque."}</p>
         </div>
         <Link to="/veiculos" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"><Car className="h-4 w-4" /> Ver estoque</Link>

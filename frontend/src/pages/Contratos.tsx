@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { urlApi } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { FileSignature, Plus } from "lucide-react";
@@ -39,6 +40,8 @@ const ASSINATURA: Record<string, { rotulo: string; cls: string }> = {
   assinado: { rotulo: "Assinado", cls: "text-hoje" },
   recusado: { rotulo: "Recusado", cls: "text-atrasada" },
 };
+
+const TIPO_LABEL: Record<string, string> = { venda: "Venda", locacao: "Locação", consignacao: "Consignação" };
 
 const STATUS_LABEL: Record<string, string> = {
   ativo: "Ativo",
@@ -160,7 +163,7 @@ export default function Contratos() {
                     data-testid={`contrato-row-${c.id}`}
                   >
                     <TableCell className="font-mono text-xs font-semibold">{c.numero}</TableCell>
-                    <TableCell>{c.tipo === "venda" ? "Venda" : "Locação"}</TableCell>
+                    <TableCell>{TIPO_LABEL[c.tipo] ?? c.tipo}</TableCell>
                     <TableCell className="text-sm">
                       {dataBR(c.inicio)} {c.fim ? `– ${dataBR(c.fim)}` : ""}
                     </TableCell>
@@ -196,7 +199,7 @@ export default function Contratos() {
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
           <SheetHeader>
             <SheetTitle data-testid="contrato-detalhe-numero">
-              {detalhe ? `${detalhe.numero}, ${detalhe.tipo === "venda" ? "venda" : "locação"}` : "Contrato"}
+              {detalhe ? `${detalhe.numero}, ${(TIPO_LABEL[detalhe.tipo] ?? detalhe.tipo).toLowerCase()}` : "Contrato"}
             </SheetTitle>
             <SheetDescription>
               {detalhe?.veiculo_titulo ?? detalhe?.imovel_titulo ?? ""}
@@ -204,7 +207,7 @@ export default function Contratos() {
             </SheetDescription>
           </SheetHeader>
 
-          {detalhe && (
+          {detalhe && (() => { const consig = detalhe.tipo === "consignacao"; return (
             <div className="space-y-5 p-4">
               {detalhe.status === "ativo" && ["erro", "pendente"].includes(detalhe.financeiro_status) && (
                 <div className="rounded-md border p-3 text-sm">
@@ -233,30 +236,30 @@ export default function Contratos() {
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-muted-foreground">{loja ? "Data da venda" : "Vigência"}</p>
+                  <p className="text-xs text-muted-foreground">{consig ? "Prazo da consignação" : loja ? "Data da venda" : "Vigência"}</p>
                   <p className="font-medium">
                     {dataBR(detalhe.inicio)} {detalhe.fim ? `– ${dataBR(detalhe.fim)}` : ""}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">{loja ? "Pagamento" : "Proprietário"}</p>
-                  <p className="font-medium">{(loja ? detalhe.forma_pagamento : detalhe.proprietario_nome) ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground">{consig ? "Dono do veículo" : loja ? (detalhe.proprietario_nome ? "Vendedor (dono)" : "Pagamento") : "Proprietário"}</p>
+                  <p className="font-medium">{(consig || (loja && detalhe.proprietario_nome) ? detalhe.proprietario_nome : loja ? detalhe.forma_pagamento : detalhe.proprietario_nome) ?? "-"}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">{loja ? "Vendedor" : "Corretor"}</p>
+                  <p className="text-xs text-muted-foreground">{loja ? "Responsável na loja" : "Corretor"}</p>
                   <p className="font-medium">{detalhe.corretor_nome ?? "—"}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">{loja ? "Valor da venda" : "Total gerado"}</p>
+                  <p className="text-xs text-muted-foreground">{consig ? "Repasse ao dono" : loja ? "Valor da venda" : "Total gerado"}</p>
                   <p className="font-mono font-semibold" data-testid="contrato-detalhe-total">
-                    {brl(detalhe.total_gerado)}
+                    {brl(consig ? detalhe.valor : detalhe.total_gerado)}
                   </p>
                 </div>
               </div>
 
               <div>
                 <p className="mb-2 text-sm font-semibold">
-                  {loja ? "Lançado no Financeiro" : `Parcelas geradas (${detalhe.transacoes.length})`}
+                  {consig ? "Financeiro: o repasse entra como conta a pagar quando o carro for vendido" : loja ? "Lançado no Financeiro" : `Parcelas geradas (${detalhe.transacoes.length})`}
                 </p>
                 <div className="space-y-2">
                   {detalhe.transacoes.map((t) => (
@@ -277,7 +280,7 @@ export default function Contratos() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => window.open(`/api/transacoes/${t.id}/recibo`, "_blank")}
+                            onClick={() => window.open(urlApi(`/api/transacoes/${t.id}/recibo`), "_blank")}
                             data-testid={`contrato-recibo-${t.id}`}
                           >
                             Recibo
@@ -314,7 +317,7 @@ export default function Contratos() {
                 </div>
               )}
             </div>
-          )}
+          ); })()}
         </SheetContent>
       </Sheet>
 

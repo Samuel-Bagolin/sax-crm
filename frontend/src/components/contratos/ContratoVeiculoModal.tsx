@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AvisoConsignado, ProdutoDoNegocio, ResponsavelContrato, useProduto, type VeiculoResumo } from "@/components/contratos/CamposContrato";
 
 /* Contrato de compra e venda da loja de veículos: escolhe o carro do estoque, o comprador e a forma de
    pagamento. Ao criar, o carro sai do estoque como vendido e a venda entra no Financeiro uma vez só. */
@@ -25,7 +26,7 @@ function hoje(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-const VAZIO = { lead_id: SEM, veiculo_id: SEM, cliente_id: SEM, valor: "", inicio: hoje(), forma: "À vista", forma_detalhe: "", observacoes: "" };
+const VAZIO = { lead_id: SEM, veiculo_id: SEM, cliente_id: SEM, valor: "", inicio: hoje(), forma: "À vista", forma_detalhe: "", observacoes: "", corretor_id: "" };
 
 export default function ContratoVeiculoModal({ open, onClose, leadInicial, onCriado }: {
   open: boolean;
@@ -49,7 +50,7 @@ export default function ContratoVeiculoModal({ open, onClose, leadInicial, onCri
   const escolherNegocio = (id: string) => {
     if (id === SEM) return set("lead_id", SEM);
     const l = negocios.find((x) => x.id === id);
-    setF((x) => ({ ...x, lead_id: id, veiculo_id: l?.veiculo_id ?? x.veiculo_id, cliente_id: l?.cliente_id ?? x.cliente_id,
+    setF((x) => ({ ...x, lead_id: id, veiculo_id: l?.veiculo_id ?? x.veiculo_id, cliente_id: l?.cliente_id ?? x.cliente_id, corretor_id: l?.corretor_id ?? x.corretor_id,
       valor: l?.valor_estimado != null ? String(l.valor_estimado) : x.valor }));
   };
 
@@ -74,6 +75,7 @@ export default function ContratoVeiculoModal({ open, onClose, leadInicial, onCri
       request_id: requestId.current, tipo: "venda", veiculo_id: f.veiculo_id,
       lead_id: f.lead_id === SEM ? null : f.lead_id, cliente_id: f.cliente_id === SEM ? null : f.cliente_id,
       valor: num(f.valor), inicio: f.inicio, forma_pagamento: forma || null, observacoes: f.observacoes.trim() || null,
+      corretor_id: f.corretor_id || null,
     }),
     onSuccess: (c) => {
       for (const k of ["contratos", "transacoes", "resumo", "veiculos", "kanban", "negocio", "leads"]) qc.invalidateQueries({ queryKey: [k] });
@@ -92,6 +94,9 @@ export default function ContratoVeiculoModal({ open, onClose, leadInicial, onCri
   };
 
   const veiculo = item.opcoes.find((o) => o.id === f.veiculo_id);
+  const negocio = f.lead_id === SEM ? null : negocios.find((l) => l.id === f.lead_id) ?? null;
+  const travado = !!negocio?.veiculo_id; // o veículo vem do negócio
+  const detalheVeiculo = useProduto("veiculo", f.veiculo_id === SEM ? null : f.veiculo_id).data as VeiculoResumo | undefined;
   // O veículo do negócio pode já ter saído da lista de disponíveis; mostra o título que veio do negócio.
   const rotuloVeiculo = f.veiculo_id === SEM ? "Selecione o veículo" : veiculo?.titulo ?? "Veículo do negócio";
 
@@ -117,6 +122,7 @@ export default function ContratoVeiculoModal({ open, onClose, leadInicial, onCri
             </Select>
           </div>
 
+          {travado ? <ProdutoDoNegocio tipo="veiculo" id={negocio!.veiculo_id!} /> : (
           <div className="grid gap-2">
             <Label>Veículo *</Label>
             <Select value={f.veiculo_id} onValueChange={escolherVeiculo}>
@@ -134,6 +140,10 @@ export default function ContratoVeiculoModal({ open, onClose, leadInicial, onCri
               </p>
             )}
           </div>
+          )}
+
+          <AvisoConsignado veiculo={detalheVeiculo} />
+          <ResponsavelContrato valor={f.corretor_id} onChange={(v) => set("corretor_id", v)} />
 
           <div className="grid gap-2">
             <Label>Comprador *</Label>

@@ -149,6 +149,7 @@ export default function Cadeiras3D({ postos }: { postos: Posto[] }) {
     controles.target.set(0, 1, 0);
     controles.enableDamping = true;
     controles.enablePan = false;
+    controles.enableZoom = false; // a roda do mouse rola a página (QA-20)
     controles.minPolarAngle = 0.35;
     controles.maxPolarAngle = 1.35;
     controles.minDistance = 5;

@@ -55,7 +55,7 @@ export default function RelatoriosTab({
     <div className="flex flex-col gap-5">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Fluxo de caixa — realizados nos últimos 6 meses</CardTitle>
+          <CardTitle className="text-base">Fluxo de caixa: realizados nos últimos 6 meses</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-72" data-testid="financeiro-cashflow-chart">

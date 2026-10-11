@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { urlApi } from "@/lib/suporte";
 import { useSegmento } from "@/lib/segmento";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -7,7 +8,7 @@ import { ArrowDownRight, Check, FileText, HandCoins, Plus, Reply, Trophy, X } fr
 import { apiGet, apiPost, detalheErro } from "@/lib/api";
 import { brl, dataBR, dataHoraBR } from "@/lib/format";
 import { isoLocal } from "@/lib/crm";
-import { FORMAS_PAGAMENTO, STATUS_PROPOSTA, type FormaPagamento, type Proposta } from "@/lib/diferenciais";
+import { formasDoSegmento, STATUS_PROPOSTA, type FormaPagamento, type Proposta } from "@/lib/diferenciais";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,9 @@ function emDias(dias: number): string {
 /** Propostas e contrapropostas do negócio, em cadeia. */
 export default function PropostasPainel({ negocioId, aberto, valorAnunciado }: { negocioId: string; aberto: boolean; valorAnunciado?: number | null }) {
   // A outra parte da negociação: o proprietário do imóvel ou a própria loja de veículos.
-  const outra = useSegmento().veiculos ? { nome: "Loja", da: "da loja" } : { nome: "Proprietário", da: "do proprietário" };
+  const veiculos = useSegmento().veiculos;
+  const outra = veiculos ? { nome: "Loja", da: "da loja" } : { nome: "Proprietário", da: "do proprietário" };
+  const FORMAS_PAGAMENTO = formasDoSegmento(veiculos);
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [dialogo, setDialogo] = useState<{ base: Proposta | null } | null>(null);
@@ -208,7 +211,7 @@ export default function PropostasPainel({ negocioId, aberto, valorAnunciado }: {
                             <Reply className="h-3 w-3" /> Renovar com contraproposta
                           </Button>
                         )}
-                        <a href={`/api/propostas/${p.id}/pdf`} target="_blank" rel="noreferrer" className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-muted">
+                        <a href={urlApi(`/api/propostas/${p.id}/pdf`)} target="_blank" rel="noreferrer" className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-muted">
                           <FileText className="h-3 w-3" /> PDF
                         </a>
                         {p.status === "enviada" && aberto && (
