@@ -66,22 +66,55 @@ function TelaVeiculo() {
   );
 }
 
-const ESTADOS = ["#f1ece0", "#ef4444", "#3b82f6", "#f1ece0", "#8b5cf6", "#f1ece0", "#f1ece0", "#eab308"];
-function TelaOdonto() {
-  const dente = (i: number, sup: boolean) => {
-    const cor = ESTADOS[(i * (sup ? 3 : 5)) % ESTADOS.length];
-    return <span key={`${sup}-${i}`} className="h-6 flex-1 rounded-[5px] border border-[#ddd5c4]" style={{ background: cor }} />;
+// Mesma leitura do odontograma 3D do sistema: arcada superior e inferior com gengiva e dentes coloridos
+// pela situação (cárie, restaurado, canal, coroa). Desenho leve em SVG, sem carregar o 3D no login.
+const COR_DENTE: Record<number, string> = { 16: "#ef4444", 11: "#c9a227", 24: "#ef4444", 26: "#3b82f6", 36: "#8b5cf6", 47: "#94a3b8" };
+const ORDEM_SUP = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
+const ORDEM_INF = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+
+function Arcada({ superior }: { superior: boolean }) {
+  const cx = 150, cy = superior ? 84 : 20, rx = superior ? 100 : 90, ry = superior ? 62 : 50;
+  const ordem = superior ? ORDEM_SUP : ORDEM_INF;
+  const ponto = (t: number) => {
+    // t de 0 a 1 percorre a meia elipse (de um lado ao outro, passando pela frente)
+    const a = Math.PI * (superior ? 1 + t : 1 - t);
+    return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), ang: (Math.atan2(ry * Math.cos(a), -rx * Math.sin(a)) * 180) / Math.PI };
   };
+  const gengiva = Array.from({ length: 41 }, (_, i) => ponto(0.02 + (0.96 * i) / 40)).map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   return (
-    <Moldura rotulo="Odontograma">
-      <div className="rounded-xl bg-gradient-to-b from-[#fbe9ec] to-[#f6dbe0] p-3">
-        <div className="flex gap-[3px]">{Array.from({ length: 16 }, (_, i) => dente(i, true))}</div>
-        <div className="my-2 h-px bg-[#e7b9c2]" />
-        <div className="flex gap-[3px]">{Array.from({ length: 16 }, (_, i) => dente(i, false))}</div>
+    <g>
+      <path d={gengiva} fill="none" stroke="#f3b9c3" strokeWidth="34" strokeLinecap="round" />
+      <path d={gengiva} fill="none" stroke="#e99aa9" strokeWidth="30" strokeLinecap="round" opacity=".25" transform={`translate(0 ${superior ? -3 : 3})`} />
+      {ordem.map((n, i) => {
+        const p = ponto(0.04 + (0.92 * i) / (ordem.length - 1));
+        const pos = Math.abs(i - 7.5); // 0 na frente, 7.5 no fundo
+        const w = pos > 4.5 ? 17 : pos > 2.5 ? 14 : 12;
+        const h = pos > 4.5 ? 17 : 19;
+        const cor = COR_DENTE[n] ?? "#f6f1e6";
+        return (
+          <g key={n} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${p.ang.toFixed(1)})`}>
+            <rect x={-w / 2} y={-h / 2} width={w} height={h} rx="4" fill={cor} stroke={cor === "#f6f1e6" ? "#ddd3c0" : "rgba(0,0,0,.18)"} strokeWidth="1" />
+            <rect x={-w / 2 + 2} y={-h / 2 + 2} width={w - 4} height="3" rx="1.5" fill="#fff" opacity=".55" />
+            {n === 16 && <rect x={-w / 2 - 4} y={-h / 2 - 4} width={w + 8} height={h + 8} rx="7" fill="none" stroke="#ff7a00" strokeWidth="2" />}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+function TelaOdonto() {
+  return (
+    <Moldura rotulo="Odontograma 3D">
+      <div className="rounded-xl bg-gradient-to-b from-[#f7f4fb] to-[#efe9f7]">
+        <svg viewBox="22 4 256 192" className="mx-auto block h-[132px] w-auto py-1" aria-hidden="true">
+          <Arcada superior />
+          <g transform="translate(0 102)"><Arcada superior={false} /></g>
+        </svg>
       </div>
       <div className="mt-3 flex items-center justify-between text-sm">
-        <span>Restauração 16, canal 36</span>
-        <b className="text-[#4a03a2]">R$ 1.150</b>
+        <span>Restauração 16 e 24, canal 26</span>
+        <b className="text-[#4a03a2]">R$ 1.400</b>
       </div>
     </Moldura>
   );

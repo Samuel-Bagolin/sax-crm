@@ -87,7 +87,7 @@ export default function PainelOdonto({
   const total = rascunho.reduce((a, i) => a + i.quantidade * i.valor_unitario, 0);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_340px]">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px] [&>*]:min-w-0">
       <div className="grid gap-3">
         <div className="overflow-hidden rounded-xl border bg-gradient-to-b from-[#faf7fd] to-[#efe9f7] dark:from-[#1b1530] dark:to-[#120d22]">
           <Suspense fallback={<div className="h-[340px] animate-pulse sm:h-[400px]" />}><Odontograma3D estados={estados} selecionado={dente} onSelecionar={escolher} planejados={planejados} /></Suspense>
@@ -117,8 +117,8 @@ export default function PainelOdonto({
         </div>
       </div>
 
-      <aside className="grid h-fit gap-4">
-        <section className="grid gap-3 rounded-xl border bg-card p-4">
+      <aside className="grid h-fit grid-cols-1 gap-4 [&>*]:min-w-0">
+        <section className="grid grid-cols-1 gap-3 rounded-xl border bg-card p-4 [&>*]:min-w-0">
           {!dente ? <p className="text-sm text-muted-foreground">Clique num dente no modelo 3D ou na grade para registrar a situação e orçar.</p> : (
             <>
               <p className="text-lg font-bold">Dente {dente}</p>
@@ -128,7 +128,7 @@ export default function PainelOdonto({
                   {Object.entries(ESTADOS_DENTE).map(([k, v]) => <option key={k} value={k}>{v.rotulo}</option>)}
                 </select>
               </div>
-              <div className="flex items-start gap-3">
+              <div className="flex flex-wrap items-start gap-3">
                 <Faces faces={faces} onClick={(f) => setFaces({ ...faces, [f]: faces[f] === pincel ? "higido" : pincel })} />
                 <div className="grid gap-1 text-xs">
                   <Label className="text-xs">Marcar faces como</Label>
@@ -141,10 +141,10 @@ export default function PainelOdonto({
                 </div>
               </div>
               <Button variant="outline" onClick={() => salvar.mutate()} disabled={salvar.isPending} data-testid="dente-salvar"><Save className="h-4 w-4" /> Salvar no odontograma</Button>
-              <div className="grid gap-1.5 border-t pt-3">
+              <div className="grid grid-cols-1 gap-1.5 border-t pt-3 [&>*]:min-w-0">
                 <Label htmlFor="o-proc">Orçar procedimento neste dente</Label>
                 <div className="flex gap-2">
-                  <select id="o-proc" className="h-9 min-w-0 flex-1 rounded-lg border bg-transparent px-2 text-sm" value={proc} onChange={(e) => setProc(e.target.value)} data-testid="dente-proc">
+                  <select id="o-proc" className="h-9 w-0 min-w-0 flex-1 rounded-lg border bg-transparent px-2 text-sm" value={proc} onChange={(e) => setProc(e.target.value)} data-testid="dente-proc">
                     <option value="">Escolha</option>
                     {procedimentos.map((s) => <option key={s.id} value={s.id}>{s.nome} ({brl(s.preco)})</option>)}
                   </select>
