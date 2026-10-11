@@ -107,6 +107,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
       { to: "/atendimentos", modulo: "atendimentos", icon: CalendarDays, rotulo: "Agenda", nivel: "todos", segmentos: SERVICOS },
       { to: "/clube", modulo: "atendimentos", icon: Crown, rotulo: "Assinantes", curto: "Clube", nivel: "todos", segmentos: ["barbearia"] },
       { to: "/orcamentos", modulo: "pacientes", icon: Handshake, rotulo: "Orçamentos", curto: "Orçam.", nivel: "todos", segmentos: COM_ORCAMENTO },
+      { to: "/meu-site", modulo: "atendimentos", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: SERVICOS },
     ],
   },
   {

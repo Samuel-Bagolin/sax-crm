@@ -29,7 +29,7 @@ RECURSOS = {
     "google": "Google Agenda e Google Drive",
     "assinatura": "Assinatura eletrônica de contratos",
     "chat": "Chat da equipe",
-    "site": "Site com o estoque (imóveis ou veículos) e WhatsApp",
+    "site": "Site próprio com catálogo e WhatsApp",
     "agenda_online": "Link de agendamento online por profissional",
     "prontuario": "Prontuário, anamnese e evolução",
     "odontograma": "Odontograma 3D e plano de tratamento",
@@ -39,14 +39,18 @@ RECURSOS = {
 RECURSOS_SEGMENTO = {
     "imobiliaria": ["match", "automacoes", "propostas", "portais", "proprietario", "google", "assinatura", "chat", "site"],
     "veiculos": ["automacoes", "propostas", "google", "assinatura", "chat", "site"],
-    "odontologia": ["agenda_online", "prontuario", "odontograma", "automacoes", "google", "assinatura", "chat"],
-    "terapia": ["agenda_online", "prontuario", "automacoes", "google", "assinatura", "chat"],
-    "barbearia": ["agenda_online", "automacoes", "google", "chat"],
-    "estetica": ["agenda_online", "prontuario", "mapa_facial", "automacoes", "google", "assinatura", "chat"],
+    "odontologia": ["agenda_online", "prontuario", "odontograma", "automacoes", "google", "assinatura", "chat", "site"],
+    "terapia": ["agenda_online", "prontuario", "automacoes", "google", "assinatura", "chat", "site"],
+    "barbearia": ["agenda_online", "automacoes", "google", "chat", "site"],
+    "estetica": ["agenda_online", "prontuario", "mapa_facial", "automacoes", "google", "assinatura", "chat", "site"],
 }
 _ROTULO_SEGMENTO = {
     ("site", "imobiliaria"): "Site com os seus imóveis e WhatsApp",
     ("site", "veiculos"): "Site da loja com o estoque e WhatsApp",
+    ("site", "odontologia"): "Site da clínica com tratamentos e WhatsApp",
+    ("site", "estetica"): "Site com procedimentos, produtos e WhatsApp",
+    ("site", "barbearia"): "Site da barbearia com serviços e agendamento",
+    ("site", "terapia"): "Site da clínica com atendimentos e agendamento",
 }
 
 
@@ -58,7 +62,11 @@ def recursos_do_segmento(segmento: str | None) -> dict[str, str]:
 
 
 # Recursos criados depois do catálogo semeado: entram uma única vez nos planos indicados.
-_MIGRACOES_RECURSO = {"site": ("profissional", "business", "enterprise")}
+# (id da migração, recurso, regra): a regra recebe o plano e diz se ganha o recurso. Cada id roda uma vez.
+_MIGRACOES_RECURSO = [
+    ("site", "site", lambda d: d.get("chave") in ("profissional", "business", "enterprise")),
+    ("site_todos", "site", lambda d: True),  # site próprio para todos os planos de todos os segmentos (out/2026)
+]
 
 TIPOS_ADICIONAL = {
     "recurso": "Libera uma funcionalidade",
@@ -73,7 +81,7 @@ _BASE = ["dashboard", "imoveis", "crm", "agenda", "usuarios"]
 PLANOS_PADRAO: dict[str, dict] = {
     "essencial": {
         "nome": "Essencial", "preco_mensal": 99, "preco_anual": None, "usuarios": 1, "imoveis": 300, "implantacao": 0,
-        "modulos": _BASE, "recursos": ["chat"], "ordem": 1, "ativo": True, "segmento": "imobiliaria", "unidades": 1,
+        "modulos": _BASE, "recursos": ["chat", "site"], "ordem": 1, "ativo": True, "segmento": "imobiliaria", "unidades": 1,
         "resumo": "CRM, imóveis, funil, agenda, leads e indicadores",
     },
     "profissional": {
@@ -136,12 +144,12 @@ async def carregar_catalogo(forcar: bool = False) -> None:
         docs = await _migrar_segmentos(docs)
     for d in docs:
         feitas = d.get("migracoes") or []
-        for recurso, chaves in _MIGRACOES_RECURSO.items():
-            if recurso in feitas:
+        for mig, recurso, regra in _MIGRACOES_RECURSO:
+            if mig in feitas:
                 continue
-            if d.get("chave") in chaves and recurso not in (d.get("recursos") or []):
+            if regra(d) and recurso not in (d.get("recursos") or []):
                 d["recursos"] = [*(d.get("recursos") or []), recurso]
-            d["migracoes"] = [*feitas, recurso]
+            d["migracoes"] = [*feitas, mig]
             feitas = d["migracoes"]
             await controle.planos_catalogo.update_one({"_id": d["_id"]}, {"$set": {"recursos": d["recursos"], "migracoes": d["migracoes"]}})
     novos = {d["chave"]: _completar({k: v for k, v in d.items() if k != "_id"}) for d in docs}

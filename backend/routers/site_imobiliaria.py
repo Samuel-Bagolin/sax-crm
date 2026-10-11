@@ -1,4 +1,5 @@
-"""Site da imobiliária: vitrine pública com os imóveis, a marca e o WhatsApp de cada empresa.
+"""Site de cada empresa: vitrine pública com a marca, o WhatsApp, o estoque (imóveis ou veículos) e o
+catálogo de serviços, tratamentos e produtos (todos os segmentos).
 
 - Configuração, logo e imagem de capa ficam no banco da empresa (`site_imobiliaria`, `site_midia`).
 - O endereço público é `/s/{slug}`. O índice `controle.sites_index` diz em qual empresa o slug está,
@@ -34,6 +35,32 @@ RESERVADOS = {"admin", "api", "app", "login", "site", "www", "sax", "suporte", "
 LIMITE_MIDIA = 900 * 1024  # bytes da imagem; o documento do Firestore tem 1 MiB
 _SLUG = re.compile(r"^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$")
 _COR = re.compile(r"^#[0-9a-fA-F]{6}$")
+TITULO_IMOB = "Encontre o imóvel certo para você"
+SUBTITULO_IMOB = "Casas, apartamentos e terrenos selecionados pela nossa equipe."
+VENDAS = ("imobiliaria", "veiculos")
+COM_FORMULARIO = ("imobiliaria", "veiculos", "odontologia", "estetica")  # segmentos com caixa de leads
+LIMITE_ITENS = 300
+LIMITE_FOTO_ITEM = 600 * 1024
+
+# Textos de partida do site em cada segmento (o gestor muda tudo na tela).
+TEXTOS_SEGMENTO = {
+    "imobiliaria": {"titulo": TITULO_IMOB, "subtitulo": SUBTITULO_IMOB, "catalogo": "Serviços",
+                    "msg": "Olá! Vi o imóvel {codigo} ({titulo}) no site e quero mais informações.", "tipo": "servico"},
+    "veiculos": {"titulo": "Encontre o seu próximo carro", "subtitulo": "Seminovos revisados, com procedência e as melhores condições.",
+                 "catalogo": "Serviços da loja", "msg": "Olá! Vi o veículo {codigo} ({titulo}) no site e quero mais informações.", "tipo": "servico"},
+    "odontologia": {"titulo": "Cuide do seu sorriso com quem entende", "subtitulo": "Tratamentos para toda a família, do check-up à reabilitação.",
+                    "catalogo": "Tratamentos", "msg": "Olá! Vi no site o tratamento {titulo} e quero agendar uma avaliação.", "tipo": "tratamento"},
+    "estetica": {"titulo": "Realce a sua beleza natural", "subtitulo": "Procedimentos faciais e corporais com avaliação personalizada.",
+                 "catalogo": "Procedimentos e produtos", "msg": "Olá! Vi no site {titulo} e quero saber mais.", "tipo": "tratamento"},
+    "barbearia": {"titulo": "Seu estilo, do jeito certo", "subtitulo": "Corte, barba e cuidado com hora marcada.",
+                  "catalogo": "Serviços", "msg": "Olá! Vi no site o serviço {titulo} e quero marcar um horário.", "tipo": "servico"},
+    "terapia": {"titulo": "Um espaço para cuidar de você", "subtitulo": "Atendimento acolhedor, presencial e online.",
+                "catalogo": "Atendimentos", "msg": "Olá! Vi no site {titulo} e quero agendar.", "tipo": "servico"},
+}
+
+
+def textos(segmento: str | None) -> dict:
+    return TEXTOS_SEGMENTO.get(segmento or "imobiliaria", TEXTOS_SEGMENTO["imobiliaria"])
 
 
 # --------------------------------------------------------------------------- modelos
@@ -43,12 +70,20 @@ class SiteConfig(BaseModel):
     ativo: bool = False
     slug: str | None = None
     nome: str = ""
-    titulo: str = "Encontre o imóvel certo para você"
-    subtitulo: str = "Casas, apartamentos e terrenos selecionados pela nossa equipe."
+    titulo: str = TITULO_IMOB
+    subtitulo: str = SUBTITULO_IMOB
     sobre: str = ""
     cor_primaria: str = COR_PADRAO
     cor_destaque: str = DESTAQUE_PADRAO
+    cor_cabecalho: str = "#ffffff"  # barra do topo, onde fica o nome da empresa
+    cor_texto_cabecalho: str = "#111827"
+    cor_fundo: str = "#f8fafc"
     fonte: Literal["moderna", "elegante", "classica"] = "moderna"
+    titulo_catalogo: str = ""  # vazio = nome padrão do segmento (Serviços, Tratamentos...)
+    layout_catalogo: Literal["grade", "lista"] = "grade"
+    mostrar_precos: bool = True
+    mostrar_agendamento: bool = True
+    mostrar_sobre: bool = True
     whatsapp: str = ""
     mensagem_whatsapp: str = MSG_PADRAO
     telefone: str = ""
@@ -69,12 +104,20 @@ class SiteConfigInput(BaseModel):
     ativo: bool = False
     slug: str = Field(min_length=3, max_length=40)
     nome: str = Field(min_length=2, max_length=80)
-    titulo: str = Field(default=SiteConfig.model_fields["titulo"].default, max_length=90)
-    subtitulo: str = Field(default=SiteConfig.model_fields["subtitulo"].default, max_length=200)
+    titulo: str = Field(default=TITULO_IMOB, max_length=90)
+    subtitulo: str = Field(default=SUBTITULO_IMOB, max_length=200)
     sobre: str = Field(default="", max_length=1500)
     cor_primaria: str = COR_PADRAO
     cor_destaque: str = DESTAQUE_PADRAO
+    cor_cabecalho: str = "#ffffff"
+    cor_texto_cabecalho: str = "#111827"
+    cor_fundo: str = "#f8fafc"
     fonte: Literal["moderna", "elegante", "classica"] = "moderna"
+    titulo_catalogo: str = Field(default="", max_length=60)
+    layout_catalogo: Literal["grade", "lista"] = "grade"
+    mostrar_precos: bool = True
+    mostrar_agendamento: bool = True
+    mostrar_sobre: bool = True
     whatsapp: str = Field(default="", max_length=30)
     mensagem_whatsapp: str = Field(default=MSG_PADRAO, max_length=300)
     telefone: str = Field(default="", max_length=30)
@@ -111,6 +154,11 @@ class ImovelNoSite(BaseModel):
 
 
 class PainelSite(BaseModel):
+    segmento: str = "imobiliaria"
+    titulo_catalogo_padrao: str = "Serviços"
+    tipo_padrao: str = "servico"
+    tem_estoque: bool = True  # imobiliária e loja de veículos mostram o estoque além do catálogo
+    agendar_url: str | None = None
     liberado: bool
     pode_editar: bool
     configurado: bool
@@ -134,12 +182,36 @@ class ContatoSite(BaseModel):
     email: str | None = Field(default=None, max_length=120)
     mensagem: str | None = Field(default=None, max_length=1500)
     imovel_id: str | None = Field(default=None, max_length=64)
+    item_id: str | None = Field(default=None, max_length=64)
     site: str | None = None  # isca para robôs: pessoas não veem este campo
 
 
 class EventoSite(BaseModel):
     tipo: Literal["visualizacao", "whatsapp"]
     imovel_id: str | None = Field(default=None, max_length=64)
+
+
+TipoItem = Literal["servico", "tratamento", "produto"]
+
+
+class ItemSiteIn(BaseModel):
+    tipo: TipoItem = "servico"
+    nome: str = Field(min_length=2, max_length=80)
+    descricao: str = Field(default="", max_length=600)
+    categoria: str = Field(default="", max_length=40)
+    preco: float | None = Field(default=None, ge=0, le=10_000_000)
+    preco_a_partir: bool = False
+    duracao_min: int | None = Field(default=None, ge=5, le=1440)
+    ativo: bool = True
+    destaque: bool = False
+    ordem: int = Field(default=50, ge=0, le=999)
+
+
+class ItemSite(ItemSiteIn):
+    id: str
+    tem_foto: bool = False
+    foto_v: int = 0
+    servico_id: str | None = None  # veio de um serviço da agenda: o botão Agendar abre direto nele
 
 
 # --------------------------------------------------------------------------- utilidades
@@ -165,14 +237,25 @@ async def _empresa_nome() -> str:
 
 async def carregar_config() -> tuple[SiteConfig, bool]:
     """Configuração salva ou, se ainda não existe, sugestão a partir dos dados da empresa."""
+    seg = await _segmento()
+    t = textos(seg)
     doc = await db.site_imobiliaria.find_one({"id": DOC_ID})
     if doc:
-        return SiteConfig(**{k: v for k, v in doc.items() if k in SiteConfig.model_fields}), True
+        c = SiteConfig(**{k: v for k, v in doc.items() if k in SiteConfig.model_fields})
+        if seg != "imobiliaria":  # site salvo antes dos textos por segmento: troca só o que ficou no padrão de imóveis
+            if c.titulo == TITULO_IMOB:
+                c.titulo = t["titulo"]
+            if c.subtitulo == SUBTITULO_IMOB:
+                c.subtitulo = t["subtitulo"]
+            if c.mensagem_whatsapp == MSG_PADRAO:
+                c.mensagem_whatsapp = t["msg"]
+        return c, True
     geral = await db.configuracoes.find_one({"id": "singleton"}, {"cor_primaria": 1, "whatsapp_numero": 1, "logo_base64": 1}) or {}
     from routers.assinaturas import _cor
 
     return SiteConfig(nome=await _empresa_nome(), cor_primaria=_cor(geral), whatsapp=geral.get("whatsapp_numero") or "",
-                      tem_logo=bool(geral.get("logo_base64"))), False
+                      tem_logo=bool(geral.get("logo_base64")), titulo=t["titulo"], subtitulo=t["subtitulo"],
+                      mensagem_whatsapp=t["msg"]), False
 
 
 def _url(slug: str | None) -> str | None:
@@ -190,11 +273,25 @@ _CACHE: dict[str, tuple[float, dict]] = {}
 CACHE_SEGUNDOS = 60
 
 
-async def _eh_veiculos() -> bool:
-    """O site mostra o estoque do segmento: imóveis (imobiliária) ou veículos (loja de veículos)."""
+async def _segmento() -> str:
     nome = empresa_atual_db()
     e = await controle.empresas.find_one({"db_name": nome}, {"segmento": 1}) if nome else None
-    return (e or {}).get("segmento") == "veiculos"
+    return (e or {}).get("segmento") or "imobiliaria"
+
+
+async def _eh_veiculos() -> bool:
+    """O site mostra o estoque do segmento: imóveis (imobiliária) ou veículos (loja de veículos)."""
+    return await _segmento() == "veiculos"
+
+
+async def _agendar_url(config: "SiteConfig") -> str | None:
+    """Link da agenda online, quando a empresa tem e está ligada."""
+    if not config.mostrar_agendamento or not await recurso_liberado("agenda_online"):
+        return None
+    from lib.agenda_online import config as cfg_agenda
+
+    cfg = await cfg_agenda()
+    return f"/agendar/{cfg['slug']}" if cfg.get("ativo") and cfg.get("slug") else None
 
 
 _CAMPOS_VEICULO = ("id", "codigo", "marca", "modelo", "versao", "ano_fabricacao", "ano_modelo", "km", "cor", "cambio", "combustivel",
@@ -218,7 +315,8 @@ def limpar_cache() -> None:
 
 async def _acesso_site(principal: Principal = Depends(require("unidade:read"))) -> Principal:
     """Quem usa o CRM pode ver o painel do site, desde que o módulo do estoque do segmento esteja ativo."""
-    await require_module(principal, "veiculo:read" if principal.segmento == "veiculos" else "imovel:read")
+    if principal.segmento in VENDAS:
+        await require_module(principal, "veiculo:read" if principal.segmento == "veiculos" else "imovel:read")
     return principal
 
 
@@ -234,7 +332,10 @@ def _exigir_editor(principal: Principal) -> None:
 async def painel(principal: Principal = Depends(_acesso_site)):
     config, configurado = await carregar_config()
     met = await _metricas()
+    seg = await _segmento()
     return PainelSite(
+        segmento=seg, titulo_catalogo_padrao=textos(seg)["catalogo"], tipo_padrao=textos(seg)["tipo"], tem_estoque=seg in VENDAS,
+        agendar_url=await _agendar_url(config),
         liberado=await recurso_liberado("site"), pode_editar=principal.pode_site, configurado=configurado, config=config,
         url=_url(config.slug) if configurado else None, sugestao_slug=config.slug or slugificar(config.nome),
         visualizacoes=sum(m.get("visualizacoes", 0) for m in met.values()),
@@ -250,7 +351,7 @@ async def salvar(input: SiteConfigInput, principal: Principal = Depends(_acesso_
     slug = input.slug.strip().lower()
     if not _SLUG.match(slug) or "--" in slug or slug in RESERVADOS:
         raise HTTPException(422, "Endereço inválido: use de 3 a 40 letras minúsculas, números e hífen, sem acento.")
-    for campo in ("cor_primaria", "cor_destaque"):
+    for campo in ("cor_primaria", "cor_destaque", "cor_cabecalho", "cor_texto_cabecalho", "cor_fundo"):
         if not _COR.match(getattr(input, campo)):
             raise HTTPException(422, "Cor inválida: use o formato #RRGGBB.")
     if input.ativo and len(so_digitos(input.whatsapp)) < 10:
@@ -258,7 +359,7 @@ async def salvar(input: SiteConfigInput, principal: Principal = Depends(_acesso_
     base = empresa_atual_db()
     dono = await controle.sites_index.find_one({"_id": slug})
     if dono and dono.get("db_name") != base:
-        raise HTTPException(409, "Este endereço já está em uso por outra imobiliária. Escolha outro.")
+        raise HTTPException(409, "Este endereço já está em uso por outra empresa. Escolha outro.")
     atual, _ = await carregar_config()
     if not dono:
         await controle.sites_index.delete_many({"db_name": base})
@@ -345,6 +446,138 @@ async def alterar_imoveis(input: AlterarImoveis, principal: Principal = Depends(
     return Response(status_code=204)
 
 
+# --------------------------------------------------------------------------- catálogo (serviços, tratamentos, produtos)
+
+
+def _item(d: dict) -> ItemSite:
+    return ItemSite(**{k: v for k, v in d.items() if k in ItemSite.model_fields})
+
+
+async def _itens_ordenados(filtro: dict | None = None) -> list[dict]:
+    docs = await db.site_itens.find(filtro or {}).to_list(LIMITE_ITENS)
+    docs.sort(key=lambda d: (not d.get("destaque"), d.get("ordem", 50), (d.get("categoria") or "").lower(), d.get("nome", "").lower()))
+    return docs
+
+
+@router.get("/itens", response_model=List[ItemSite])
+async def listar_itens(principal: Principal = Depends(_acesso_site)):
+    return [_item(d) for d in await _itens_ordenados()]
+
+
+@router.post("/itens", response_model=ItemSite, status_code=201)
+async def criar_item(input: ItemSiteIn, principal: Principal = Depends(_acesso_site)):
+    _exigir_editor(principal)
+    await exigir_recurso("site")
+    if await db.site_itens.count_documents({}) >= LIMITE_ITENS:
+        raise HTTPException(409, f"O site aceita até {LIMITE_ITENS} itens. Desative ou exclua alguns antes.")
+    from models.common import new_id
+
+    doc = {"id": new_id(), **input.model_dump(), "nome": input.nome.strip(), "categoria": input.categoria.strip(),
+           "tem_foto": False, "foto_v": 0, "created_at": now_utc()}
+    await db.site_itens.insert_one(doc)
+    limpar_cache()
+    return _item(doc)
+
+
+@router.put("/itens/{item_id}", response_model=ItemSite)
+async def editar_item(item_id: str, input: ItemSiteIn, principal: Principal = Depends(_acesso_site)):
+    _exigir_editor(principal)
+    r = await db.site_itens.update_one({"id": item_id}, {"$set": {**input.model_dump(), "nome": input.nome.strip(),
+                                                                  "categoria": input.categoria.strip(), "updated_at": now_utc()}})
+    if not r.matched_count:
+        raise HTTPException(404, "Item não encontrado")
+    limpar_cache()
+    return _item(await db.site_itens.find_one({"id": item_id}))
+
+
+@router.delete("/itens/{item_id}", status_code=204)
+async def excluir_item(item_id: str, principal: Principal = Depends(_acesso_site)):
+    _exigir_editor(principal)
+    await db.site_itens.delete_one({"id": item_id})
+    await db.site_item_midia.delete_one({"id": item_id})
+    limpar_cache()
+    return Response(status_code=204)
+
+
+@router.put("/itens/{item_id}/foto", response_model=ItemSite)
+async def foto_item(item_id: str, input: MidiaInput, principal: Principal = Depends(_acesso_site)):
+    _exigir_editor(principal)
+    if not await db.site_itens.find_one({"id": item_id}, {"id": 1}):
+        raise HTTPException(404, "Item não encontrado")
+    try:
+        bruto = base64.b64decode(input.base64, validate=True)
+    except Exception:
+        raise HTTPException(422, "Imagem inválida")
+    if len(bruto) > LIMITE_FOTO_ITEM:
+        raise HTTPException(422, "A foto deve ter no máximo 600 KB.")
+    from routers.fotos_imovel import _mime
+
+    if _mime(bruto) is None:
+        raise HTTPException(422, "Envie a foto em JPG, PNG ou WEBP.")
+    await db.site_item_midia.update_one({"id": item_id}, {"$set": {"id": item_id, "base64": input.base64, "mime": _mime(bruto)}}, upsert=True)
+    await db.site_itens.update_one({"id": item_id}, {"$set": {"tem_foto": True}, "$inc": {"foto_v": 1}})
+    limpar_cache()
+    return _item(await db.site_itens.find_one({"id": item_id}))
+
+
+@router.delete("/itens/{item_id}/foto", response_model=ItemSite)
+async def remover_foto_item(item_id: str, principal: Principal = Depends(_acesso_site)):
+    _exigir_editor(principal)
+    await db.site_item_midia.delete_one({"id": item_id})
+    await db.site_itens.update_one({"id": item_id}, {"$set": {"tem_foto": False}, "$inc": {"foto_v": 1}})
+    limpar_cache()
+    d = await db.site_itens.find_one({"id": item_id})
+    if not d:
+        raise HTTPException(404, "Item não encontrado")
+    return _item(d)
+
+
+@router.get("/itens/{item_id}/foto")
+async def ver_foto_item(item_id: str, principal: Principal = Depends(_acesso_site)):
+    doc = await db.site_item_midia.find_one({"id": item_id})
+    if not doc:
+        raise HTTPException(404, "Sem foto")
+    return Response(base64.b64decode(doc["base64"]), media_type=doc.get("mime", "image/jpeg"))
+
+
+def _preco_importado(sv: dict) -> float | None:
+    """Preço por unidade (toxina por U, por ml) não é o preço do atendimento: vira sob consulta. Zero também."""
+    return None if sv.get("unidade") or not sv.get("preco") else sv.get("preco")
+
+
+def _descricao_importada(sv: dict) -> str:
+    desc = (sv.get("descricao") or "").strip()
+    if sv.get("unidade") and sv.get("preco"):
+        valor = f"R$ {sv['preco']:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+        desc = f"{desc} Valor de {valor} por {sv['unidade']}, conforme a quantidade indicada na avaliação.".strip()
+    return desc[:600]
+
+
+@router.post("/itens/importar")
+async def importar_servicos(principal: Principal = Depends(_acesso_site)):
+    """Traz os serviços ativos da agenda para o catálogo do site. Quem já veio não duplica."""
+    _exigir_editor(principal)
+    await exigir_recurso("site")
+    seg = await _segmento()
+    tipo = textos(seg)["tipo"]
+    ja = {d.get("servico_id") async for d in db.site_itens.find({"servico_id": {"$ne": None}}, {"servico_id": 1})}
+    total = await db.site_itens.count_documents({})
+    novos = 0
+    from models.common import new_id
+
+    for sv in await db.servicos.find({"ativo": {"$ne": False}}).to_list(500):
+        if sv["id"] in ja or total + novos >= LIMITE_ITENS:
+            continue
+        await db.site_itens.insert_one({
+            "id": new_id(), "tipo": tipo, "nome": (sv.get("nome") or "Serviço")[:80], "descricao": _descricao_importada(sv),
+            "categoria": (sv.get("categoria") or "")[:40], "preco": _preco_importado(sv), "preco_a_partir": False,
+            "duracao_min": sv.get("duracao_min"), "ativo": True, "destaque": False, "ordem": 50, "tem_foto": False, "foto_v": 0,
+            "servico_id": sv["id"], "created_at": now_utc()})
+        novos += 1
+    limpar_cache()
+    return {"importados": novos}
+
+
 # --------------------------------------------------------------------------- página pública
 
 
@@ -391,6 +624,29 @@ def _marca(config: SiteConfig, slug: str) -> dict:
     return m
 
 
+async def _marca_publica(config: SiteConfig, slug: str, seg: str) -> dict:
+    return {**_marca(config, slug), "segmento": seg, "titulo_catalogo": config.titulo_catalogo or textos(seg)["catalogo"],
+            "formulario": seg in COM_FORMULARIO, "agendar_url": await _agendar_url(config)}
+
+
+def _item_publico(d: dict, slug: str, config: SiteConfig) -> dict:
+    return {"id": d["id"], "tipo": d.get("tipo", "servico"), "nome": d.get("nome"), "descricao": d.get("descricao") or "",
+            "categoria": d.get("categoria") or "", "destaque": bool(d.get("destaque")), "duracao_min": d.get("duracao_min"),
+            "preco": d.get("preco") if config.mostrar_precos else None, "preco_a_partir": bool(d.get("preco_a_partir")),
+            "servico_id": d.get("servico_id"),
+            "foto_url": f"/api/publico/site/{slug}/item/{d['id']}/foto?v={d.get('foto_v', 0)}" if d.get("tem_foto") else None}
+
+
+@publico_router.get("/{slug}/item/{item_id}/foto")
+async def foto_publica_item(slug: str, item_id: str):
+    await _entrar(slug)
+    doc = await db.site_item_midia.find_one({"id": item_id})
+    if not doc:
+        raise HTTPException(404, "Sem foto")
+    return Response(base64.b64decode(doc["base64"]), media_type=doc.get("mime", "image/jpeg"),
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 @publico_router.get("/{slug}")
 async def pagina(slug: str):
     slug = slug.lower()
@@ -398,13 +654,17 @@ async def pagina(slug: str):
     if cache and time.monotonic() - cache[0] < CACHE_SEGUNDOS:
         return cache[1]
     config = await _site_ativo(slug)
-    veiculos = await _eh_veiculos()
+    seg = await _segmento()
+    veiculos = seg == "veiculos"
     if veiculos:
         docs = await db.veiculos.find(_FILTRO_VEICULO, {k: 1 for k in _CAMPOS_VEICULO}).sort("created_at", -1).to_list(1000)
-    else:
+    elif seg == "imobiliaria":
         docs = await db.imoveis.find(_FILTRO_SITE, {k: 1 for k in _CAMPOS_CARD}).sort("created_at", -1).to_list(1000)
+    else:
+        docs = []
     docs.sort(key=lambda d: (not d.get("site_destaque"), d.get("site_status") == "reservado"))
-    dados = {"marca": {**_marca(config, slug), "segmento": "veiculos" if veiculos else "imobiliaria"},
+    itens = [_item_publico(d, slug, config) for d in await _itens_ordenados({"ativo": {"$ne": False}})]
+    dados = {"marca": await _marca_publica(config, slug, seg), "itens": itens,
              "imoveis": [_veiculo_card(d) if veiculos else _card(d) for d in docs]}
     _CACHE[slug] = (time.monotonic(), dados)
     return dados
@@ -424,7 +684,7 @@ async def imovel_publico(slug: str, codigo: str):
     if not fotos and d.get("foto_url"):
         fotos = [d["foto_url"]]
     card = _veiculo_card(d) if veiculos else _card(d)
-    return {"marca": {**_marca(config, slug.lower()), "segmento": "veiculos" if veiculos else "imobiliaria"},
+    return {"marca": await _marca_publica(config, slug.lower(), "veiculos" if veiculos else "imobiliaria"),
             "imovel": {**card, "descricao": d.get("descricao"), "fotos": fotos}}
 
 
@@ -463,7 +723,11 @@ async def contato(slug: str, input: ContatoSite, request: Request):
     if len(recentes) >= 5:
         raise HTTPException(429, "Muitas mensagens seguidas. Tente de novo em alguns minutos ou chame no WhatsApp.")
     _CONTATOS[chave] = [*recentes, agora]
-    veiculos = await _eh_veiculos()
+    seg = await _segmento()
+    if seg not in COM_FORMULARIO:
+        raise HTTPException(409, "Este site recebe contato pelo WhatsApp.")
+    veiculos = seg == "veiculos"
+    item = await db.site_itens.find_one({"id": input.item_id, "ativo": {"$ne": False}}, {"nome": 1, "tipo": 1, "preco": 1}) if input.item_id else None
     imovel = None
     if input.imovel_id and veiculos:
         v = await db.veiculos.find_one({**_FILTRO_VEICULO, "id": input.imovel_id})
@@ -480,13 +744,15 @@ async def contato(slug: str, input: ContatoSite, request: Request):
     partes = [(input.mensagem or "").strip()]
     if imovel:
         partes.append(f"Interesse no {'veículo' if veiculos else 'imóvel'} {imovel.get('codigo')}: {imovel.get('titulo')}")
+    if item:
+        partes.append(f"Interesse em {item.get('nome')} (pelo site)")
     fin = (imovel or {}).get("finalidade")
     entrada = Entrada(
         nome=input.nome.strip(), telefone=input.telefone.strip(), email=(input.email or "").strip().lower() or None,
-        origem="Site", interesse="locacao" if fin == "locacao" else "compra",
+        origem="Site", interesse="locacao" if fin == "locacao" else ("compra" if seg in VENDAS else "outro"),
         mensagem="\n".join(p for p in partes if p)[:2000] or None, corretor_id=corretor_id,
         imovel_id=None if veiculos else (imovel or {}).get("id"), veiculo_id=(imovel or {}).get("id") if veiculos else None,
-        valor_estimado=((imovel or {}).get("valor_aluguel") if fin == "locacao" else (imovel or {}).get("valor_venda")),
+        valor_estimado=((imovel or {}).get("valor_aluguel") if fin == "locacao" else (imovel or {}).get("valor_venda")) or (item or {}).get("preco"),
     )
     await db.entradas.insert_one(entrada.model_dump())
     await lead_novo(entrada.model_dump())
@@ -506,7 +772,8 @@ async def evento(slug: str, input: EventoSite, request: Request):
     _EVENTOS[chave] = agora
     veiculos = await _eh_veiculos()
     colecao, filtro = (db.veiculos, _FILTRO_VEICULO) if veiculos else (db.imoveis, _FILTRO_SITE)
-    if input.imovel_id and not await colecao.find_one({**filtro, "id": input.imovel_id}, {"id": 1}):
+    if input.imovel_id and not await colecao.find_one({**filtro, "id": input.imovel_id}, {"id": 1}) \
+            and not await db.site_itens.find_one({"id": input.imovel_id}, {"id": 1}):
         return Response(status_code=204)
     campo = "visualizacoes" if input.tipo == "visualizacao" else "whatsapp"
     await db.site_metricas.update_one({"id": input.imovel_id or "_site"}, {"$inc": {campo: 1}}, upsert=True)

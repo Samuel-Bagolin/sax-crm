@@ -825,7 +825,15 @@ export interface SiteConfig {
   sobre: string;
   cor_primaria: string;
   cor_destaque: string;
+  cor_cabecalho: string;
+  cor_texto_cabecalho: string;
+  cor_fundo: string;
   fonte: FonteSite;
+  titulo_catalogo: string;
+  layout_catalogo: "grade" | "lista";
+  mostrar_precos: boolean;
+  mostrar_agendamento: boolean;
+  mostrar_sobre: boolean;
   whatsapp: string;
   mensagem_whatsapp: string;
   telefone: string;
@@ -843,6 +851,11 @@ export interface SiteConfig {
 }
 
 export interface PainelSite {
+  segmento: SegmentoChave;
+  titulo_catalogo_padrao: string;
+  tipo_padrao: TipoItemSite;
+  tem_estoque: boolean;
+  agendar_url: string | null;
   liberado: boolean;
   pode_editar: boolean;
   configurado: boolean;
@@ -852,6 +865,25 @@ export interface PainelSite {
   visualizacoes: number;
   cliques_whatsapp: number;
   contatos: number;
+}
+
+export type TipoItemSite = "servico" | "tratamento" | "produto";
+
+export interface ItemSite {
+  id: string;
+  tipo: TipoItemSite;
+  nome: string;
+  descricao: string;
+  categoria: string;
+  preco: number | null;
+  preco_a_partir: boolean;
+  duracao_min: number | null;
+  ativo: boolean;
+  destaque: boolean;
+  ordem: number;
+  tem_foto: boolean;
+  foto_v: number;
+  servico_id: string | null;
 }
 
 export interface ImovelNoSite {
@@ -914,4 +946,12 @@ export interface ImovelSitePublico {
   garantia?: string | null;
 }
 
-export type MarcaSite = Omit<SiteConfig, "ativo" | "atualizado_em" | "atualizado_por"> & { logo_url: string | null; capa_url: string | null; segmento?: "imobiliaria" | "veiculos" };
+export type MarcaSite = Omit<SiteConfig, "ativo" | "atualizado_em" | "atualizado_por"> & {
+  logo_url: string | null; capa_url: string | null; segmento?: SegmentoChave;
+  titulo_catalogo?: string; formulario?: boolean; agendar_url?: string | null;
+};
+
+export interface ItemSitePublico {
+  id: string; tipo: TipoItemSite; nome: string; descricao: string; categoria: string; destaque: boolean;
+  duracao_min: number | null; preco: number | null; preco_a_partir: boolean; servico_id: string | null; foto_url: string | null;
+}

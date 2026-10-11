@@ -57,8 +57,11 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
 3. **Plano da empresa.** Funcionalidade paga passa por `exigir_recurso("chave")` no backend e
    `usePlano().tem("chave")` na tela. Limites de usuários e imóveis: `exigir_limite`. O catálogo de
    planos e adicionais é editável em Empresas e vive no banco de controle (`lib/planos.py`).
-   Site da imobiliária (`routers/site_imobiliaria.py`, recurso `site`): só gestor ou usuário com
-   `gerencia_site` (`principal.pode_site`) edita o site e muda `site_status` dos imóveis.
+   Site próprio (`routers/site_imobiliaria.py`, recurso `site`, todos os segmentos e planos): só gestor
+   ou usuário com `gerencia_site` (`principal.pode_site`) edita. Imobiliária e loja mostram o estoque;
+   todos têm o catálogo `site_itens` (serviço, tratamento, produto; foto em `site_item_midia`). Textos de
+   partida por segmento em `TEXTOS_SEGMENTO`. Contato do site só vira lead onde há caixa de leads
+   (`COM_FORMULARIO`); nos outros o site manda para o WhatsApp e a agenda online.
 4. **Banco.** O código usa a API do Motor/MongoDB. Em produção ela roda sobre o Firestore por um
    adaptador (`lib/firestore_mongo.py`): documento até 1 MiB (campos grandes são divididos sozinhos),
    cada documento lido é cobrado, então evite varrer coleções inteiras em rotas chamadas a toda hora.

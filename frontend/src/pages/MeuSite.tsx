@@ -20,7 +20,9 @@ import {
 import { apiDelete, apiGet, apiPut, detalheErro } from "@/lib/api";
 import { brlCompacto } from "@/lib/format";
 import { usePlano } from "@/lib/diferenciais";
-import type { FonteSite, ImovelNoSite, PainelSite, SiteConfig, SiteStatus } from "@/lib/types";
+import type { FonteSite, ImovelNoSite, ItemSite, PainelSite, SiteConfig, SiteStatus } from "@/lib/types";
+import { useSegmento } from "@/lib/segmento";
+import { CatalogoSite, precoItem } from "@/components/site/CatalogoSite";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +40,15 @@ const PALETAS: { nome: string; p: string; d: string }[] = [
   { nome: "Grafite e coral", p: "#2b2f36", d: "#ef6f53" },
   { nome: "Vinho e rosé", p: "#6d1a36", d: "#e8a598" },
   { nome: "Azul e ciano", p: "#1d4ed8", d: "#06b6d4" },
+];
+
+// Barra do topo, onde fica o nome da empresa.
+const CABECALHOS: { nome: string; fundo: string; texto: string }[] = [
+  { nome: "Branco", fundo: "#ffffff", texto: "#111827" },
+  { nome: "Cor principal", fundo: "", texto: "#ffffff" },
+  { nome: "Preto", fundo: "#111111", texto: "#ffffff" },
+  { nome: "Creme", fundo: "#f6efe4", texto: "#3b2f22" },
+  { nome: "Cinza claro", fundo: "#eef1f5", texto: "#1f2937" },
 ];
 
 const FONTES: { v: FonteSite; nome: string; amostra: string; familia: string }[] = [
@@ -68,9 +79,11 @@ export default function MeuSite() {
   const qc = useQueryClient();
   const { tem } = usePlano();
   const painel = useQuery({ queryKey: ["site-painel"], queryFn: () => apiGet<PainelSite>("/site-imobiliaria") });
-  const imoveis = useQuery({ queryKey: ["site-imoveis"], queryFn: () => apiGet<ImovelNoSite[]>("/site-imobiliaria/imoveis") });
+  const seg = useSegmento();
+  const imoveis = useQuery({ queryKey: ["site-imoveis"], queryFn: () => apiGet<ImovelNoSite[]>("/site-imobiliaria/imoveis"), enabled: seg.vendas });
+  const itens = useQuery({ queryKey: ["site-itens"], queryFn: () => apiGet<ItemSite[]>("/site-imobiliaria/itens") });
   const [form, setForm] = useState<Form | null>(null);
-  const [aba, setAba] = useState("imoveis");
+  const [aba, setAba] = useState(seg.vendas ? "imoveis" : "catalogo");
 
   useEffect(() => {
     if (painel.data && !form) setForm(paraForm(painel.data));
@@ -106,10 +119,10 @@ export default function MeuSite() {
     return (
       <div className="mx-auto max-w-xl rounded-2xl border bg-card p-8 text-center">
         <Globe className="mx-auto h-10 w-10 text-primary" />
-        <h2 className="mt-3 text-lg font-semibold">Site da imobiliária</h2>
+        <h2 className="mt-3 text-lg font-semibold">Site próprio</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Um site com a sua marca, os imóveis da carteira e o WhatsApp da equipe, atualizado direto pelo CRM. Ele não faz parte do plano atual da
-          imobiliária. Fale com o suporte para liberar.
+          Um site com a sua marca, o que você oferece e o WhatsApp da equipe, atualizado direto pelo CRM. Ele não faz parte do plano atual.
+          Fale com o suporte para liberar.
         </p>
       </div>
     );
@@ -118,6 +131,8 @@ export default function MeuSite() {
   const urlCompleta = p.url && p.url.startsWith("http") ? p.url : p.url ? `${window.location.origin}${p.url}` : null;
   const lista = imoveis.data ?? [];
   const noSite = lista.filter((i) => i.site_status !== "inativo" && !["vendido", "alugado"].includes(i.status)).length;
+  const itensNoSite = (itens.data ?? []).filter((i) => i.ativo).length;
+  const tituloCatalogo = form.titulo_catalogo || p.titulo_catalogo_padrao;
   const publicar = (ativo: boolean) => salvar.mutate({ ...form, ativo });
 
   return (
@@ -169,34 +184,64 @@ export default function MeuSite() {
       </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi icone={Globe} rotulo="Imóveis no site" valor={noSite} />
+        <Kpi icone={Globe} rotulo={p.tem_estoque ? `${seg.termos.itens} no site` : "Itens no site"} valor={p.tem_estoque ? noSite : itensNoSite} />
         <Kpi icone={Eye} rotulo="Visualizações" valor={p.visualizacoes} />
         <Kpi icone={MousePointerClick} rotulo="Cliques no WhatsApp" valor={p.cliques_whatsapp} />
-        <Kpi icone={Inbox} rotulo="Contatos pelo site" valor={p.contatos} detalhe="Entram em Leads" />
+        <Kpi icone={Inbox} rotulo="Contatos pelo site" valor={p.contatos} detalhe={seg.servicos && !["odontologia", "estetica"].includes(seg.chave) ? "Chegam pelo WhatsApp" : "Entram em Leads"} />
       </div>
 
       <Tabs value={aba} onValueChange={(v) => setAba(String(v))}>
         <TabsList className="w-full justify-start overflow-x-auto">
-          <TabsTrigger value="imoveis" data-testid="site-aba-imoveis">Imóveis</TabsTrigger>
-          <TabsTrigger value="marca" data-testid="site-aba-marca">Marca e textos</TabsTrigger>
+          {p.tem_estoque && <TabsTrigger value="imoveis" data-testid="site-aba-imoveis">{seg.termos.itens}</TabsTrigger>}
+          <TabsTrigger value="catalogo" data-testid="site-aba-catalogo">{tituloCatalogo}</TabsTrigger>
+          <TabsTrigger value="marca" data-testid="site-aba-marca">Aparência e textos</TabsTrigger>
           <TabsTrigger value="contato" data-testid="site-aba-contato">Contato e WhatsApp</TabsTrigger>
           <TabsTrigger value="endereco" data-testid="site-aba-endereco">Endereço do site</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="imoveis" className="mt-4">
-          <ImoveisDoSite lista={lista} carregando={imoveis.isLoading} pode={!!p.pode_editar} />
+        {p.tem_estoque && (
+          <TabsContent value="imoveis" className="mt-4">
+            <ImoveisDoSite lista={lista} carregando={imoveis.isLoading} pode={!!p.pode_editar} />
+          </TabsContent>
+        )}
+        <TabsContent value="catalogo" className="mt-4">
+          <CatalogoSite pode={pode} tipoPadrao={p.tipo_padrao} titulo={tituloCatalogo} podeImportar={seg.servicos} />
         </TabsContent>
 
         <TabsContent value="marca" className="mt-4">
           <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
             <div className="grid gap-5">
-              <Bloco titulo="Logo e foto de capa" descricao="A capa aparece no topo do site. Sem capa, o site usa a foto do imóvel em destaque.">
+              <Bloco titulo="Logo e foto de capa" descricao={p.tem_estoque ? `A capa aparece no topo do site. Sem capa, o site usa a foto do ${seg.termos.item.toLowerCase()} em destaque.` : "A capa aparece no topo do site. Sem capa, o topo usa a cor principal."}>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Midia tipo="logo" painel={p} pode={pode} />
                   <Midia tipo="capa" painel={p} pode={pode} />
                 </div>
               </Bloco>
-              <Bloco titulo="Cores" descricao="A cor principal vai nos botões e títulos. A de destaque marca o botão de busca e o selo de reservado.">
+              <Bloco titulo="Barra do topo" descricao="É a faixa onde ficam a logo e o nome da empresa. Escolha a cor do fundo e a do nome.">
+                <div className="flex flex-wrap gap-2">
+                  {CABECALHOS.map((c) => {
+                    const fundo = c.fundo || form.cor_primaria;
+                    const ativo = form.cor_cabecalho.toLowerCase() === fundo.toLowerCase() && form.cor_texto_cabecalho.toLowerCase() === c.texto;
+                    return (
+                      <button key={c.nome} type="button" disabled={!pode} onClick={() => setForm((f) => (f ? { ...f, cor_cabecalho: fundo, cor_texto_cabecalho: c.texto } : f))}
+                        className={cn("flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-medium disabled:opacity-60", ativo && "border-primary ring-2 ring-primary/30")}
+                        data-testid={`site-cabecalho-${c.nome}`}>
+                        <span className="flex h-6 w-9 items-center justify-center rounded-full border text-[10px] font-bold" style={{ background: fundo, color: c.texto }}>Aa</span>
+                        {c.nome}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Cor rotulo="Fundo da barra" valor={form.cor_cabecalho} onChange={(v) => set("cor_cabecalho", v)} pode={pode} />
+                  <Cor rotulo="Cor do nome" valor={form.cor_texto_cabecalho} onChange={(v) => set("cor_texto_cabecalho", v)} pode={pode} />
+                  <Cor rotulo="Fundo da página" valor={form.cor_fundo} onChange={(v) => set("cor_fundo", v)} pode={pode} />
+                </div>
+                {contraste(form.cor_cabecalho, form.cor_texto_cabecalho) < 3 && (
+                  <p className="text-xs text-amber-700">O nome fica difícil de ler nessa combinação. Use um fundo mais claro ou mais escuro.</p>
+                )}
+              </Bloco>
+              <Bloco titulo="Cores" descricao="A cor principal vai nos botões e títulos. A de destaque marca o botão de busca, os preços e os selos.">
                 <div className="flex flex-wrap gap-2">
                   {PALETAS.map((c) => (
                     <button
@@ -234,14 +279,33 @@ export default function MeuSite() {
                       onClick={() => set("fonte", f.v)}
                       className={cn("rounded-lg border p-3 text-left transition disabled:opacity-60", form.fonte === f.v ? "border-primary bg-accent/40 ring-2 ring-primary/25" : "hover:bg-muted")}
                     >
-                      <span className="block text-lg font-semibold" style={{ fontFamily: f.familia }}>{f.amostra}</span>
+                      <span className="block truncate text-lg font-semibold" style={{ fontFamily: f.familia }}>{form.nome || f.amostra}</span>
                       <span className="text-xs text-muted-foreground">{f.nome}</span>
                     </button>
                   ))}
                 </div>
               </Bloco>
+              <Bloco titulo="Seções do site">
+                <Campo rotulo={`Título da seção ${p.tem_estoque ? "de serviços" : "do catálogo"}`} id="s-tcat" ajuda={`Em branco, usa "${p.titulo_catalogo_padrao}".`}>
+                  <Input id="s-tcat" value={form.titulo_catalogo} onChange={(e) => set("titulo_catalogo", e.target.value)} disabled={!pode} maxLength={60} placeholder={p.titulo_catalogo_padrao} />
+                </Campo>
+                <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Formato do catálogo">
+                  {([["grade", "Cartões com foto"], ["lista", "Lista com preços"]] as const).map(([v, r]) => (
+                    <button key={v} type="button" role="radio" aria-checked={form.layout_catalogo === v} disabled={!pode} onClick={() => set("layout_catalogo", v)}
+                      className={cn("rounded-lg border p-3 text-left text-sm disabled:opacity-60", form.layout_catalogo === v ? "border-primary bg-accent/40 ring-2 ring-primary/25" : "hover:bg-muted")}>{r}</button>
+                  ))}
+                </div>
+                <div className="grid gap-2 text-sm">
+                  <Marcar rotulo="Mostrar preços" ajuda="Desligado, os itens aparecem sem valor e o cliente pergunta no WhatsApp." v={form.mostrar_precos} on={(v) => set("mostrar_precos", v)} pode={pode} />
+                  <Marcar rotulo="Mostrar a seção Quem somos" v={form.mostrar_sobre} on={(v) => set("mostrar_sobre", v)} pode={pode} />
+                  {seg.servicos && (
+                    <Marcar rotulo="Botão Agendar online" ajuda={p.agendar_url || !form.mostrar_agendamento ? "Leva o cliente para a sua agenda online." : "Aparece quando a agenda online estiver ligada em Agenda online."}
+                      v={form.mostrar_agendamento} on={(v) => set("mostrar_agendamento", v)} pode={pode} />
+                  )}
+                </div>
+              </Bloco>
               <Bloco titulo="Textos do site">
-                <Campo rotulo="Nome da imobiliária" id="s-nome">
+                <Campo rotulo={`Nome da ${seg.empresa}`} id="s-nome">
                   <Input id="s-nome" value={form.nome} onChange={(e) => set("nome", e.target.value)} disabled={!pode} maxLength={80} />
                 </Campo>
                 <Campo rotulo="Título da página inicial" id="s-titulo" ajuda="Frase curta, até 90 letras.">
@@ -255,17 +319,17 @@ export default function MeuSite() {
                 </Campo>
               </Bloco>
             </div>
-            <Previa form={form} painel={p} />
+            <Previa form={form} painel={p} itens={(itens.data ?? []).filter((i) => i.ativo)} tituloCatalogo={tituloCatalogo} />
           </div>
         </TabsContent>
 
         <TabsContent value="contato" className="mt-4">
           <div className="grid gap-5 lg:grid-cols-2">
-            <Bloco titulo="WhatsApp" descricao="Todos os botões do site abrem conversa neste número, já com o código do imóvel na mensagem.">
+            <Bloco titulo="WhatsApp" descricao={`Todos os botões do site abrem conversa neste número, já com o nome do ${p.tem_estoque ? seg.termos.item.toLowerCase() : "item"} na mensagem.`}>
               <Campo rotulo="Número com DDD" id="s-whats">
                 <Input id="s-whats" value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} disabled={!pode} inputMode="tel" placeholder="(41) 99999-0000" data-testid="site-whatsapp" />
               </Campo>
-              <Campo rotulo="Mensagem que o cliente envia" id="s-msg" ajuda="Use {codigo} e {titulo} para incluir o imóvel. O link do imóvel vai junto.">
+              <Campo rotulo="Mensagem que o cliente envia" id="s-msg" ajuda={p.tem_estoque ? `Use {codigo} e {titulo} para incluir o ${seg.termos.item.toLowerCase()}. O link vai junto.` : "Use {titulo} para incluir o nome do serviço, tratamento ou produto."}>
                 <Textarea id="s-msg" rows={3} value={form.mensagem_whatsapp} onChange={(e) => set("mensagem_whatsapp", e.target.value)} disabled={!pode} maxLength={300} />
               </Campo>
             </Bloco>
@@ -277,20 +341,22 @@ export default function MeuSite() {
                 <Campo rotulo="E-mail" id="s-email">
                   <Input id="s-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} disabled={!pode} />
                 </Campo>
-                <Campo rotulo="CRECI" id="s-creci">
-                  <Input id="s-creci" value={form.creci} onChange={(e) => set("creci", e.target.value)} disabled={!pode} />
-                </Campo>
+                {seg.registro && (
+                  <Campo rotulo={seg.registro} id="s-creci">
+                    <Input id="s-creci" value={form.creci} onChange={(e) => set("creci", e.target.value)} disabled={!pode} />
+                  </Campo>
+                )}
                 <Campo rotulo="Horário de atendimento" id="s-hora">
                   <Input id="s-hora" value={form.horario} onChange={(e) => set("horario", e.target.value)} disabled={!pode} placeholder="Seg. a sex., 9h às 18h" />
                 </Campo>
                 <Campo rotulo="Instagram" id="s-insta">
-                  <Input id="s-insta" value={form.instagram} onChange={(e) => set("instagram", e.target.value)} disabled={!pode} placeholder="@suaimobiliaria" />
+                  <Input id="s-insta" value={form.instagram} onChange={(e) => set("instagram", e.target.value)} disabled={!pode} placeholder={`@sua${seg.empresa.normalize("NFD").replace(/[\u0300-\u036f]/g, "")}`} />
                 </Campo>
                 <Campo rotulo="Facebook" id="s-face">
                   <Input id="s-face" value={form.facebook} onChange={(e) => set("facebook", e.target.value)} disabled={!pode} placeholder="Endereço da página" />
                 </Campo>
               </div>
-              <Campo rotulo="Endereço da imobiliária" id="s-end">
+              <Campo rotulo={`Endereço da ${seg.empresa}`} id="s-end">
                 <Input id="s-end" value={form.endereco} onChange={(e) => set("endereco", e.target.value)} disabled={!pode} />
               </Campo>
             </Bloco>
@@ -323,7 +389,7 @@ export default function MeuSite() {
         </TabsContent>
       </Tabs>
 
-      {aba !== "imoveis" && pode && (
+      {!["imoveis", "catalogo"].includes(aba) && pode && (
         <div className="sticky bottom-3 z-10 flex justify-end">
           <div className="flex items-center gap-3 rounded-xl border bg-card/95 p-2 pl-4 shadow-lg backdrop-blur">
             <span className="hidden text-xs text-muted-foreground sm:inline">
@@ -373,6 +439,26 @@ function Campo({ rotulo, id, ajuda, children }: { rotulo: string; id: string; aj
       {ajuda && <p className="text-xs text-muted-foreground">{ajuda}</p>}
     </div>
   );
+}
+
+function Marcar({ rotulo, ajuda, v, on, pode }: { rotulo: string; ajuda?: string; v: boolean; on: (v: boolean) => void; pode: boolean }) {
+  return (
+    <label className="flex items-start gap-2.5">
+      <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--primary)]" checked={v} onChange={(e) => on(e.target.checked)} disabled={!pode} />
+      <span><span className="font-medium">{rotulo}</span>{ajuda && <span className="block text-xs text-muted-foreground">{ajuda}</span>}</span>
+    </label>
+  );
+}
+
+/** Contraste WCAG entre duas cores #RRGGBB (1 a 21). */
+function contraste(a: string, b: string) {
+  const lum = (h: string) => {
+    if (!/^#[0-9a-f]{6}$/i.test(h)) return 0.5;
+    const [r, g, bb] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bb;
+  };
+  const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
 }
 
 function Cor({ rotulo, valor, onChange, pode }: { rotulo: string; valor: string; onChange: (v: string) => void; pode: boolean }) {
@@ -436,40 +522,63 @@ function Midia({ tipo, painel, pode }: { tipo: "logo" | "capa"; painel: PainelSi
   );
 }
 
-function Previa({ form, painel }: { form: Form; painel: PainelSite }) {
+function Previa({ form, painel, itens, tituloCatalogo }: { form: Form; painel: PainelSite; itens: ItemSite[]; tituloCatalogo: string }) {
   const capa = painel.config.tem_capa && painel.config.slug ? `/api/publico/site/${painel.config.slug}/midia/capa?v=${painel.config.midia_v}` : null;
+  const logo = painel.config.tem_logo && painel.config.slug ? `/api/publico/site/${painel.config.slug}/midia/logo?v=${painel.config.midia_v}` : null;
   const fonte = FONTES.find((f) => f.v === form.fonte)?.familia;
+  const amostra = itens.slice(0, 3);
   return (
     <aside className="xl:sticky xl:top-20 xl:self-start">
       <p className="mb-2 flex items-center gap-1.5 text-sm font-medium"><Palette className="h-4 w-4" /> Prévia</p>
-      <div className="overflow-hidden rounded-xl border bg-white text-[#1d2330] shadow-sm" aria-hidden>
-        <div className="flex items-center justify-between border-b border-[#e3e7ee] px-3 py-2">
-          <span className="text-[13px] font-bold" style={{ fontFamily: fonte }}>{form.nome || "Sua imobiliária"}</span>
-          <span className="rounded-full bg-[#1fa855] px-2 py-0.5 text-[10px] font-semibold text-white">WhatsApp</span>
+      <div className="overflow-hidden rounded-xl border text-[#1d2330] shadow-sm" style={{ background: form.cor_fundo }} aria-hidden data-testid="site-previa">
+        <div className="flex items-center justify-between gap-2 px-3 py-2" style={{ background: form.cor_cabecalho, borderBottom: "1px solid rgba(0,0,0,.08)" }} data-testid="previa-cabecalho">
+          <span className="flex min-w-0 items-center gap-1.5">
+            {logo && <img src={logo} alt="" className="h-5 w-5 shrink-0 object-contain" />}
+            <span className="truncate text-[13px] font-bold" style={{ fontFamily: fonte, color: form.cor_texto_cabecalho }}>{form.nome || "Sua empresa"}</span>
+          </span>
+          <span className="shrink-0 rounded-full bg-[#1fa855] px-2 py-0.5 text-[10px] font-semibold text-white">WhatsApp</span>
         </div>
-        <div className="relative flex h-36 items-end p-3" style={{ background: form.cor_primaria }}>
+        <div className="relative flex h-32 flex-col justify-end p-3" style={{ background: form.cor_primaria }}>
           {capa && <img src={capa} alt="" className="absolute inset-0 h-full w-full object-cover" />}
           {capa && <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/70" />}
           <p className="relative text-lg font-bold leading-tight text-white" style={{ fontFamily: fonte }}>{form.titulo || "Título do site"}</p>
+          {painel.agendar_url && form.mostrar_agendamento && (
+            <span className="relative mt-1.5 w-fit rounded-md px-2 py-1 text-[10px] font-semibold text-white" style={{ background: form.cor_destaque }}>Agendar online</span>
+          )}
         </div>
-        <div className="-mt-3 px-3">
-          <div className="flex gap-1.5 rounded-lg bg-white p-1.5 shadow-md ring-1 ring-black/5">
-            <span className="flex-1 rounded-md border border-[#e3e7ee] px-2 py-1.5 text-[10px] text-[#5b6474]">Bairro ou cidade</span>
-            <span className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold" style={{ background: form.cor_destaque, color: "#fff" }}>Buscar</span>
+        {painel.tem_estoque && (
+          <div className="grid grid-cols-2 gap-2 p-3 pb-0">
+            {[0, 1].map((k) => (
+              <div key={k} className="overflow-hidden rounded-lg bg-white ring-1 ring-[#e3e7ee]">
+                <div className="relative h-12 bg-[#f3f5f8]">
+                  {k === 1 && <span className="absolute inset-x-0 bottom-0 px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: form.cor_destaque, color: "#fff" }}>Reservado</span>}
+                </div>
+                <div className="p-1.5">
+                  <p className="text-[11px] font-bold" style={{ fontFamily: fonte }}>{painel.segmento === "veiculos" ? "R$ 89.900" : "R$ 480.000"}</p>
+                  <p className="text-[9px] text-[#5b6474]">{painel.segmento === "veiculos" ? "Hatch, 2021, 45 mil km" : "Apartamento, 2 quartos"}</p>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 p-3">
-          {[0, 1].map((k) => (
-            <div key={k} className="overflow-hidden rounded-lg ring-1 ring-[#e3e7ee]">
-              <div className="relative h-14 bg-[#f3f5f8]">
-                {k === 1 && <span className="absolute inset-x-0 bottom-0 px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: form.cor_destaque, color: "#fff" }}>Reservado</span>}
-              </div>
-              <div className="p-1.5">
-                <p className="text-[11px] font-bold" style={{ fontFamily: fonte }}>R$ 480.000</p>
-                <p className="text-[9px] text-[#5b6474]">Apartamento, 2 quartos</p>
-              </div>
+        )}
+        <div className="p-3">
+          <p className="mb-1.5 text-[12px] font-bold" style={{ fontFamily: fonte, color: form.cor_primaria }}>{tituloCatalogo}</p>
+          {!amostra.length ? (
+            <p className="rounded-lg border border-dashed bg-white/60 p-3 text-center text-[10px] text-[#5b6474]">Os itens do catálogo aparecem aqui.</p>
+          ) : (
+            <div className={form.layout_catalogo === "grade" ? "grid grid-cols-2 gap-2" : "grid gap-1.5"}>
+              {amostra.map((i) => (
+                <div key={i.id} className={cn("overflow-hidden rounded-lg bg-white ring-1 ring-[#e3e7ee]", form.layout_catalogo === "lista" && "flex items-center justify-between gap-2 px-2 py-1.5")}>
+                  {form.layout_catalogo === "grade" && <div className="h-10 bg-[#f3f5f8]" />}
+                  <div className={form.layout_catalogo === "grade" ? "p-1.5" : "min-w-0"}>
+                    <p className="truncate text-[10px] font-bold">{i.nome}</p>
+                    {form.layout_catalogo === "grade" && form.mostrar_precos && <p className="text-[9px] font-semibold" style={{ color: form.cor_destaque }}>{precoItem(i)}</p>}
+                  </div>
+                  {form.layout_catalogo === "lista" && form.mostrar_precos && <p className="shrink-0 text-[9px] font-semibold" style={{ color: form.cor_destaque }}>{precoItem(i)}</p>}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       </div>
     </aside>

@@ -29,7 +29,7 @@ import {
 import { apiGet, apiPost, detalheErro } from "@/lib/api";
 import { brl, primeiroNome } from "@/lib/format";
 import { linkWhatsapp } from "@/lib/crm";
-import type { ImovelSitePublico, MarcaSite } from "@/lib/types";
+import type { ImovelSitePublico, ItemSitePublico, MarcaSite } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /* Site público da imobiliária. Cores, fonte, logo e textos vêm do CRM (tela Meu site).
@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 interface Pagina {
   marca: MarcaSite;
   imoveis: ImovelSitePublico[];
+  itens?: ItemSitePublico[];
 }
 interface Detalhe {
   marca: MarcaSite;
@@ -77,6 +78,10 @@ function vocab(marca: MarcaSite) {
   };
 }
 
+/** O site mostra estoque (imóveis ou veículos) só na imobiliária e na loja; os outros mostram o catálogo. */
+const temEstoque = (m: MarcaSite) => !m.segmento || m.segmento === "imobiliaria" || m.segmento === "veiculos";
+const REGISTRO: Record<string, string> = { imobiliaria: "CRECI", odontologia: "CRO", estetica: "Registro", terapia: "Registro" };
+
 function textoSobre(hex: string): string {
   const n = parseInt(hex.slice(1), 16);
   const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
@@ -93,9 +98,13 @@ function preco(i: ImovelSitePublico): { valor: string; sufixo: string; legenda: 
   return { valor: i.valor_venda ? brl(i.valor_venda) : "Consulte", sufixo: "", legenda: i.finalidade === "ambos" ? "Venda ou aluguel" : "Venda" };
 }
 
+function msgItem(marca: MarcaSite, item: ItemSitePublico): string {
+  return (marca.mensagem_whatsapp || "Olá! Vi no site {titulo} e quero saber mais.").replaceAll("{codigo}", "").replaceAll("{titulo}", item.nome).replace(/\s+/g, " ").trim();
+}
+
 function msgWhats(marca: MarcaSite, i?: ImovelSitePublico): string {
   const V = vocab(marca);
-  if (!i) return `Olá! Vim pelo site da ${marca.nome} e quero ajuda para encontrar um ${V.um}.`;
+  if (!i) return temEstoque(marca) ? `Olá! Vim pelo site da ${marca.nome} e quero ajuda para encontrar um ${V.um}.` : `Olá! Vim pelo site da ${marca.nome} e quero mais informações.`;
   return (marca.mensagem_whatsapp || `Olá! Vi o ${V.um} {codigo} no site e quero mais informações.`)
     .replaceAll("{codigo}", i.codigo)
     .replaceAll("{titulo}", i.titulo)
@@ -150,8 +159,10 @@ function estilo(marca: MarcaSite): CSSProperties {
     "--f-titulo": `${f.titulo}, ui-sans-serif, system-ui, sans-serif`,
     "--f-corpo": `${f.corpo}, ui-sans-serif, system-ui, sans-serif`,
     fontFamily: "var(--f-corpo)",
+    "--h": marca.cor_cabecalho || "#ffffff",
+    "--h-txt": marca.cor_texto_cabecalho || TINTA,
     color: TINTA,
-    background: "#ffffff",
+    background: marca.cor_fundo || "#ffffff",
   } as CSSProperties;
 }
 
@@ -168,7 +179,7 @@ function Logo({ marca, claro }: { marca: MarcaSite; claro?: boolean }) {
       <span className="flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold" style={{ background: "var(--p)", color: "var(--p-txt)" }}>
         {iniciais}
       </span>
-      <span className="text-[17px] font-bold leading-tight" style={{ fontFamily: "var(--f-titulo)", color: claro ? "#fff" : TINTA }}>
+      <span className="text-[17px] font-bold leading-tight" style={{ fontFamily: "var(--f-titulo)", color: claro ? "#fff" : "var(--h-txt, #1d2330)" }} data-testid="site-nome-topo">
         {marca.nome}
       </span>
     </span>
@@ -183,15 +194,15 @@ function IconeWhats({ className }: { className?: string }) {
   );
 }
 
-function BotaoWhats({ marca, imovel, children, className, grande }: { marca: MarcaSite; imovel?: ImovelSitePublico; children?: ReactNode; className?: string; grande?: boolean }) {
-  const href = linkWhatsapp(marca.whatsapp, msgWhats(marca, imovel));
+function BotaoWhats({ marca, imovel, item, children, className, grande }: { marca: MarcaSite; imovel?: ImovelSitePublico; item?: ItemSitePublico; children?: ReactNode; className?: string; grande?: boolean }) {
+  const href = linkWhatsapp(marca.whatsapp, item ? msgItem(marca, item) : msgWhats(marca, imovel));
   if (!href) return null;
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      onClick={() => registrar(marca.slug ?? "", "whatsapp", imovel?.id)}
+      onClick={() => registrar(marca.slug ?? "", "whatsapp", imovel?.id ?? item?.id)}
       className={cn(
         "inline-flex items-center justify-center gap-2 rounded-full bg-[#1fa855] font-semibold text-white transition hover:bg-[#178a45] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1fa855]",
         grande ? "h-12 px-6 text-[15px]" : "h-10 px-4 text-sm",
@@ -277,17 +288,19 @@ function Card({ i, marca }: { i: ImovelSitePublico; marca: MarcaSite }) {
   );
 }
 
-function Topo({ marca, sobre }: { marca: MarcaSite; sobre?: boolean }) {
+function Topo({ marca, sobre, catalogo }: { marca: MarcaSite; sobre?: boolean; catalogo?: boolean }) {
+  const link = "hidden rounded-full px-3 py-2 text-sm font-medium transition hover:bg-black/5";
   return (
-    <header className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur" style={{ borderColor: LINHA }}>
+    <header className="sticky top-0 z-40 border-b backdrop-blur" style={{ borderColor: "rgba(0,0,0,.08)", background: `color-mix(in srgb, var(--h) 94%, transparent)`, color: "var(--h-txt)" }} data-testid="site-topo">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:h-[72px] sm:px-6">
         <Link to={`/s/${marca.slug}`} className="flex items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--p)]">
           <Logo marca={marca} />
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
-          <a href={`/s/${marca.slug}#imoveis`} className="hidden rounded-full px-3 py-2 text-sm font-medium hover:bg-[#f3f5f8] sm:block">{vocab(marca).Uns}</a>
-          {sobre && <a href={`/s/${marca.slug}#sobre`} className="hidden rounded-full px-3 py-2 text-sm font-medium hover:bg-[#f3f5f8] sm:block">Quem somos</a>}
-          <a href={`/s/${marca.slug}#contato`} className="hidden rounded-full px-3 py-2 text-sm font-medium hover:bg-[#f3f5f8] md:block">Contato</a>
+          {temEstoque(marca) && <a href={`/s/${marca.slug}#imoveis`} className={cn(link, "sm:block")}>{vocab(marca).Uns}</a>}
+          {catalogo && <a href={`/s/${marca.slug}#catalogo`} className={cn(link, "sm:block")}>{marca.titulo_catalogo || "Serviços"}</a>}
+          {sobre && <a href={`/s/${marca.slug}#sobre`} className={cn(link, "md:block")}>Quem somos</a>}
+          <a href={`/s/${marca.slug}#contato`} className={cn(link, "lg:block")}>Contato</a>
           <BotaoWhats marca={marca} className="ml-1">
             <span className="hidden sm:inline">Chamar no WhatsApp</span>
             <span className="sm:hidden">WhatsApp</span>
@@ -306,7 +319,7 @@ function Rodape({ marca }: { marca: MarcaSite }) {
           <div className="inline-block rounded-xl bg-white p-2.5">
             <Logo marca={marca} />
           </div>
-          {marca.creci && <p className="text-sm">CRECI {marca.creci}</p>}
+          {marca.creci && <p className="text-sm">{REGISTRO[marca.segmento ?? "imobiliaria"] ?? "Registro"} {marca.creci}</p>}
         </div>
         <div className="space-y-2 text-sm">
           {(marca.telefone || marca.email || marca.horario) && <p className="font-semibold text-white">Atendimento</p>}
@@ -391,7 +404,7 @@ function FormContato({ marca, imovel, titulo, inicial }: { marca: MarcaSite; imo
     return (
       <div className="rounded-2xl p-6 text-center" style={{ background: NEVOA }} role="status">
         <p className="text-lg font-semibold" style={{ fontFamily: "var(--f-titulo)" }}>Recebemos seu contato, {primeiroNome(nome)}.</p>
-        <p className="mt-1 text-sm" style={{ color: CINZA }}>Um corretor vai falar com você em breve. Se preferir, chame agora:</p>
+        <p className="mt-1 text-sm" style={{ color: CINZA }}>A equipe vai falar com você em breve. Se preferir, chame agora:</p>
         <BotaoWhats marca={marca} imovel={imovel} className="mt-4" />
       </div>
     );
@@ -402,7 +415,7 @@ function FormContato({ marca, imovel, titulo, inicial }: { marca: MarcaSite; imo
       <p className="text-base font-semibold" style={{ fontFamily: "var(--f-titulo)" }}>{titulo}</p>
       <input aria-label="Seu nome" placeholder="Seu nome" value={nome} onChange={(e) => setNome(e.target.value)} className={campo} style={{ borderColor: LINHA }} autoComplete="name" required data-testid="site-form-nome" />
       <input aria-label="Seu WhatsApp ou telefone" placeholder="WhatsApp com DDD" value={telefone} onChange={(e) => setTelefone(e.target.value)} className={campo} style={{ borderColor: LINHA }} inputMode="tel" autoComplete="tel" required data-testid="site-form-telefone" />
-      <textarea aria-label="Mensagem" placeholder="Conte o que você procura (opcional)" value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={3} className={cn(campo, "h-auto py-2.5")} style={{ borderColor: LINHA }} />
+      <textarea aria-label="Mensagem" placeholder={temEstoque(marca) ? "Conte o que você procura (opcional)" : "Conte o que você precisa (opcional)"} value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={3} className={cn(campo, "h-auto py-2.5")} style={{ borderColor: LINHA }} />
       <input tabIndex={-1} autoComplete="off" aria-hidden className="absolute -left-[9999px] h-0 w-0 opacity-0" value={isca} onChange={(e) => setIsca(e.target.value)} name="site" />
       {enviar.isError && <p className="text-sm text-[#c0362c]">{detalheErro(enviar.error) ?? "Não foi possível enviar. Tente pelo WhatsApp."}</p>}
       <button
@@ -448,7 +461,7 @@ export default function SitePublico() {
 function PaginaInicial({ slug }: { slug: string }) {
   const q = useQuery({ queryKey: ["site-publico", slug], queryFn: () => apiGet<Pagina>(`/publico/site/${slug}`), retry: false, staleTime: 60_000 });
   const marca = q.data?.marca;
-  useTema(marca, marca ? `${marca.nome}: ${marca.segmento === "veiculos" ? "veículos à venda" : "imóveis à venda e para alugar"}` : "");
+  useTema(marca, marca ? (temEstoque(marca) ? `${marca.nome}: ${marca.segmento === "veiculos" ? "veículos à venda" : "imóveis à venda e para alugar"}` : `${marca.nome}: ${marca.titulo_catalogo || "serviços"}`) : "");
   useEffect(() => {
     if (marca) registrar(slug, "visualizacao");
   }, [marca, slug]);
@@ -479,6 +492,9 @@ function PaginaInicial({ slug }: { slug: string }) {
   const destaques = imoveis.filter((i) => i.destaque).slice(0, 3);
 
   if (!marca) return <Estado carregando={q.isLoading} erro={q.error} />;
+  const itens = q.data?.itens ?? [];
+  const mostrarSobre = !!marca.sobre && marca.mostrar_sobre !== false;
+  if (!temEstoque(marca)) return <PaginaServicos marca={marca} itens={itens} sobre={mostrarSobre} />;
 
   const capa = capaFalhou ? null : (marca.capa_url ?? destaques[0]?.foto_url ?? imoveis.find((i) => i.foto_url)?.foto_url ?? null);
   const filtrando = finalidade !== "todos" || !!tipo || !!quartos || !!local.trim();
@@ -492,7 +508,7 @@ function PaginaInicial({ slug }: { slug: string }) {
 
   return (
     <div style={estilo(marca)} className="min-h-dvh antialiased">
-      <Topo marca={marca} sobre={!!marca.sobre} />
+      <Topo marca={marca} sobre={mostrarSobre} catalogo={itens.length > 0} />
 
       {/* Abertura: a foto da imobiliária (ou do imóvel em destaque) com a busca ancorada embaixo */}
       <section className="relative">
@@ -632,7 +648,9 @@ function PaginaInicial({ slug }: { slug: string }) {
         )}
       </section>
 
-      {marca.sobre && (
+      {itens.length > 0 && <Catalogo marca={marca} itens={itens} />}
+
+      {mostrarSobre && (
         <section id="sobre" className="scroll-mt-20" style={{ background: NEVOA }}>
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-[1fr_1.4fr] md:items-center">
             <h2 className="text-[28px] font-bold leading-tight tracking-tight sm:text-4xl" style={{ fontFamily: "var(--f-titulo)" }}>
@@ -658,6 +676,153 @@ function PaginaInicial({ slug }: { slug: string }) {
         <div className="rounded-2xl bg-white p-5 sm:p-6" style={{ boxShadow: `0 0 0 1px ${LINHA}` }}>
           <FormContato marca={marca} titulo="Prefere que a gente ligue?" />
         </div>
+      </section>
+
+      <Rodape marca={marca} />
+      <WhatsFlutuante marca={marca} />
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ catálogo (serviços, tratamentos, produtos)
+
+const ROTULO_TIPO: Record<ItemSitePublico["tipo"], string> = { servico: "Serviço", tratamento: "Tratamento", produto: "Produto" };
+
+function precoTexto(i: ItemSitePublico) {
+  if (i.preco == null) return null;
+  if (i.preco === 0) return "Sem custo";
+  return `${i.preco_a_partir ? "a partir de " : ""}${brl(i.preco)}`;
+}
+
+function BotaoAgendar({ marca, item, className }: { marca: MarcaSite; item?: ItemSitePublico; className?: string }) {
+  if (!marca.agendar_url || item?.tipo === "produto") return null;
+  return (
+    <a href={marca.agendar_url} className={cn("inline-flex items-center justify-center gap-2 rounded-full font-semibold transition hover:opacity-90", className ?? "h-10 px-4 text-sm")}
+      style={{ background: "var(--d)", color: "var(--d-txt)" }} data-testid="site-agendar">
+      <CalendarDays className="h-4 w-4" /> Agendar
+    </a>
+  );
+}
+
+function Catalogo({ marca, itens }: { marca: MarcaSite; itens: ItemSitePublico[] }) {
+  const categorias = useMemo(() => [...new Set(itens.map((i) => i.categoria).filter(Boolean))], [itens]);
+  const [cat, setCat] = useState("");
+  const lista = cat ? itens.filter((i) => i.categoria === cat) : itens;
+  const grade = marca.layout_catalogo !== "lista";
+  return (
+    <section id="catalogo" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-14 sm:px-6" aria-labelledby="t-catalogo" data-testid="site-catalogo-publico">
+      <h2 id="t-catalogo" className="text-2xl font-bold tracking-tight sm:text-[28px]" style={{ fontFamily: "var(--f-titulo)" }}>{marca.titulo_catalogo || "Serviços"}</h2>
+      {categorias.length > 1 && (
+        <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Categorias">
+          {["", ...categorias].map((c) => (
+            <button key={c || "todas"} type="button" role="tab" aria-selected={cat === c} onClick={() => setCat(c)}
+              className="rounded-full border px-4 py-1.5 text-sm font-semibold transition" style={cat === c ? { background: "var(--p)", color: "var(--p-txt)", borderColor: "transparent" } : { borderColor: LINHA, color: CINZA, background: "#fff" }}>
+              {c || "Todos"}
+            </button>
+          ))}
+        </div>
+      )}
+      {grade ? (
+        <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {lista.map((i) => (
+            <article key={i.id} className="flex flex-col overflow-hidden rounded-2xl bg-white" style={{ boxShadow: `0 0 0 1px ${LINHA}` }} data-testid="site-item">
+              {i.foto_url ? <Foto src={i.foto_url} alt={i.nome} className="aspect-[4/3]" /> : null}
+              <div className="flex flex-1 flex-col gap-2 p-5">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide" style={{ color: CINZA }}>
+                  <span>{ROTULO_TIPO[i.tipo]}{i.categoria ? ` · ${i.categoria}` : ""}</span>
+                  {i.destaque && <Star className="h-3.5 w-3.5" style={{ color: "var(--d)", fill: "var(--d)" }} aria-label="Destaque" />}
+                </div>
+                <h3 className="text-lg font-bold leading-snug" style={{ fontFamily: "var(--f-titulo)" }}>{i.nome}</h3>
+                {i.descricao && <p className="line-clamp-4 whitespace-pre-line text-sm leading-relaxed" style={{ color: CINZA }}>{i.descricao}</p>}
+                <div className="mt-auto flex flex-wrap items-baseline gap-x-3 pt-2">
+                  {precoTexto(i) && <p className="text-lg font-bold" style={{ color: "var(--p)" }}>{precoTexto(i)}</p>}
+                  {i.duracao_min && <p className="flex items-center gap-1 text-sm" style={{ color: CINZA }}><Clock3 className="h-3.5 w-3.5" /> {i.duracao_min} min</p>}
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <BotaoAgendar marca={marca} item={i} />
+                  <BotaoWhats marca={marca} item={i}>{i.tipo === "produto" ? "Quero este" : "Tirar dúvida"}</BotaoWhats>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <ul className="mt-6 divide-y overflow-hidden rounded-2xl bg-white" style={{ boxShadow: `0 0 0 1px ${LINHA}`, borderColor: LINHA }}>
+          {lista.map((i) => (
+            <li key={i.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-5 sm:p-5" style={{ borderColor: LINHA }} data-testid="site-item">
+              <div className="min-w-0 flex-1">
+                <p className="font-bold" style={{ fontFamily: "var(--f-titulo)" }}>{i.nome}</p>
+                {i.descricao && <p className="mt-0.5 line-clamp-2 text-sm" style={{ color: CINZA }}>{i.descricao}</p>}
+                {i.duracao_min && <p className="mt-0.5 text-xs" style={{ color: CINZA }}>{i.duracao_min} min</p>}
+              </div>
+              {precoTexto(i) && <p className="shrink-0 font-bold" style={{ color: "var(--p)" }}>{precoTexto(i)}</p>}
+              <div className="flex shrink-0 gap-2">
+                <BotaoAgendar marca={marca} item={i} className="h-9 px-3 text-sm" />
+                <BotaoWhats marca={marca} item={i}>WhatsApp</BotaoWhats>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** Site dos segmentos de atendimento (clínicas, barbearia, estética): abertura, catálogo, quem somos e contato. */
+function PaginaServicos({ marca, itens, sobre }: { marca: MarcaSite; itens: ItemSitePublico[]; sobre: boolean }) {
+  const [capaFalhou, setCapaFalhou] = useState(false);
+  const capa = capaFalhou ? null : (marca.capa_url ?? null);
+  return (
+    <div style={estilo(marca)} className="min-h-dvh antialiased">
+      <Topo marca={marca} sobre={sobre} catalogo={itens.length > 0} />
+      <section className="relative overflow-hidden" style={{ background: "var(--p)" }}>
+        {capa && <img src={capa} alt="" onError={() => setCapaFalhou(true)} className="absolute inset-0 h-full w-full object-cover" />}
+        {capa && <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(15,18,28,.2) 0%, rgba(15,18,28,.75) 100%)" }} />}
+        <div className="relative mx-auto flex min-h-[420px] max-w-6xl flex-col justify-end px-4 py-14 sm:min-h-[480px] sm:px-6">
+          <h1 className="max-w-3xl text-[34px] font-bold leading-[1.08] tracking-tight sm:text-[52px]" style={{ fontFamily: "var(--f-titulo)", color: capa ? "#fff" : "var(--p-txt)" }}>
+            {marca.titulo || marca.nome}
+          </h1>
+          {marca.subtitulo && (
+            <p className="mt-3 max-w-xl text-base sm:text-lg" style={{ color: capa ? "rgba(255,255,255,.88)" : "var(--p-txt)", opacity: capa ? 1 : 0.85 }}>{marca.subtitulo}</p>
+          )}
+          <div className="mt-7 flex flex-wrap gap-3">
+            <BotaoAgendar marca={marca} className="h-12 px-6 text-[15px]" />
+            <BotaoWhats marca={marca} grande />
+            {itens.length > 0 && (
+              <a href="#catalogo" className="inline-flex h-12 items-center rounded-full border px-6 text-[15px] font-semibold"
+                style={{ borderColor: capa ? "rgba(255,255,255,.5)" : "color-mix(in srgb, var(--p-txt) 45%, transparent)", color: capa ? "#fff" : "var(--p-txt)" }}>
+                Ver {(marca.titulo_catalogo || "serviços").toLowerCase()}
+              </a>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {itens.length > 0 ? <Catalogo marca={marca} itens={itens} /> : <div className="h-10" />}
+
+      {sobre && (
+        <section id="sobre" className="scroll-mt-20" style={{ background: NEVOA }}>
+          <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-[1fr_1.4fr] md:items-center">
+            <h2 className="text-[28px] font-bold leading-tight tracking-tight sm:text-4xl" style={{ fontFamily: "var(--f-titulo)" }}>Quem somos</h2>
+            <p className="max-w-[68ch] whitespace-pre-line text-[16px] leading-relaxed" style={{ color: "#3b4352" }}>{marca.sobre}</p>
+          </div>
+        </section>
+      )}
+
+      <section id="contato" className={cn("mx-auto grid max-w-6xl scroll-mt-20 gap-10 px-4 py-14 sm:px-6", marca.formulario && "md:grid-cols-2")}>
+        <div>
+          <h2 className="text-[28px] font-bold leading-tight tracking-tight sm:text-4xl" style={{ fontFamily: "var(--f-titulo)" }}>Fale com a gente</h2>
+          <p className="mt-3 max-w-md text-base" style={{ color: CINZA }}>Tire dúvidas, peça um orçamento ou marque o seu horário.</p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <BotaoAgendar marca={marca} className="h-12 px-6 text-[15px]" />
+            <BotaoWhats marca={marca} grande />
+          </div>
+        </div>
+        {marca.formulario && (
+          <div className="rounded-2xl bg-white p-5 sm:p-6" style={{ boxShadow: `0 0 0 1px ${LINHA}` }}>
+            <FormContato marca={marca} titulo="Prefere que a gente ligue?" />
+          </div>
+        )}
       </section>
 
       <Rodape marca={marca} />

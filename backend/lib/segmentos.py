@@ -178,16 +178,16 @@ PRECOS_SEGMENTO: dict[str, dict] = {
 _RECURSOS_TIER: dict[str, tuple[list[str], ...]] = {
     "veiculos": (["chat", "site"], ["chat", "site", "automacoes", "propostas"],
                  ["chat", "site", "automacoes", "propostas", "assinatura", "google"], None),
-    "odontologia": (["chat", "agenda_online", "prontuario", "odontograma"],
-                    ["chat", "agenda_online", "prontuario", "odontograma", "automacoes"],
-                    ["chat", "agenda_online", "prontuario", "odontograma", "automacoes", "assinatura", "google"], None),
-    "terapia": (["chat", "agenda_online", "prontuario"], ["chat", "agenda_online", "prontuario", "automacoes"],
-                ["chat", "agenda_online", "prontuario", "automacoes", "assinatura", "google"], None),
-    "barbearia": (["chat", "agenda_online"], ["chat", "agenda_online", "automacoes"],
-                  ["chat", "agenda_online", "automacoes", "google"], None),
-    "estetica": (["chat", "agenda_online", "prontuario", "mapa_facial"],
-                 ["chat", "agenda_online", "prontuario", "mapa_facial", "automacoes"],
-                 ["chat", "agenda_online", "prontuario", "mapa_facial", "automacoes", "assinatura", "google"], None),
+    "odontologia": (["chat", "site", "agenda_online", "prontuario", "odontograma"],
+                    ["chat", "site", "agenda_online", "prontuario", "odontograma", "automacoes"],
+                    ["chat", "site", "agenda_online", "prontuario", "odontograma", "automacoes", "assinatura", "google"], None),
+    "terapia": (["chat", "site", "agenda_online", "prontuario"], ["chat", "site", "agenda_online", "prontuario", "automacoes"],
+                ["chat", "site", "agenda_online", "prontuario", "automacoes", "assinatura", "google"], None),
+    "barbearia": (["chat", "site", "agenda_online"], ["chat", "site", "agenda_online", "automacoes"],
+                  ["chat", "site", "agenda_online", "automacoes", "google"], None),
+    "estetica": (["chat", "site", "agenda_online", "prontuario", "mapa_facial"],
+                 ["chat", "site", "agenda_online", "prontuario", "mapa_facial", "automacoes"],
+                 ["chat", "site", "agenda_online", "prontuario", "mapa_facial", "automacoes", "assinatura", "google"], None),
 }
 
 _RESUMO_TIER = {
