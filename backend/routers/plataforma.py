@@ -78,6 +78,21 @@ async def testar_pagamentos(principal: Principal = Depends(require("empresa:mana
     return {"ok": True, "saldo": saldo.get("balance")}
 
 
+@router.get("/links-pagamento")
+async def ver_links_pagamento(principal: Principal = Depends(require("empresa:manage"))):
+    from lib import links_pagamento
+
+    return await links_pagamento.painel()
+
+
+@router.post("/links-pagamento/gerar")
+async def gerar_links_pagamento(principal: Principal = Depends(require("empresa:manage"))):
+    """Cria ou atualiza no Asaas os links de pagamento dos planos (um lote por chamada)."""
+    from lib import links_pagamento
+
+    return await links_pagamento.sincronizar()
+
+
 @router.post("/cartao-demo")
 async def gerar_cartao_demo(principal: Principal = Depends(require("empresa:manage"))):
     """Gera (ou troca) o cartão de demonstração. O anterior deixa de funcionar na hora."""

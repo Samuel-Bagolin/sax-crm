@@ -82,6 +82,8 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    Empresas > Pagamentos ou em `ASAAS_API_KEY`. O webhook (`/api/webhooks/asaas`) confere o token,
    é idempotente pelo id do evento e grava só campos `assinatura.*`. O cartão de demonstração
    (gerado em Empresas > Pagamentos) cria conta paga sem cobrança, só para o dono da plataforma testar.
+   Links de pagamento dos planos (`lib/links_pagamento.py`, Empresas > Pagamentos): cartão no preço da
+   tabela e Pix com 10% de desconto, recorrentes; gerados em lotes e idempotentes (preço mudou, troca o link).
 9. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
    `FIREBASE_SERVICE_ACCOUNT`; o resto é gerado e guardado no banco (`lib/autoconfig.py`).
 

@@ -139,6 +139,7 @@ export function ConfigPagamentos() {
   const copiar = (t: string) => navigator.clipboard.writeText(t).then(() => toast.success("Copiado"));
   const numeroFmt = d.cartao_demo?.replace(/(\d{4})(?=\d)/g, "$1 ");
   return (
+    <div className="grid gap-5">
     <div className="grid gap-5 lg:grid-cols-2">
       <section className="grid h-fit gap-4 rounded-xl border bg-card p-5">
         <div>
@@ -197,6 +198,8 @@ export function ConfigPagamentos() {
         ) : <Button className="w-fit" onClick={() => gerar.mutate()} disabled={gerar.isPending} data-testid="gerar-cartao-demo">Gerar cartão de demonstração</Button>}
       </section>
     </div>
+    <LinksPagamento configurado={d.configurado} />
+    </div>
   );
 }
 
@@ -209,5 +212,125 @@ function Linha({ rotulo, valor, copiar, secreto }: { rotulo: string; valor: stri
       {secreto && <button type="button" onClick={() => setVer(!ver)} aria-label={ver ? "Ocultar" : "Mostrar"}>{ver ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>}
       <button type="button" onClick={() => copiar(valor)} aria-label={`Copiar ${rotulo}`}><Copy className="h-4 w-4" /></button>
     </div>
+  );
+}
+
+// ------------------------------------------------------------------ links de pagamento dos planos
+
+interface LinkPlano {
+  chave: string; plano: string; plano_nome: string; segmento: string; segmento_nome: string;
+  periodo: "mensal" | "anual"; forma: "cartao" | "pix"; valor: number; valor_tabela: number; url: string | null; erro: string | null;
+}
+interface LinksResp { links: LinkPlano[]; pendentes: number; total: number; prontos: number; parar?: boolean }
+
+export function LinksPagamento({ configurado }: { configurado: boolean }) {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["plataforma-links"], queryFn: () => apiGet<LinksResp>("/plataforma/links-pagamento") });
+  const [seg, setSeg] = useState("");
+  const [gerando, setGerando] = useState(false);
+  const copiar = (t: string) => navigator.clipboard.writeText(t).then(() => toast.success("Link copiado"));
+
+  // Gera em lotes: cada chamada cria até 12 links, para caber no tempo da função no Vercel.
+  const gerar = async () => {
+    setGerando(true);
+    try {
+      for (let i = 0; i < 20; i++) {
+        const r = await apiPost<LinksResp>("/plataforma/links-pagamento/gerar");
+        qc.setQueryData(["plataforma-links"], r);
+        if (!r.pendentes || r.parar) {
+          if (r.parar) toast.error("Alguns links foram recusados pelo Asaas. Veja o motivo na lista.");
+          else toast.success(`${r.prontos} links prontos no Asaas`);
+          break;
+        }
+      }
+    } catch (e) {
+      toast.error(detalheErro(e) ?? "Não foi possível gerar os links");
+    } finally {
+      setGerando(false);
+      qc.invalidateQueries({ queryKey: ["plataforma-links"] });
+    }
+  };
+
+  const d = q.data;
+  const segmentos = [...new Map((d?.links ?? []).map((l) => [l.segmento, l.segmento_nome])).entries()];
+  const linhas = (d?.links ?? []).filter((l) => !seg || l.segmento === seg);
+  // Uma linha por plano e período, com cartão e Pix lado a lado.
+  const grupos = [...linhas.reduce((m, l) => {
+    const k = `${l.plano}:${l.periodo}`;
+    m.set(k, { ...(m.get(k) ?? { base: l }), [l.forma]: l });
+    return m;
+  }, new Map<string, { base: LinkPlano; cartao?: LinkPlano; pix?: LinkPlano }>()).values()];
+
+  const baixar = () => {
+    const cab = "Segmento;Plano;Período;Forma;Valor;Link";
+    const corpo = (d?.links ?? []).filter((l) => l.url).map((l) => [l.segmento_nome, l.plano_nome, l.periodo === "mensal" ? "Mensal" : "Anual",
+      l.forma === "pix" ? "Pix 10% off" : "Cartão", l.valor.toFixed(2).replace(".", ","), l.url].join(";"));
+    const blob = new Blob(["﻿" + [cab, ...corpo].join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "links-pagamento-sax.csv"; a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  const Celula = ({ l }: { l?: LinkPlano }) => !l ? <td /> : (
+    <td className="px-3 py-2">
+      <div className="flex items-center gap-2">
+        <span className="num w-24 text-right font-medium">{brl(l.valor)}</span>
+        {l.url ? (
+          <>
+            <button type="button" onClick={() => copiar(l.url!)} className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-muted" aria-label={`Copiar link ${l.forma}`}><Copy className="h-3.5 w-3.5" /> Copiar</button>
+            <a href={l.url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Abrir</a>
+          </>
+        ) : l.erro ? <span className="text-xs text-destructive" title={l.erro}><AlertTriangle className="mr-1 inline h-3.5 w-3.5" />{l.erro}</span>
+          : <span className="text-xs text-muted-foreground">não gerado</span>}
+      </div>
+    </td>
+  );
+
+  return (
+    <section className="grid gap-4 rounded-xl border bg-card p-5" data-testid="links-pagamento">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="max-w-2xl">
+          <h3 className="font-semibold">Links de pagamento dos planos</h3>
+          <p className="text-sm text-muted-foreground">Um link por plano, mensal e anual: cartão de crédito no preço da tabela, cobrado sozinho a cada ciclo, e Pix com 10% de desconto, com uma nova cobrança Pix a cada ciclo. Use para vender pelo WhatsApp.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={gerar} disabled={!configurado || gerando} data-testid="gerar-links">
+            {gerando && <Loader2 className="h-4 w-4 animate-spin" />} {d?.prontos ? "Atualizar links no Asaas" : "Gerar links no Asaas"}
+          </Button>
+          <Button variant="outline" onClick={baixar} disabled={!d?.prontos}>Baixar planilha</Button>
+        </div>
+      </div>
+      <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+        Quem paga pelo link não ganha conta no CRM sozinho. Ao receber o pagamento no Asaas, crie a empresa em Empresas. Mudou o preço de um plano? Clique em atualizar: o link antigo sai do Asaas e um novo é criado.
+      </p>
+      {!configurado && <p className="text-sm text-muted-foreground">Salve a chave do Asaas acima para gerar os links.</p>}
+      {d && (
+        <>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span><b className="num">{d.prontos}</b> de <b className="num">{d.total}</b> links prontos{d.pendentes ? `, ${d.pendentes} para criar ou atualizar` : ""}</span>
+            <select aria-label="Segmento" value={seg} onChange={(e) => setSeg(e.target.value)} className="ml-auto h-8 rounded-lg border bg-transparent px-2 text-sm">
+              <option value="">Todos os segmentos</option>
+              {segmentos.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+            </select>
+          </div>
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+                <tr><th className="px-3 py-2">Plano</th><th className="px-3 py-2">Período</th><th className="px-3 py-2">Cartão de crédito</th><th className="px-3 py-2">Pix (10% off)</th></tr>
+              </thead>
+              <tbody className="divide-y">
+                {grupos.map(({ base, cartao, pix }) => (
+                  <tr key={`${base.plano}:${base.periodo}`}>
+                    <td className="px-3 py-2"><p className="font-medium">{base.plano_nome}</p><p className="text-xs text-muted-foreground">{base.segmento_nome}</p></td>
+                    <td className="px-3 py-2">{base.periodo === "mensal" ? "Mensal" : "Anual"}</td>
+                    <Celula l={cartao} />
+                    <Celula l={pix} />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
