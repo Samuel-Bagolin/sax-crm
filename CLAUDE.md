@@ -114,10 +114,19 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    Empresas > Pagamentos ou `EVOLUTION_URL`/`EVOLUTION_API_KEY`. `controle.whatsapp_instancias` liga a
    instância ao banco e guarda o token do webhook (`/api/webhooks/whatsapp/{token}`). Mensagem e conversa
    têm `_id` fixo (instância|id, instância|jid): webhook repetido não duplica. A tela consulta só
-   `wa_estado.versao` a cada 4 s. Gestor vê tudo; corretor vê as dele e as sem responsável. Contato novo
-   vira lead (origem WhatsApp) nos segmentos com Leads. Teste local: `tests/fake_evolution.py` na porta 8098.
+   `wa_estado.versao` a cada 4 s. Setores (`wa_setores`, nome livre e membros) e responsáveis por número
+   (`responsaveis`, `setor_id` em `wa_conexoes`): número com setor ou responsáveis é restrito, só essas pessoas
+   veem as conversas dele; número sem os dois é aberto (cada um vê as dele e as sem dono). Gestor vê tudo;
+   conversa passada para alguém aparece para essa pessoa. Número de uma pessoa só: conversa nova já nasce dela
+   (sem rodízio). Regra em `_acesso`/`_pode_ver`. Contato novo vira lead (origem WhatsApp) nos segmentos com
+   Leads. Teste local: `tests/fake_evolution.py` na porta 8098.
 11. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
    `FIREBASE_SERVICE_ACCOUNT`; o resto é gerado e guardado no banco (`lib/autoconfig.py`).
+12. **Marca.** A tela de login é da plataforma: sempre a marca SAX, nunca a de um cliente (`/configuracoes/publica`
+   sem sessão só usa a empresa com `?empresa=slug`). A logo da empresa vai na URL com `logo_v` (muda com o
+   arquivo, fura o cache na hora). Upload de logo passa por `prepararImagem` (`lib/imagem.ts`): reduz e tira o
+   fundo branco que encosta na borda. O cabeçalho mostra logo e nome da empresa; o menu da conta, CNPJ,
+   segmento e plano.
 
 ## Texto da interface
 

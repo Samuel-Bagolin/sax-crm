@@ -31,6 +31,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import SiteStatusPicker, { SITE_STATUS } from "@/components/site/SiteStatusPicker";
 import { cn } from "@/lib/utils";
+import { prepararImagem } from "@/lib/imagem";
+import { urlApi } from "@/lib/suporte";
 
 type Form = Omit<SiteConfig, "tem_logo" | "tem_capa" | "midia_v" | "atualizado_em" | "atualizado_por" | "slug"> & { slug: string };
 
@@ -64,19 +66,6 @@ const FONTES: { v: FonteSite; nome: string; amostra: string; familia: string }[]
 function paraForm(p: PainelSite): Form {
   const { tem_logo: _l, tem_capa: _c, midia_v: _m, atualizado_em: _a, atualizado_por: _b, slug, ...resto } = p.config;
   return { ...resto, slug: slug ?? p.sugestao_slug };
-}
-
-async function lerImagem(arquivo: File, tipo: "logo" | "capa"): Promise<{ base64: string; mime: "image/png" | "image/jpeg" }> {
-  const bitmap = await createImageBitmap(arquivo);
-  const max = tipo === "logo" ? 640 : 1920;
-  const escala = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * escala);
-  canvas.height = Math.round(bitmap.height * escala);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  const mime = tipo === "logo" ? "image/png" : "image/jpeg";
-  const url = canvas.toDataURL(mime, 0.82);
-  return { base64: url.split(",")[1], mime };
 }
 
 export default function MeuSite() {
@@ -223,7 +212,7 @@ export default function MeuSite() {
             <div className="grid gap-5">
               <Bloco titulo="Logo e foto de capa" descricao={p.tem_estoque ? `A capa aparece no topo do site. Sem capa, o site usa a foto do ${seg.termos.item.toLowerCase()} em destaque.` : "A capa aparece no topo do site. Sem capa, o topo usa a cor principal."}>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Midia tipo="logo" painel={p} pode={pode} />
+                  <Midia tipo="logo" painel={p} pode={pode} fundo={form.cor_cabecalho} />
                   <Midia tipo="capa" painel={p} pode={pode} />
                 </div>
               </Bloco>
@@ -484,17 +473,19 @@ function Cor({ rotulo, valor, onChange, pode }: { rotulo: string; valor: string;
   );
 }
 
-function Midia({ tipo, painel, pode }: { tipo: "logo" | "capa"; painel: PainelSite; pode: boolean }) {
+function Midia({ tipo, painel, pode, fundo }: { tipo: "logo" | "capa"; painel: PainelSite; pode: boolean; fundo?: string }) {
   const qc = useQueryClient();
   const ref = useRef<HTMLInputElement>(null);
   const tem = tipo === "logo" ? painel.config.tem_logo : painel.config.tem_capa;
-  const slug = painel.config.slug;
-  const src = tem && slug ? `/api/publico/site/${slug}/midia/${tipo}?v=${painel.config.midia_v}` : null;
+  const src = tem ? urlApi(`/api/site-imobiliaria/midia/${tipo}?v=${painel.config.midia_v}`) : null;
   const enviar = useMutation({
-    mutationFn: async (f: File) => apiPut<PainelSite>(`/site-imobiliaria/midia/${tipo}`, await lerImagem(f, tipo)),
-    onSuccess: (r) => {
+    mutationFn: async (f: File) => {
+      const { base64, mime, fundoRemovido } = await prepararImagem(f, { max: tipo === "logo" ? 640 : 1920, logo: tipo === "logo" });
+      return { r: await apiPut<PainelSite>(`/site-imobiliaria/midia/${tipo}`, { base64, mime }), fundoRemovido };
+    },
+    onSuccess: ({ r, fundoRemovido }) => {
       qc.setQueryData(["site-painel"], r);
-      toast.success(tipo === "logo" ? "Logo atualizada." : "Capa atualizada.");
+      toast.success(tipo === "logo" ? (fundoRemovido ? "Logo atualizada. Tiramos o fundo branco para combinar com a barra." : "Logo atualizada.") : "Capa atualizada.");
     },
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível enviar a imagem."),
   });
@@ -505,12 +496,14 @@ function Midia({ tipo, painel, pode }: { tipo: "logo" | "capa"; painel: PainelSi
   return (
     <div className="grid gap-2">
       <Label>{tipo === "logo" ? "Logo" : "Foto de capa"}</Label>
-      <div className={cn("relative flex items-center justify-center overflow-hidden rounded-lg border border-dashed bg-muted/40", tipo === "logo" ? "h-28" : "h-28")}>
+      {/* A logo aparece sobre a cor da barra do site: a prévia mostra exatamente assim. */}
+      <div className={cn("relative flex h-28 items-center justify-center overflow-hidden rounded-lg border border-dashed", !(tipo === "logo" && fundo) && "bg-muted/40")}
+        style={tipo === "logo" && fundo ? { background: fundo } : undefined} data-testid={`site-midia-${tipo}`}>
         {src ? (
           <img src={src} alt="" className={cn("h-full w-full", tipo === "logo" ? "object-contain p-3" : "object-cover")} />
         ) : (
           <span className="px-4 text-center text-xs text-muted-foreground">
-            {tipo === "logo" ? (slug ? "Usando a logo do sistema, se houver" : "Salve o endereço do site para ver a prévia") : "Sem capa"}
+            {tipo === "logo" ? "Sem logo: o site usa a logo do CRM, se houver" : "Sem capa"}
           </span>
         )}
       </div>
@@ -528,14 +521,14 @@ function Midia({ tipo, painel, pode }: { tipo: "logo" | "capa"; painel: PainelSi
           )}
         </div>
       )}
-      <p className="text-xs text-muted-foreground">{tipo === "logo" ? "PNG com fundo transparente fica melhor." : "Foto horizontal, de preferência da fachada ou da equipe."}</p>
+      <p className="text-xs text-muted-foreground">{tipo === "logo" ? "PNG com fundo transparente fica melhor. Se tiver fundo branco, nós tiramos." : "Foto horizontal, de preferência da fachada ou da equipe."}</p>
     </div>
   );
 }
 
 function Previa({ form, painel, itens, tituloCatalogo }: { form: Form; painel: PainelSite; itens: ItemSite[]; tituloCatalogo: string }) {
-  const capa = painel.config.tem_capa && painel.config.slug ? `/api/publico/site/${painel.config.slug}/midia/capa?v=${painel.config.midia_v}` : null;
-  const logo = painel.config.tem_logo && painel.config.slug ? `/api/publico/site/${painel.config.slug}/midia/logo?v=${painel.config.midia_v}` : null;
+  const capa = painel.config.tem_capa ? urlApi(`/api/site-imobiliaria/midia/capa?v=${painel.config.midia_v}`) : null;
+  const logo = painel.config.tem_logo ? urlApi(`/api/site-imobiliaria/midia/logo?v=${painel.config.midia_v}`) : null;
   const fonte = FONTES.find((f) => f.v === form.fonte)?.familia;
   const amostra = itens.slice(0, 3);
   return (
@@ -544,7 +537,7 @@ function Previa({ form, painel, itens, tituloCatalogo }: { form: Form; painel: P
       <div className="overflow-hidden rounded-xl border text-[#1d2330] shadow-sm" style={{ background: form.cor_fundo }} aria-hidden data-testid="site-previa">
         <div className="flex items-center justify-between gap-2 px-3 py-2" style={{ background: form.cor_cabecalho, borderBottom: "1px solid rgba(0,0,0,.08)" }} data-testid="previa-cabecalho">
           <span className="flex min-w-0 items-center gap-1.5">
-            {logo && <img src={logo} alt="" className="h-5 w-5 shrink-0 object-contain" />}
+            {logo && <img src={logo} alt="" className="h-6 w-auto max-w-[72px] shrink-0 object-contain" />}
             <span className="truncate text-[13px] font-bold" style={{ fontFamily: fonte, color: form.cor_texto_cabecalho }}>{form.nome || "Sua empresa"}</span>
           </span>
           <span className="shrink-0 rounded-full bg-[#1fa855] px-2 py-0.5 text-[10px] font-semibold text-white">WhatsApp</span>

@@ -9,10 +9,10 @@ import { useEquipe, iniciais } from "@/lib/crm";
 import { useSegmento } from "@/lib/segmento";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NumerosWhatsApp, type Conexao } from "@/components/whatsapp/NumerosWhatsApp";
+import { NumerosWhatsApp, type Conexao, type Setor } from "@/components/whatsapp/NumerosWhatsApp";
 import { cn } from "@/lib/utils";
 
-interface Situacao { servidor_ok: boolean; liberado: boolean; pode_gerir: boolean; versao: number; conexoes: Conexao[] }
+interface Situacao { servidor_ok: boolean; liberado: boolean; pode_gerir: boolean; versao: number; conexoes: Conexao[]; setores?: Setor[] }
 interface Conversa {
   id: string; nome: string; telefone: string | null; conexao_id: string; responsavel_id: string | null; entrada_id: string | null;
   ultima_msg: string | null; ultima_de_mim: boolean; ultima_em: string | null; nao_lidas: number;
@@ -62,10 +62,22 @@ export default function WhatsApp() {
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [busca, setBusca] = useState("");
   const [ativa, setAtiva] = useState<string | null>(null);
-  const conversas = useQuery({ queryKey: ["wa", "conversas", filtro, versao], queryFn: () => apiGet<Conversa[]>(`/whatsapp/conversas?filtro=${filtro}`), enabled: ok, placeholderData: (a) => a });
+  // "" = todos; "n:<id>" = um número; "s:<id>" = um setor.
+  const [origem, setOrigem] = useState("");
+  const params = `filtro=${filtro}${origem.startsWith("n:") ? `&conexao_id=${origem.slice(2)}` : ""}${origem.startsWith("s:") ? `&setor_id=${origem.slice(2)}` : ""}`;
+  const conversas = useQuery({ queryKey: ["wa", "conversas", params, versao], queryFn: () => apiGet<Conversa[]>(`/whatsapp/conversas?${params}`), enabled: ok, placeholderData: (a) => a });
   const { data: equipe = [] } = useEquipe();
   const nomePessoa = useMemo(() => Object.fromEntries(equipe.filter((m) => m.pessoa_id).map((m) => [m.pessoa_id!, m.nome])), [equipe]);
   const conexoes = sit.data?.conexoes ?? [];
+  const setores = sit.data?.setores ?? [];
+  const setoresComNumero = setores.filter((x) => conexoes.some((c) => c.setor_id === x.id));
+  const nomeSetor = Object.fromEntries(setores.map((x) => [x.id, x.nome]));
+  const rotuloNumero = (id: string) => {
+    const c = conexoes.find((x) => x.id === id);
+    if (!c) return "";
+    const setor = c.setor_id ? nomeSetor[c.setor_id] : null;
+    return setor && setor.toLowerCase() !== c.nome.toLowerCase() ? `${setor} · ${c.nome}` : c.nome;
+  };
 
   useEffect(() => {
     qc.invalidateQueries({ queryKey: ["wa", "situacao"] });
@@ -106,7 +118,7 @@ export default function WhatsApp() {
       </div>
 
       {aba === "numeros" ? (
-        <NumerosWhatsApp conexoes={conexoes} podeGerir={!!sit.data.pode_gerir} />
+        <NumerosWhatsApp conexoes={conexoes} setores={setores} podeGerir={!!sit.data.pode_gerir} />
       ) : semNumero ? (
         <Aviso icone={Smartphone} titulo="Nenhum número conectado" texto={isAdmin ? "Conecte o WhatsApp da empresa lendo um QR code com o celular. As conversas aparecem aqui na hora." : "Peça ao gestor para conectar o WhatsApp da empresa em Números."}
           acao={isAdmin ? <Button onClick={() => setAba("numeros")} data-testid="wa-ir-numeros">Conectar número</Button> : undefined} />
@@ -119,6 +131,15 @@ export default function WhatsApp() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input className="pl-9" placeholder="Buscar conversa" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar conversa" />
               </div>
+              {(conexoes.length > 1 || setoresComNumero.length > 0) && (
+                <select value={origem} onChange={(e) => setOrigem(e.target.value)} aria-label="Número ou setor" className="h-9 rounded-md border bg-background px-2 text-sm" data-testid="wa-origem">
+                  <option value="">Todos os números</option>
+                  {setoresComNumero.length > 0 && (
+                    <optgroup label="Setores">{setoresComNumero.map((x) => <option key={x.id} value={`s:${x.id}`}>{x.nome}</option>)}</optgroup>
+                  )}
+                  <optgroup label="Números">{conexoes.map((c) => <option key={c.id} value={`n:${c.id}`}>{c.nome}</option>)}</optgroup>
+                </select>
+              )}
               <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Filtro">
                 {FILTROS.map(([f, r]) => (
                   <button key={f} type="button" role="tab" aria-selected={filtro === f} onClick={() => setFiltro(f)}
@@ -141,7 +162,10 @@ export default function WhatsApp() {
                         <span className="truncate text-xs text-muted-foreground">{c.ultima_de_mim && "Você: "}{c.ultima_msg}</span>
                         {c.nao_lidas > 0 && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold text-white">{c.nao_lidas}</span>}
                       </span>
-                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{c.responsavel_id ? nomePessoa[c.responsavel_id] ?? "Responsável" : "Sem responsável"}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                        {conexoes.length > 1 || setores.length > 0 ? <span className="font-medium text-foreground/70">{rotuloNumero(c.conexao_id)} · </span> : null}
+                        {c.responsavel_id ? nomePessoa[c.responsavel_id] ?? "Responsável" : "Sem responsável"}
+                      </span>
                     </span>
                   </button>
                 </li>

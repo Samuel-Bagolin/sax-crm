@@ -37,7 +37,7 @@ export function useConfig() {
   return {
     config,
     carregando: q.isLoading,
-    logoUrl: config.tem_logo ? urlApi("/api/configuracoes/logo") : null,
+    logoUrl: config.tem_logo ? urlApi(`/api/configuracoes/logo?v=${config.logo_v ?? "1"}`) : null,
     moduloAtivo: (m: string) => config.modulos_ativos.includes(m),
     titulo: (m: string) => config.titulos_modulos[m] ?? PADRAO.titulos_modulos[m] ?? m,
   };

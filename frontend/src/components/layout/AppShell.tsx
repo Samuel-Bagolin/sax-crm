@@ -53,7 +53,7 @@ import Avatar from "@/components/shared/Avatar";
 import MarcaSax from "@/components/shared/MarcaSax";
 import { useAuth } from "@/lib/useAuth";
 import { useConfig } from "@/lib/useConfig";
-import { isoLocal } from "@/lib/crm";
+import { iniciais, isoLocal } from "@/lib/crm";
 import type { Atividade, SegmentoChave, TermosSegmento } from "@/lib/types";
 import { SERVICOS, useSegmento } from "@/lib/segmento";
 import { cn } from "@/lib/utils";
@@ -171,7 +171,7 @@ function Marca({ nome, logoUrl, compacto }: { nome: string; logoUrl: string | nu
   return (
     <Link to="/" className={cn("flex h-14 shrink-0 items-center", compacto ? "justify-center" : "gap-2.5 px-4")} aria-label="Início" title={nome}>
       {logoUrl ? (
-        <img src={logoUrl} alt="" className="h-9 w-9 shrink-0 rounded-md bg-white object-contain p-0.5" data-testid="brand-logo" />
+        <img src={logoUrl} alt="" className={cn("h-10 shrink-0 rounded-md bg-white object-contain p-1", compacto ? "w-[60px]" : "w-16")} data-testid="brand-logo" />
       ) : (
         <MarcaSax className="w-[52px]" />
       )}
@@ -286,6 +286,7 @@ export default function AppShell() {
   const { config, titulo: rotulo, logoUrl, moduloAtivo } = useConfig();
   const crmAtivo = !noControle && moduloAtivo("crm");
   const seg = useSegmento();
+  const { data: plano } = usePlano();
 
   // Contadores do menu: só números, para gastar poucas leituras do banco (o Firestore cobra por documento lido).
   const { data: novos } = useQuery({
@@ -363,7 +364,7 @@ export default function AppShell() {
       <FaixaAmbiente />
       <div className="flex min-h-0 flex-1">
         <aside className="sticky top-0 hidden h-svh w-[76px] shrink-0 flex-col bg-sidebar lg:flex">
-          <Marca nome={config.nome_software} logoUrl={logoUrl} compacto />
+          <Marca nome={principal?.empresa_nome ?? config.nome_software} logoUrl={logoUrl} compacto />
           <Navegacao compacto contadores={contadores} />
         </aside>
 
@@ -375,7 +376,7 @@ export default function AppShell() {
               </SheetTrigger>
               <SheetContent side="left" className="flex w-64 flex-col bg-sidebar p-0">
                 <SheetTitle className="sr-only">Menu</SheetTitle>
-                <Marca nome={config.nome_software} logoUrl={logoUrl} compacto={false} />
+                <Marca nome={principal?.empresa_nome ?? config.nome_software} logoUrl={logoUrl} compacto={false} />
                 <Navegacao compacto={false} contadores={contadores} aoNavegar={() => setMenuAberto(false)} />
               </SheetContent>
             </Sheet>
@@ -403,6 +404,12 @@ export default function AppShell() {
                   <Search className="h-4 w-4" />
                 </Button>
               )}
+              {principal?.empresa_nome && (
+                <div className="mr-1 hidden max-w-[260px] items-center gap-2 border-r pr-3 md:flex" title={principal.empresa_nome} data-testid="empresa-atual">
+                  {logoUrl && <img src={logoUrl} alt="" className="h-7 max-w-[72px] shrink-0 object-contain" />}
+                  <span className="truncate text-sm font-medium">{principal.empresa_nome}</span>
+                </div>
+              )}
               <AlternadorTema />
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -427,10 +434,29 @@ export default function AppShell() {
                       <p className="truncate text-xs text-muted-foreground">{principal?.email}</p>
                       <p className="text-xs text-primary" data-testid="user-menu-papel">
                         {isSysadmin ? "Administrador de sistema" : isAdmin ? "Gestor" : seg.termos.profissional}
-                        {principal?.empresa_nome ? ` em ${principal.empresa_nome}` : ""}
                       </p>
                     </div>
                   </div>
+                  {principal?.empresa_nome && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <div className="grid gap-1.5 px-2 py-2" data-testid="user-menu-empresa">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Sua empresa</p>
+                        <div className="flex items-center gap-2.5">
+                          {logoUrl ? (
+                            <img src={logoUrl} alt="" className="h-10 w-14 shrink-0 object-contain" />
+                          ) : (
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-sm font-bold text-primary">{iniciais(principal.empresa_nome)}</span>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold">{principal.empresa_nome}</p>
+                            {principal.empresa_cnpj && <p className="text-xs text-muted-foreground">CNPJ {principal.empresa_cnpj}</p>}
+                            <p className="truncate text-xs text-muted-foreground">{seg.nome}{plano?.nome ? ` · Plano ${plano.nome}` : ""}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                   <DropdownMenuSeparator />
                   {!noControle && (
                     <DropdownMenuItem onClick={() => navigate("/perfil")}>

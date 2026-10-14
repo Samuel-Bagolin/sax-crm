@@ -86,6 +86,7 @@ class Principal(BaseModel):
     # Empresa (tenant) do token: define o BANCO usado no request. None = plano de controle.
     empresa_id: str | None = None
     empresa_nome: str | None = None
+    empresa_cnpj: str | None = None
     suporte: bool = False  # sysadmin operando dentro de uma empresa
     ambiente: str = AMBIENTE
     session_version: int = 0
@@ -282,7 +283,7 @@ def _dados_empresa(empresa: dict | None, sysadmin: bool) -> dict:
     from lib.segmentos import segmento_de
 
     ass = empresa.get("assinatura")
-    return {"segmento": segmento_de(empresa), "assinatura": resumo_publico(ass),
+    return {"segmento": segmento_de(empresa), "assinatura": resumo_publico(ass), "empresa_cnpj": empresa.get("cnpj") or None,
             "bloqueio": None if sysadmin else bloqueio(ass)}
 
 

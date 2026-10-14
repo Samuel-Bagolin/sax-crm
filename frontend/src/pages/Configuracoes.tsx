@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSegmento } from "@/lib/segmento";
 import { useConfig } from "@/lib/useConfig";
+import { prepararImagem } from "@/lib/imagem";
 
 // Módulos que cada segmento pode ligar ou desligar. Visão Geral e Equipe ficam sempre ligados.
 const FIXOS = ["dashboard", "usuarios"];
@@ -50,12 +51,15 @@ export default function Configuracoes() {
   };
 
   const salvarLogo = useMutation({
-    mutationFn: (payload: { base64: string; mime: string }) =>
-      apiPut<Configuracao>("/configuracoes/logo", payload),
-    onSuccess: () => {
+    mutationFn: async (arquivo: File) => {
+      const { base64, mime, fundoRemovido } = await prepararImagem(arquivo, { max: 640, logo: true });
+      await apiPut<Configuracao>("/configuracoes/logo", { base64, mime });
+      return fundoRemovido;
+    },
+    onSuccess: (fundoRemovido) => {
       setLogoVersao((v) => v + 1);
       invalidarConfig();
-      toast.success("Logotipo atualizado.");
+      toast.success(fundoRemovido ? "Logotipo atualizado. Tiramos o fundo branco." : "Logotipo atualizado.");
     },
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível enviar o logotipo."),
   });
@@ -71,16 +75,11 @@ export default function Configuracoes() {
   });
 
   const enviarLogo = (arquivo: File) => {
-    if (arquivo.size > 512 * 1024) {
-      toast.error("O logotipo deve ter no máximo 512 KB.");
+    if (arquivo.size > 5 * 1024 * 1024) {
+      toast.error("A imagem deve ter no máximo 5 MB.");
       return;
     }
-    const leitor = new FileReader();
-    leitor.onload = () => {
-      const base64 = String(leitor.result).split(",")[1] ?? "";
-      salvarLogo.mutate({ base64, mime: arquivo.type || "image/png" });
-    };
-    leitor.readAsDataURL(arquivo);
+    salvarLogo.mutate(arquivo);
   };
 
   useEffect(() => {
@@ -269,13 +268,13 @@ export default function Configuracoes() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="config-logo">Logotipo da {seg.empresa} (PNG, JPG ou WEBP · até 512 KB)</Label>
+                <Label htmlFor="config-logo">Logotipo da {seg.empresa} (PNG, JPG ou WEBP)</Label>
                 <div className="flex flex-wrap items-center gap-3">
                   {temLogo && (
                     <img
                       src={urlApi(`/api/configuracoes/logo?v=${logoVersao}`)}
                       alt="Logotipo atual"
-                      className="h-14 w-14 rounded-md border object-contain p-1"
+                      className="h-14 w-28 rounded-md border bg-white object-contain p-1"
                       data-testid="config-logo-preview"
                     />
                   )}

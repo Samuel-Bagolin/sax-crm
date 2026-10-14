@@ -398,6 +398,15 @@ async def enviar_midia(tipo: Literal["logo", "capa"], input: MidiaInput, princip
     return await painel(principal)
 
 
+@router.get("/midia/{tipo}")
+async def ver_midia(tipo: Literal["logo", "capa"], principal: Principal = Depends(_acesso_site)):
+    """Prévia no painel: funciona antes de escolher o endereço do site (a rota pública precisa do slug)."""
+    doc = await db.site_midia.find_one({"id": tipo})
+    if not doc:
+        raise HTTPException(404, "Sem imagem")
+    return Response(base64.b64decode(doc["base64"]), media_type=doc.get("mime", "image/jpeg"), headers={"Cache-Control": "private, max-age=86400"})
+
+
 @router.delete("/midia/{tipo}", response_model=PainelSite)
 async def remover_midia(tipo: Literal["logo", "capa"], principal: Principal = Depends(_acesso_site)):
     _exigir_editor(principal)

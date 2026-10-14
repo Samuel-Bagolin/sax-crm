@@ -97,6 +97,7 @@ class ConfiguracaoPublica(BaseModel):
     cor_menu_destaque: str = "#ff7a00"
     imagem_fundo_login: str | None = None
     tem_logo: bool = False
+    logo_v: str | None = None
     segmento: dict | None = None  # lib/segmentos.info(): nome, categoria, termos, módulos
 
 

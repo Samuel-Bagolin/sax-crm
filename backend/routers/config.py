@@ -52,6 +52,19 @@ async def carregar() -> Configuracao:
     return Configuracao(**doc)
 
 
+async def _empresa_pelo_slug(slug: str | None) -> None:
+    if empresa_atual_db() or not slug:
+        return
+    doc = await controle.empresas.find_one({"slug": slug, "ativo": True})
+    if doc:
+        definir_empresa(doc["db_name"])
+
+
+def versao_logo(c: Configuracao) -> str | None:
+    """Muda quando o arquivo muda: a URL nova fura o cache do navegador na hora."""
+    return hashlib.sha1(c.logo_base64.encode()).hexdigest()[:10] if c.logo_base64 else None
+
+
 @router.get("/publica", response_model=ConfiguracaoPublica)
 async def config_publica(
     empresa: str | None = Query(None, description="slug da empresa"),
@@ -59,17 +72,10 @@ async def config_publica(
 ):
     """Identidade visual e módulos ativos — sem sessão, sem segredos.
 
-    Com sessão, a empresa vem do token (já fixada por `principal_opcional`). Sem sessão, vem do
-    slug (?empresa=) ou, se a instalação tiver uma única empresa ativa, dela mesma.
+    Com sessão, a empresa vem do token (já fixada por `principal_opcional`). Sem sessão, só pelo
+    slug (?empresa=). Sem os dois, é a marca da plataforma: a tela de login nunca mostra a de um cliente.
     """
-    if not empresa_atual_db():
-        doc = None
-        if empresa:
-            doc = await controle.empresas.find_one({"slug": empresa, "ativo": True})
-        elif await controle.empresas.count_documents({"ativo": True}) == 1:
-            doc = await controle.empresas.find_one({"ativo": True})
-        if doc:
-            definir_empresa(doc["db_name"])
+    await _empresa_pelo_slug(empresa)
     c = await carregar()
     public = c.model_dump()
     company = None
@@ -81,23 +87,17 @@ async def config_publica(
         company = await controle.empresas.find_one({"db_name": empresa_atual_db()}, {"segmento": 1})
     from lib.segmentos import info, segmento_de
 
-    return ConfiguracaoPublica(**public, tem_logo=bool(c.logo_base64), segmento=info(segmento_de(company)))
+    return ConfiguracaoPublica(**public, tem_logo=bool(c.logo_base64), logo_v=versao_logo(c), segmento=info(segmento_de(company)))
 
 
 @router.get("/logo")
 async def get_logo(
     empresa: str | None = Query(None, description="slug da empresa"),
+    v: str | None = Query(None, description="versão do arquivo (cache)"),
     principal: Principal | None = Depends(principal_opcional),
 ):
-    """Logotipo da empresa — público (e-mail e login carregam por URL https)."""
-    if not empresa_atual_db():
-        doc = None
-        if empresa:
-            doc = await controle.empresas.find_one({"slug": empresa, "ativo": True})
-        elif await controle.empresas.count_documents({"ativo": True}) == 1:
-            doc = await controle.empresas.find_one({"ativo": True})
-        if doc:
-            definir_empresa(doc["db_name"])
+    """Logotipo da empresa: público (o e-mail carrega por URL https com ?empresa=slug)."""
+    await _empresa_pelo_slug(empresa)
     c = await carregar()
     if c.logo_mime == "image/svg+xml": raise HTTPException(404, "Envie novamente o logotipo como PNG, JPG ou WEBP")
     if not c.logo_base64:
@@ -109,7 +109,7 @@ async def get_logo(
     return Response(
         content=conteudo,
         media_type=c.logo_mime or "image/png",
-        headers={"Cache-Control": "public, max-age=300"},
+        headers={"Cache-Control": "public, max-age=86400" if v else "no-cache"},
     )
 
 

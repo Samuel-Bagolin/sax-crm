@@ -309,6 +309,7 @@ export interface ConfiguracaoPublica {
   cor_menu_destaque: string;
   imagem_fundo_login: string | null;
   tem_logo: boolean;
+  logo_v?: string | null;
   segmento?: SegmentoInfo | null;
 }
 
@@ -385,6 +386,7 @@ export interface Principal {
   pessoa_id: string | null;
   empresa_id: string | null;
   empresa_nome: string | null;
+  empresa_cnpj?: string | null;
   suporte: boolean;
   ambiente: string;
   tem_foto: boolean;

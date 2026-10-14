@@ -7,8 +7,13 @@ Coleções no banco da empresa:
 - wa_estado: contador `versao` que sobe a cada mudança. A tela consulta só ele (1 leitura) e recarrega a
   lista quando muda, em vez de varrer as conversas a cada poucos segundos.
 
-Quem vê o quê: gestor vê tudo. Corretor/profissional vê as conversas dele e as sem responsável; ao
-responder uma sem responsável, ela passa a ser dele (quem pega primeiro fica, com update condicional).
+- wa_setores: departamentos criados pelo gestor (Comercial, Financeiro...), com os membros da equipe.
+
+Quem vê o quê: gestor vê tudo. Cada número pode ter setor e responsáveis. Número com setor ou responsáveis
+é restrito: só os responsáveis e os membros do setor veem as conversas dele. Número aberto (sem os dois):
+cada um vê as conversas dele e as sem responsável. Em qualquer número, a conversa passada para a pessoa
+aparece para ela. Ao responder uma sem responsável, ela passa a ser de quem respondeu (quem pega primeiro
+fica, com update condicional).
 """
 
 import hmac
@@ -62,14 +67,51 @@ def _iso(v) -> str | None:
     return v
 
 
-def _pode_ver(conv: dict, principal: Principal) -> bool:
-    return principal.is_admin or conv.get("responsavel_id") in (None, principal.pessoa_id)
+async def _setores_dict() -> dict[str, dict]:
+    return {s["id"]: s for s in await db.wa_setores.find({}).to_list(100)}
+
+
+def _equipe_do_numero(conexao: dict, setores: dict[str, dict]) -> set[str]:
+    """Quem atende o número: responsáveis + membros do setor. Vazio = número aberto para a equipe toda."""
+    pessoas = set(conexao.get("responsaveis") or [])
+    setor = setores.get(conexao.get("setor_id") or "")
+    if setor:
+        pessoas |= set(setor.get("membros") or [])
+    return pessoas
+
+
+def _restrito(conexao: dict | None) -> bool:
+    return bool(conexao and (conexao.get("responsaveis") or conexao.get("setor_id")))
+
+
+async def _acesso(principal: Principal) -> tuple[list[dict], set[str], set[str]]:
+    """(conexões, números que a pessoa atende inteiros, números abertos)."""
+    conexoes = await db.wa_conexoes.find({}).to_list(LIMITE_NUMEROS + 5)
+    setores = await _setores_dict()
+    meus, abertos = set(), set()
+    for c in conexoes:
+        if not _restrito(c):
+            abertos.add(c["id"])
+        elif principal.pessoa_id and principal.pessoa_id in _equipe_do_numero(c, setores):
+            meus.add(c["id"])
+    return conexoes, meus, abertos
+
+
+def _pode_ver(conv: dict, principal: Principal, meus: set[str], abertos: set[str]) -> bool:
+    if principal.is_admin or (principal.pessoa_id and conv.get("responsavel_id") == principal.pessoa_id):
+        return True
+    cid = conv.get("conexao_id")
+    return cid in meus or (cid in abertos and conv.get("responsavel_id") is None)
 
 
 async def _conversa(conversa_id: str, principal: Principal) -> dict:
     conv = await db.wa_conversas.find_one({"_id": conversa_id})
-    if not conv or not _pode_ver(conv, principal):
+    if not conv:
         raise HTTPException(404, "Conversa não encontrada")
+    if not principal.is_admin:
+        _, meus, abertos = await _acesso(principal)
+        if not _pode_ver(conv, principal, meus, abertos):
+            raise HTTPException(404, "Conversa não encontrada")
     return conv
 
 
@@ -82,7 +124,12 @@ def _saida_conversa(c: dict) -> dict:
 
 def _saida_conexao(c: dict) -> dict:
     return {"id": c["id"], "nome": c.get("nome"), "status": c.get("status") or "aguardando_qr", "numero": c.get("numero"),
-            "perfil": c.get("perfil"), "criado_em": _iso(c.get("criado_em"))}
+            "perfil": c.get("perfil"), "criado_em": _iso(c.get("criado_em")), "setor_id": c.get("setor_id"),
+            "responsaveis": list(c.get("responsaveis") or [])}
+
+
+def _saida_setor(s: dict) -> dict:
+    return {"id": s["id"], "nome": s.get("nome"), "membros": list(s.get("membros") or [])}
 
 
 # ------------------------------------------------------------------ situação e números
@@ -93,9 +140,15 @@ async def situacao(principal: Principal = Depends(require("whatsapp:atender"))):
     """O que a tela precisa para decidir o que mostrar (sem exigir o recurso, para explicar quando falta)."""
     cfg = await wa.config()
     estado = await db.wa_estado.find_one({"id": "singleton"}) or {}
-    conexoes = await db.wa_conexoes.find({}).to_list(LIMITE_NUMEROS + 5) if principal.empresa_id else []
+    conexoes, setores = [], []
+    if principal.empresa_id:
+        conexoes, meus, abertos = await _acesso(principal)
+        if not principal.is_admin:  # cada um vê os números que atende e os abertos
+            conexoes = [c for c in conexoes if c["id"] in meus or c["id"] in abertos]
+        setores = [_saida_setor(x) for x in (await _setores_dict()).values()]
+        setores.sort(key=lambda x: (x["nome"] or "").lower())
     return {"servidor_ok": wa.configurado(cfg), "liberado": await recurso_liberado("whatsapp"), "pode_gerir": principal.is_admin,
-            "versao": int(estado.get("versao") or 0), "conexoes": [_saida_conexao(c) for c in conexoes]}
+            "versao": int(estado.get("versao") or 0), "conexoes": [_saida_conexao(c) for c in conexoes], "setores": setores}
 
 
 @router.get("/versao")
@@ -163,27 +216,119 @@ async def remover_conexao(conexao_id: str, principal: Principal = Depends(_gerir
     await _mudou()
 
 
+async def _validar_equipe(pessoas: list[str]) -> list[str]:
+    """Só aceita pessoas da equipe desta empresa (nunca um id solto vindo da tela)."""
+    pessoas = list(dict.fromkeys(p for p in pessoas if p))
+    if not pessoas:
+        return []
+    validas = {u["pessoa_id"] for u in await db.usuarios.find({"pessoa_id": {"$in": pessoas}}).to_list(200) if u.get("ativo", True)}
+    faltam = [p for p in pessoas if p not in validas]
+    if faltam:
+        raise HTTPException(422, "Escolha pessoas ativas da equipe.")
+    return pessoas
+
+
+class ConexaoEdit(BaseModel):
+    nome: str = Field(min_length=2, max_length=40)
+    setor_id: str | None = None
+    responsaveis: list[str] = Field(default_factory=list, max_length=50)
+
+
+@router.put("/conexoes/{conexao_id}")
+async def editar_conexao(conexao_id: str, input: ConexaoEdit, principal: Principal = Depends(_gerir)):
+    await _conexao(conexao_id)
+    if input.setor_id and not await db.wa_setores.find_one({"id": input.setor_id}):
+        raise HTTPException(422, "Setor não encontrado")
+    mudar = {"nome": input.nome.strip(), "setor_id": input.setor_id or None, "responsaveis": await _validar_equipe(input.responsaveis)}
+    await db.wa_conexoes.update_one({"id": conexao_id}, {"$set": mudar})
+    await _mudou()
+    return _saida_conexao(await _conexao(conexao_id))
+
+
+class SetorIn(BaseModel):
+    nome: str = Field(min_length=2, max_length=40)
+    membros: list[str] = Field(default_factory=list, max_length=100)
+
+
+@router.get("/setores")
+async def listar_setores(principal: Principal = Depends(_atender)):
+    setores = [_saida_setor(x) for x in (await _setores_dict()).values()]
+    return sorted(setores, key=lambda x: (x["nome"] or "").lower())
+
+
+async def _nome_livre(nome: str, ignorar: str | None = None) -> str:
+    nome = " ".join(nome.split())
+    for x in (await _setores_dict()).values():
+        if x["id"] != ignorar and (x.get("nome") or "").lower() == nome.lower():
+            raise HTTPException(409, "Já existe um setor com esse nome.")
+    return nome
+
+
+@router.post("/setores", status_code=201)
+async def criar_setor(input: SetorIn, principal: Principal = Depends(_gerir)):
+    if await db.wa_setores.count_documents({}) >= 30:
+        raise HTTPException(409, "Limite de 30 setores.")
+    doc = {"id": new_id(), "nome": await _nome_livre(input.nome), "membros": await _validar_equipe(input.membros), "criado_em": now_utc()}
+    await db.wa_setores.insert_one(doc)
+    await _mudou()
+    return _saida_setor(doc)
+
+
+@router.put("/setores/{setor_id}")
+async def editar_setor(setor_id: str, input: SetorIn, principal: Principal = Depends(_gerir)):
+    if not await db.wa_setores.find_one({"id": setor_id}):
+        raise HTTPException(404, "Setor não encontrado")
+    mudar = {"nome": await _nome_livre(input.nome, setor_id), "membros": await _validar_equipe(input.membros)}
+    await db.wa_setores.update_one({"id": setor_id}, {"$set": mudar})
+    await _mudou()
+    return _saida_setor({"id": setor_id, **mudar})
+
+
+@router.delete("/setores/{setor_id}", status_code=204)
+async def remover_setor(setor_id: str, principal: Principal = Depends(_gerir)):
+    if not await db.wa_setores.find_one({"id": setor_id}):
+        raise HTTPException(404, "Setor não encontrado")
+    # Os números do setor ficam só com os responsáveis (ou abertos, se não tiverem).
+    for c in await db.wa_conexoes.find({"setor_id": setor_id}).to_list(LIMITE_NUMEROS + 5):
+        await db.wa_conexoes.update_one({"id": c["id"]}, {"$set": {"setor_id": None}})
+    await db.wa_setores.delete_one({"id": setor_id})
+    await _mudou()
+
+
 # ------------------------------------------------------------------ conversas
 
 
 @router.get("/conversas")
-async def conversas(filtro: str = Query("todas", pattern="^(todas|minhas|sem_responsavel|nao_lidas)$"), principal: Principal = Depends(_atender)):
-    if principal.is_admin and filtro in ("todas", "nao_lidas"):
-        docs = await db.wa_conversas.find({}).sort("ultima_em", -1).to_list(300)
-    elif filtro == "minhas" or (not principal.is_admin and filtro == "todas"):
-        docs = await db.wa_conversas.find({"responsavel_id": principal.pessoa_id}).sort("ultima_em", -1).to_list(300)
-        if filtro == "todas":  # corretor: as dele e as sem responsável
-            docs += await db.wa_conversas.find({"responsavel_id": None}).sort("ultima_em", -1).to_list(300)
+async def conversas(filtro: str = Query("todas", pattern="^(todas|minhas|sem_responsavel|nao_lidas)$"),
+                    conexao_id: str | None = Query(None, max_length=64), setor_id: str | None = Query(None, max_length=64),
+                    principal: Principal = Depends(_atender)):
+    conexoes, meus, abertos = await _acesso(principal)
+    if principal.is_admin:
+        docs = await db.wa_conversas.find({}).sort("ultima_em", -1).to_list(500)
+    else:
+        # Só o que a pessoa pode ver: números que ela atende inteiros, as dela e as sem responsável dos abertos.
+        docs = []
+        if meus:
+            docs += await db.wa_conversas.find({"conexao_id": {"$in": sorted(meus)}}).to_list(500)
+        if principal.pessoa_id:
+            docs += await db.wa_conversas.find({"responsavel_id": principal.pessoa_id}).to_list(500)
+        if abertos:
+            docs += [d for d in await db.wa_conversas.find({"conexao_id": {"$in": sorted(abertos)}}).to_list(500) if d.get("responsavel_id") is None]
+        unicos = {d["_id"]: d for d in docs}
+        docs = [d for d in unicos.values() if _pode_ver(d, principal, meus, abertos)]
+    if filtro == "minhas":
+        docs = [d for d in docs if principal.pessoa_id and d.get("responsavel_id") == principal.pessoa_id]
     elif filtro == "sem_responsavel":
-        docs = await db.wa_conversas.find({"responsavel_id": None}).sort("ultima_em", -1).to_list(300)
-    else:  # nao_lidas, corretor
-        docs = [d for d in await db.wa_conversas.find({"responsavel_id": principal.pessoa_id}).to_list(300)]
-        docs += await db.wa_conversas.find({"responsavel_id": None}).to_list(300)
-    if filtro == "nao_lidas":
+        docs = [d for d in docs if d.get("responsavel_id") is None]
+    elif filtro == "nao_lidas":
         docs = [d for d in docs if d.get("nao_lidas")]
-    docs = [d for d in docs if _pode_ver(d, principal)]
+    if conexao_id:
+        docs = [d for d in docs if d.get("conexao_id") == conexao_id]
+    if setor_id:
+        do_setor = {c["id"] for c in conexoes if c.get("setor_id") == setor_id}
+        docs = [d for d in docs if d.get("conexao_id") in do_setor]
     docs.sort(key=lambda d: _iso(d.get("ultima_em")) or "", reverse=True)
-    return [_saida_conversa(d) for d in docs]
+    return [_saida_conversa(d) for d in docs[:300]]
 
 
 @router.get("/conversas/{conversa_id}/mensagens")
@@ -342,8 +487,11 @@ async def _mensagem_recebida(instancia: str, item: dict) -> None:
     nome = None if de_mim else (item.get("pushName") or "").strip()[:80] or None
     conv = await db.wa_conversas.find_one({"_id": conversa_id})
     if not conv:
+        # Número com uma pessoa só (responsável ou setor de um membro): a conversa já nasce dela.
+        equipe = _equipe_do_numero(conexao, await _setores_dict()) if _restrito(conexao) else set()
         novo = {"_id": conversa_id, "id": conversa_id, "jid": jid, "telefone": wa.telefone(jid), "nome": nome or wa.telefone(jid) or "Contato",
-                "conexao_id": conexao["id"], "responsavel_id": None, "entrada_id": None, "nao_lidas": 0, "criado_em": now_utc()}
+                "conexao_id": conexao["id"], "responsavel_id": next(iter(equipe)) if len(equipe) == 1 else None, "entrada_id": None,
+                "nao_lidas": 0, "criado_em": now_utc()}
         try:
             await db.wa_conversas.insert_one(novo)
             conv = novo
@@ -379,7 +527,14 @@ async def _primeiro_contato(conv: dict, texto: str) -> None:
                 return
     from routers.crm import _proximo_rodizio
 
-    corretor_id = await _proximo_rodizio() if (await carregar_crm_config()).distribuicao == "rodizio" else None
+    conexao = await db.wa_conexoes.find_one({"id": conv.get("conexao_id")}) or {}
+    if _restrito(conexao):
+        # Número de setor ou com responsáveis: o rodízio geral não vale. Uma pessoa só fica com a conversa;
+        # mais de uma, a conversa espera na fila do número e quem responder primeiro fica.
+        equipe = _equipe_do_numero(conexao, await _setores_dict())
+        corretor_id = next(iter(equipe)) if len(equipe) == 1 else None
+    else:
+        corretor_id = await _proximo_rodizio() if (await carregar_crm_config()).distribuicao == "rodizio" else None
     entrada_id = await _novo_lead(conv, texto, corretor_id)
     await db.wa_conversas.update_one({"_id": conv["_id"]}, {"$set": {"entrada_id": entrada_id, "responsavel_id": corretor_id}})
 

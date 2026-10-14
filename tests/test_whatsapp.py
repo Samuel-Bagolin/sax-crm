@@ -107,3 +107,104 @@ def test_corretor_ve_as_dele_e_as_sem_responsavel(servidor):
     assert c.post("/whatsapp/conexoes", json={"nome": "X"}).status_code == 403  # só o gestor conecta número
     r = c.get("/whatsapp/conversas")
     assert r.status_code in (200, 403)  # 403 quando o plano da imobiliária de demonstração não tem o recurso
+
+
+def _membro(c: httpx.Client, nome: str) -> tuple[httpx.Client, str]:
+    email = f"{nome.lower()}.{uuid.uuid4().hex[:5]}@exemplo.com"
+    assert c.post("/usuarios", json={"nome": nome, "email": email, "senha": "SenhaForte#123", "papel": "corretor"}).status_code == 201
+    s = httpx.Client(base_url=API, timeout=60)
+    me = s.post("/auth/login", json={"email": email, "senha": "SenhaForte#123"})
+    assert me.status_code == 200
+    return s, me.json()["pessoa_id"]
+
+
+def _conectar(c: httpx.Client, nome: str) -> tuple[dict, str]:
+    antes = {i["name"] for i in httpx.get(f"{EVO}/instance/fetchInstances", headers={"apikey": "chave-teste"}).json()}
+    con = c.post("/whatsapp/conexoes", json={"nome": nome}).json()
+    inst = next(i["name"] for i in httpx.get(f"{EVO}/instance/fetchInstances", headers={"apikey": "chave-teste"}).json() if i["name"] not in antes)
+    httpx.post(f"{EVO}/_teste/conectar/{inst}")
+    return con, inst
+
+
+def _numero() -> str:
+    return "554197" + uuid.uuid4().hex[:7].translate(str.maketrans("abcdef", "123456"))
+
+
+def test_setores_e_responsaveis_por_numero(servidor, cartao_demo):
+    """Número com setor ou responsáveis: só quem atende vê. Número aberto: cada um vê as dele e as sem dono."""
+    c, _ = _cadastrar("imobiliaria", cartao_demo)
+    ana, ana_id = _membro(c, "Ana")
+    bia, bia_id = _membro(c, "Bia")
+    caio, caio_id = _membro(c, "Caio")
+
+    # Setores com nome livre; nome repetido é recusado; pessoa de fora da equipe também.
+    fin = c.post("/whatsapp/setores", json={"nome": "Financeiro", "membros": [bia_id, caio_id]})
+    assert fin.status_code == 201, fin.text
+    fin = fin.json()
+    assert c.post("/whatsapp/setores", json={"nome": "financeiro"}).status_code == 409
+    assert c.post("/whatsapp/setores", json={"nome": "Operações", "membros": ["pessoa-de-outra-empresa"]}).status_code == 422
+    assert ana.post("/whatsapp/setores", json={"nome": "Meu setor"}).status_code == 403  # só o gestor cria
+
+    comercial, inst_com = _conectar(c, "Comercial")
+    financeiro, inst_fin = _conectar(c, "Financeiro")
+    aberto, inst_ab = _conectar(c, "Recepção")
+
+    # Comercial: só a Ana. Financeiro: setor Financeiro (Bia e Caio). Recepção: aberto.
+    r = c.put(f"/whatsapp/conexoes/{comercial['id']}", json={"nome": "Comercial", "responsaveis": [ana_id]})
+    assert r.status_code == 200 and r.json()["responsaveis"] == [ana_id]
+    assert c.put(f"/whatsapp/conexoes/{financeiro['id']}", json={"nome": "Financeiro", "setor_id": fin["id"]}).status_code == 200
+    assert c.put(f"/whatsapp/conexoes/{aberto['id']}", json={"nome": "Recepção", "setor_id": "nao-existe"}).status_code == 422
+    assert ana.put(f"/whatsapp/conexoes/{comercial['id']}", json={"nome": "X", "responsaveis": [ana_id]}).status_code == 403
+
+    n_com, n_fin, n_ab = _numero(), _numero(), _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst_com}", json={"numero": n_com, "nome": "Cliente Comercial", "texto": "Quero comprar"})
+    httpx.post(f"{EVO}/_teste/receber/{inst_fin}", json={"numero": n_fin, "nome": "Cliente Boleto", "texto": "Segunda via do boleto"})
+    httpx.post(f"{EVO}/_teste/receber/{inst_ab}", json={"numero": n_ab, "nome": "Cliente Recepção", "texto": "Oi"})
+
+    def tels(s, **params):
+        return {x["telefone"] for x in s.get("/whatsapp/conversas", params=params).json()}
+
+    # Gestor vê tudo.
+    assert {n_com, n_fin, n_ab} <= tels(c)
+    # Comercial tem uma pessoa só: a conversa já nasce da Ana (e o lead também).
+    conv_com = next(x for x in c.get("/whatsapp/conversas").json() if x["telefone"] == n_com)
+    assert conv_com["responsavel_id"] == ana_id
+    lead = next(e for e in c.get("/entradas").json() if e["id"] == conv_com["entrada_id"])
+    assert lead["corretor_id"] == ana_id
+    # Financeiro tem duas pessoas: fica sem dono, as duas veem; a Ana não.
+    conv_fin = next(x for x in c.get("/whatsapp/conversas").json() if x["telefone"] == n_fin)
+    assert conv_fin["responsavel_id"] is None
+
+    assert tels(ana) >= {n_com, n_ab} and n_fin not in tels(ana)
+    assert tels(bia) >= {n_fin, n_ab} and n_com not in tels(bia)
+    assert n_fin in tels(caio) and n_com not in tels(caio)
+    # Quem não atende o número não abre nem responde a conversa (404, não 403).
+    assert bia.get(f"/whatsapp/conversas/{conv_com['id']}/mensagens").status_code == 404
+    assert bia.post(f"/whatsapp/conversas/{conv_com['id']}/mensagens", json={"texto": "oi"}).status_code == 404
+    # Situação: cada um só vê os números que atende e os abertos.
+    nomes_bia = {x["nome"] for x in bia.get("/whatsapp/situacao").json()["conexoes"]}
+    assert nomes_bia == {"Financeiro", "Recepção"}
+    assert {x["nome"] for x in bia.get("/whatsapp/situacao").json()["setores"]} == {"Financeiro"}
+
+    # Bia responde primeiro e fica com a conversa; o Caio continua vendo (atende o número inteiro).
+    assert bia.post(f"/whatsapp/conversas/{conv_fin['id']}/mensagens", json={"texto": "Mando agora"}).status_code == 201
+    assert next(x for x in c.get("/whatsapp/conversas").json() if x["id"] == conv_fin["id"])["responsavel_id"] == bia_id
+    assert n_fin in tels(caio)
+    assert n_fin in tels(bia, filtro="minhas") and n_fin not in tels(caio, filtro="minhas")
+
+    # Filtros do gestor por setor e por número.
+    assert tels(c, setor_id=fin["id"]) == {n_fin}
+    assert tels(c, conexao_id=comercial["id"]) == {n_com}
+
+    # Gestor passa a conversa do Comercial para o Caio: ela aparece para ele mesmo sem atender o número.
+    # A Ana continua vendo, porque é responsável pelo número inteiro.
+    assert c.put(f"/whatsapp/conversas/{conv_com['id']}/responsavel", json={"pessoa_id": caio_id}).status_code == 200
+    assert n_com in tels(caio) and n_com in tels(ana)
+    assert caio.get(f"/whatsapp/conversas/{conv_com['id']}/mensagens").status_code == 200
+
+    # Remover o setor: o número Financeiro fica aberto; conversa da Bia continua dela, a Ana não vê a dela.
+    assert c.delete(f"/whatsapp/setores/{fin['id']}").status_code == 204
+    assert next(x for x in c.get("/whatsapp/situacao").json()["conexoes"] if x["id"] == financeiro["id"])["setor_id"] is None
+    assert n_fin not in tels(ana)
+    for con in (comercial, financeiro, aberto):
+        c.delete(f"/whatsapp/conexoes/{con['id']}")

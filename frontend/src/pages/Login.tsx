@@ -9,7 +9,6 @@ import MarcaSax from "@/components/shared/MarcaSax";
 import LoginVitrine from "@/components/shared/LoginVitrine";
 import { apiPost, detalheErro } from "@/lib/api";
 import { beginSession } from "@/lib/session";
-import { useConfig } from "@/lib/useConfig";
 import type { Principal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +21,6 @@ export default function Login() {
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-  const { config, logoUrl } = useConfig();
 
   const entrar = useMutation({
     mutationFn: (dados: { email: string; senha: string }) => apiPost<Principal>("/auth/login", dados),
@@ -52,36 +50,18 @@ export default function Login() {
     <div className="flex min-h-svh flex-col lg:flex-row">
       {/* Painel de marca — lado esquerdo, assimétrico */}
       <div
-        className="relative flex flex-col justify-between overflow-hidden bg-sidebar bg-cover bg-center p-8 text-sidebar-foreground lg:w-[44%] lg:p-12"
-        style={
-          config.imagem_fundo_login
-            ? { backgroundImage: `linear-gradient(rgba(74,3,162,.8),rgba(74,3,162,.92)), url(${config.imagem_fundo_login})` }
-            : undefined
-        }
+        className="relative flex flex-col justify-between overflow-hidden bg-[#4a03a2] p-8 text-white lg:w-[44%] lg:p-12"
         data-testid="login-painel-marca"
       >
         <div className="flex items-center gap-4">
-          {logoUrl ? (
-            <img src={logoUrl} alt={config.nome_software} className="h-10 rounded-md bg-white object-contain p-1" data-testid="login-logo" />
-          ) : (
-            <span className="flex items-center gap-3">
-              <MarcaSax className="w-28" />
-              <span className="border-l border-white/25 pl-3 text-sm font-medium tracking-wider text-white/75">CRM</span>
-            </span>
-          )}
-          {logoUrl && (
-            <div className="border-l border-sidebar-foreground/20 pl-4">
-              <p className="font-heading text-base font-semibold tracking-tight" data-testid="login-nome-software">
-                {config.nome_software}
-              </p>
-              {config.slogan && <p className="text-xs text-sidebar-foreground/60">{config.slogan}</p>}
-            </div>
-          )}
+          {/* Login é da plataforma: sempre a marca SAX, nunca a de um cliente. */}
+          <span className="flex items-center gap-3" data-testid="login-marca-sax">
+            <MarcaSax className="w-28" />
+            <span className="border-l border-white/25 pl-3 text-sm font-medium tracking-wider text-white/75">CRM</span>
+          </span>
         </div>
 
-        {!config.imagem_fundo_login && (
-          <div className="pointer-events-none absolute inset-0 opacity-[0.09] [background-image:radial-gradient(#fff_1.5px,transparent_1.5px)] [background-size:26px_26px]" />
-        )}
+        <div className="pointer-events-none absolute inset-0 opacity-[0.09] [background-image:radial-gradient(#fff_1.5px,transparent_1.5px)] [background-size:26px_26px]" />
 
         <div className="relative my-10 lg:my-0">
           <h1 className="font-heading text-3xl font-bold leading-tight tracking-tight lg:text-[40px]">
@@ -89,7 +69,7 @@ export default function Login() {
             <br />
             seu tipo de negócio.
           </h1>
-          <p className="mt-4 max-w-md text-sm leading-relaxed text-sidebar-foreground/70">
+          <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">
             Imobiliária, loja de veículos, odontologia, clínica terapêutica, barbearia e estética. Cada um com menu,
             funil, agenda e telas feitas para a sua rotina.
           </p>
@@ -98,7 +78,7 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="relative text-[11px] text-sidebar-foreground/40">
+        <p className="relative text-[11px] text-white/50">
           CRM por segmento com tecnologia SAX
         </p>
       </div>
