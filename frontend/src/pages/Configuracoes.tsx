@@ -48,6 +48,8 @@ export default function Configuracoes() {
     qc.invalidateQueries({ queryKey: ["config"] });
     qc.invalidateQueries({ queryKey: ["config", "publica"] });
     qc.invalidateQueries({ queryKey: ["config", "historico"] });
+    qc.invalidateQueries({ queryKey: ["auth"] }); // nome da empresa no cabeçalho
+    qc.invalidateQueries({ queryKey: ["empresas"] });
   };
 
   const salvarLogo = useMutation({

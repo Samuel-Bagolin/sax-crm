@@ -230,9 +230,13 @@ async def update_config(input: ConfiguracaoUpdate, principal: Principal = Depend
     await db.configuracoes.update_one({"id": CONFIG_ID}, {"$set": data}, upsert=True)
     await _registrar(principal.nome, mudancas)
     # Nome da empresa é um só: o do configurador também é o do painel Empresas, do cabeçalho e dos e-mails.
+    # Compara com o nome do painel (não com o do configurador): empresas que já tinham nomes diferentes
+    # se acertam no primeiro salvar.
     nome = (data.get("nome_software") or "").strip()
-    if nome and nome != atual.nome_software and principal.empresa_id:
-        await controle.empresas.update_one({"id": principal.empresa_id}, {"$set": {"nome": nome, "updated_at": now_utc()}})
+    if nome and principal.empresa_id:
+        empresa = await controle.empresas.find_one({"id": principal.empresa_id}, {"nome": 1}) or {}
+        if empresa.get("nome") != nome:
+            await controle.empresas.update_one({"id": principal.empresa_id}, {"$set": {"nome": nome, "updated_at": now_utc()}})
     return await carregar()
 
 
