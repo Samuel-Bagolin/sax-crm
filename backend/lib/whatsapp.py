@@ -134,6 +134,59 @@ async def enviar_texto(instancia: str, jid: str, texto: str) -> str | None:
     return ((r.get("key") or {}).get("id")) if isinstance(r.get("key"), dict) else None
 
 
+MIDIA_TOCAVEL = {"imageMessage": "imagem", "stickerMessage": "imagem", "audioMessage": "audio", "videoMessage": "video",
+                 "ptvMessage": "video", "documentMessage": "documento", "documentWithCaptionMessage": "documento"}
+LIMITE_MIDIA = 4 * 1024 * 1024  # a resposta de função do Vercel aceita até ~4,5 MB
+
+
+def midia_da_mensagem(msg: dict) -> dict | None:
+    """Dados para baixar a mídia depois: tipo, mimetype, nome e a mensagem crua (sem miniatura)."""
+    for chave, tipo in MIDIA_TOCAVEL.items():
+        if chave not in (msg or {}):
+            continue
+        corpo = msg.get(chave) or {}
+        if chave == "documentWithCaptionMessage":
+            corpo = ((corpo.get("message") or {}).get("documentMessage")) or {}
+            chave = "documentMessage"
+        crua = {k: v for k, v in corpo.items() if k not in ("jpegThumbnail", "contextInfo", "thumbnailSha256", "waveform", "streamingSidecar")}
+        return {"tipo": tipo, "mime": corpo.get("mimetype"), "nome": corpo.get("fileName"), "segundos": corpo.get("seconds"),
+                "chave": chave, "crua": {chave: crua}}
+    return None
+
+
+async def baixar_midia(instancia: str, key: dict, crua: dict | None, converter_audio: bool) -> tuple[bytes, str]:
+    """Pede o arquivo à Evolution. Com a mensagem crua ela baixa direto do WhatsApp; sem ela, procura pelo id."""
+    import base64
+
+    mensagem = {"key": key, **({"message": crua} if crua else {})}
+    tentativas = [True, False] if converter_audio else [False]
+    ultimo: ErroWhatsApp | None = None
+    for converter in tentativas:  # áudio: tenta MP4 (toca no Safari e no iPhone); sem ffmpeg no servidor, vai o original
+        try:
+            r = await chamar("POST", f"/chat/getBase64FromMediaMessage/{instancia}", {"message": mensagem, "convertToMp4": converter}, timeout=40)
+        except ErroWhatsApp as e:
+            ultimo = e
+            continue
+        b64 = r.get("base64") or ""
+        if not b64:
+            ultimo = ErroWhatsApp(404, "O WhatsApp não devolveu o arquivo. Abra no celular.")
+            continue
+        if len(b64) * 3 // 4 > LIMITE_MIDIA:
+            raise ErroWhatsApp(413, "Arquivo grande demais para abrir pelo CRM. Veja no celular.")
+        mime = r.get("mimetype") or ("audio/mp4" if converter else "application/octet-stream")
+        return base64.b64decode(b64.split(",")[-1]), mime.split(";")[0] if converter else mime
+    raise ultimo or ErroWhatsApp(404, "Arquivo não encontrado.")
+
+
+async def foto_perfil(instancia: str, jid: str) -> str | None:
+    try:
+        r = await chamar("POST", f"/chat/fetchProfilePictureUrl/{instancia}", {"number": destino(jid)}, timeout=15)
+    except ErroWhatsApp:
+        return None
+    url = r.get("profilePictureUrl")
+    return url if isinstance(url, str) and url.startswith(("https://", "http://")) else None
+
+
 # ------------------------------------------------------------------ leitura do webhook
 
 

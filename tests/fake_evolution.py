@@ -106,6 +106,47 @@ async def t_receber(nome: str, req: Request):
     return {"webhook": await _disparar(nome, "messages.upsert", data), "id": mid}
 
 
+AUDIO = b"ID3fake-audio-bytes"
+FOTO = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+                     "1f15c4890000000d49444154789c63f8cfc0f01f0005000201ff8a2c5b0000000049454e44ae426082")
+PEDIDOS_MIDIA: list[dict] = []
+
+
+@app.post("/chat/getBase64FromMediaMessage/{nome}")
+async def midia(nome: str, req: Request, apikey: str | None = Header(None)):
+    _auth(apikey)
+    b = await req.json()
+    PEDIDOS_MIDIA.append(b)
+    msg = (b.get("message") or {}).get("message") or {}
+    import base64
+    if "audioMessage" in msg or (b.get("message") or {}).get("key", {}).get("id", "").startswith("AUD"):
+        mime = "audio/mp4" if b.get("convertToMp4") else "audio/ogg; codecs=opus"
+        return {"mediaType": "audioMessage", "mimetype": mime, "base64": base64.b64encode(AUDIO).decode()}
+    if "imageMessage" in msg:
+        return {"mediaType": "imageMessage", "mimetype": "image/png", "base64": base64.b64encode(FOTO).decode()}
+    return {"error": True, "message": "Message not found"}
+
+
+@app.post("/chat/fetchProfilePictureUrl/{nome}")
+async def foto_perfil(nome: str, req: Request, apikey: str | None = Header(None)):
+    _auth(apikey)
+    b = await req.json()
+    if str(b.get("number", "")).endswith("0000"):
+        return {"wuid": b["number"], "profilePictureUrl": None}
+    return {"wuid": b["number"], "profilePictureUrl": f"{req.base_url}_teste/foto.png"}
+
+
+@app.get("/_teste/foto.png")
+async def t_foto():
+    from fastapi import Response
+    return Response(FOTO, media_type="image/png")
+
+
+@app.get("/_teste/midia")
+async def t_midia():
+    return PEDIDOS_MIDIA
+
+
 @app.get("/_teste/enviadas")
 async def t_enviadas():
     return ENVIADAS

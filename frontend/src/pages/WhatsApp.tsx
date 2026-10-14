@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Check, CheckCheck, Inbox, Loader2, MessageSquareText, Phone, Search, Send, Smartphone, UserPlus, WifiOff } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, FileText, Inbox, Loader2, MessageSquareText, Phone, Search, Send, Smartphone, UserPlus, WifiOff } from "lucide-react";
 import { apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
+import { urlApi } from "@/lib/suporte";
 import { useEquipe, iniciais } from "@/lib/crm";
 import { useSegmento } from "@/lib/segmento";
 import { Button } from "@/components/ui/button";
@@ -17,10 +18,16 @@ interface Conversa {
   id: string; nome: string; telefone: string | null; conexao_id: string; responsavel_id: string | null; entrada_id: string | null;
   ultima_msg: string | null; ultima_de_mim: boolean; ultima_em: string | null; nao_lidas: number;
 }
-interface Mensagem { id: string; texto: string; tipo: string; de_mim: boolean; em: string | null; autor: string | null; status: string | null }
+interface Midia { tipo: "imagem" | "audio" | "video" | "documento"; mime: string | null; nome: string | null; segundos: number | null }
+interface Mensagem { id: string; texto: string; tipo: string; de_mim: boolean; em: string | null; autor: string | null; status: string | null; midia?: Midia | null }
 
 type Filtro = "todas" | "nao_lidas" | "minhas" | "sem_responsavel";
 const FILTROS: [Filtro, string][] = [["todas", "Todas"], ["nao_lidas", "Não lidas"], ["minhas", "Minhas"], ["sem_responsavel", "Sem responsável"]];
+
+/** "[Foto] planta da casa" vira "planta da casa"; "[Áudio]" vira vazio. */
+function legenda(texto: string) {
+  return (texto || "").replace(/^\[[^\]]+\]\s*/, "").trim();
+}
 
 function hora(iso: string | null) {
   if (!iso) return "";
@@ -39,6 +46,42 @@ function dia(iso: string | null) {
   if (d.toDateString() === hoje.toDateString()) return "Hoje";
   if (d.toDateString() === new Date(Date.now() - 86_400_000).toDateString()) return "Ontem";
   return d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+}
+
+/** Foto do contato no WhatsApp; sem foto (ou privada), as iniciais. */
+function FotoContato({ c, tamanho }: { c: Conversa; tamanho: "sm" | "md" }) {
+  const [erro, setErro] = useState(false);
+  const cls = tamanho === "md" ? "h-10 w-10" : "h-9 w-9";
+  return (
+    <span className={cn("relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-sm font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300", cls)}>
+      {iniciais(c.nome) || "?"}
+      {!erro && (
+        <img src={urlApi(`/api/whatsapp/conversas/${encodeURIComponent(c.id)}/foto`)} alt="" loading="lazy" onError={() => setErro(true)}
+          className="absolute inset-0 h-full w-full object-cover" data-testid="wa-foto" />
+      )}
+    </span>
+  );
+}
+
+function Anexo({ m }: { m: Mensagem }) {
+  const [erro, setErro] = useState(false);
+  const md = m.midia!;
+  const src = urlApi(`/api/whatsapp/mensagens/${encodeURIComponent(m.id)}/midia`);
+  if (erro) return <p className="text-xs italic text-zinc-500">Não foi possível abrir este arquivo aqui. Veja no celular.</p>;
+  if (md.tipo === "audio") return <audio controls preload="none" src={src} onError={() => setErro(true)} className="h-10 w-64 max-w-full" data-testid="wa-audio" />;
+  if (md.tipo === "imagem") {
+    return (
+      <a href={src} target="_blank" rel="noreferrer" className="block">
+        <img src={src} alt="Foto recebida" loading="lazy" onError={() => setErro(true)} className="max-h-72 w-auto max-w-full rounded-md" data-testid="wa-imagem" />
+      </a>
+    );
+  }
+  if (md.tipo === "video") return <video controls preload="none" src={src} onError={() => setErro(true)} className="max-h-72 max-w-full rounded-md" />;
+  return (
+    <a href={src} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-md bg-black/5 px-2.5 py-2 text-sm hover:bg-black/10 dark:bg-white/10" data-testid="wa-documento">
+      <FileText className="h-5 w-5 shrink-0 text-zinc-500" /><span className="truncate">{md.nome || "Abrir documento"}</span>
+    </a>
+  );
 }
 
 function telefoneBonito(t: string | null) {
@@ -140,7 +183,7 @@ export default function WhatsApp() {
                   <optgroup label="Números">{conexoes.map((c) => <option key={c.id} value={`n:${c.id}`}>{c.nome}</option>)}</optgroup>
                 </select>
               )}
-              <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Filtro">
+              <div className="flex flex-wrap gap-1" role="tablist" aria-label="Filtro">
                 {FILTROS.map(([f, r]) => (
                   <button key={f} type="button" role="tab" aria-selected={filtro === f} onClick={() => setFiltro(f)}
                     className={cn("shrink-0 rounded-full border px-2.5 py-1 text-xs", filtro === f ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")}>{r}</button>
@@ -152,7 +195,7 @@ export default function WhatsApp() {
               {lista.map((c) => (
                 <li key={c.id}>
                   <button type="button" onClick={() => setAtiva(c.id)} className={cn("flex w-full items-center gap-3 border-b px-3 py-2.5 text-left hover:bg-muted/60", ativa === c.id && "bg-accent/60")} data-testid="wa-conversa">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">{iniciais(c.nome) || "?"}</span>
+                    <FotoContato c={c} tamanho="md" />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
                         <span className={cn("truncate text-sm", c.nao_lidas ? "font-semibold" : "font-medium")}>{c.nome}</span>
@@ -230,7 +273,7 @@ function Conversa({ c, versao, voltar, equipe, isAdmin, minhaPessoa, temLeads, c
     <>
       <header className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
         <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={voltar} aria-label="Voltar para a lista"><ArrowLeft className="h-4 w-4" /></Button>
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">{iniciais(c.nome) || "?"}</span>
+        <FotoContato c={c} tamanho="sm" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold" data-testid="wa-contato-nome">{c.nome}</p>
           <p className="flex items-center gap-1 truncate text-xs text-muted-foreground"><Phone className="h-3 w-3" />{telefoneBonito(c.telefone)}{conexao ? ` · pelo número ${conexao.nome}` : ""}</p>
@@ -255,18 +298,27 @@ function Conversa({ c, versao, voltar, equipe, isAdmin, minhaPessoa, temLeads, c
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] px-3 py-4 dark:bg-zinc-900 sm:px-6" data-testid="wa-mensagens"
         style={{ backgroundImage: "radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px)", backgroundSize: "18px 18px" }}>
         {q.isLoading && <p className="text-center text-sm text-muted-foreground">Carregando...</p>}
-        <div className="mx-auto flex max-w-3xl flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5">
           {msgs.map((m) => {
             const d = dia(m.em);
             const separador = d !== ultimoDia;
             ultimoDia = d;
             return (
-              <div key={m.id} className="contents">
+              <div key={m.id} className="flex flex-col">
                 {separador && <p className="my-2 self-center rounded-md bg-white/90 px-2.5 py-1 text-[11px] font-medium text-zinc-600 shadow-sm dark:bg-zinc-800 dark:text-zinc-300">{d}</p>}
-                <div className={cn("max-w-[85%] rounded-lg px-2.5 py-1.5 text-sm shadow-sm sm:max-w-[70%]", m.de_mim ? "self-end rounded-tr-sm bg-[#d9fdd3] text-zinc-900 dark:bg-emerald-900 dark:text-emerald-50" : "self-start rounded-tl-sm bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100")}>
+                <div className={cn("flex w-full", m.de_mim ? "justify-end" : "justify-start")}>
+                <div data-testid="wa-balao" className={cn("max-w-[85%] rounded-lg px-2.5 py-1.5 text-sm shadow-sm sm:max-w-[65%] lg:max-w-[55%]", m.de_mim ? "rounded-tr-sm bg-[#d9fdd3] text-zinc-900 dark:bg-emerald-900 dark:text-emerald-50" : "rounded-tl-sm bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100")}>
                   {m.de_mim && m.autor && <p className="mb-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">{m.autor}</p>}
-                  <p className={cn("whitespace-pre-wrap break-words", m.tipo !== "texto" && "italic text-zinc-600 dark:text-zinc-300")}>{m.texto}</p>
+                  {m.midia ? (
+                    <div className="grid gap-1">
+                      <Anexo m={m} />
+                      {legenda(m.texto) && <p className="whitespace-pre-wrap break-words">{legenda(m.texto)}</p>}
+                    </div>
+                  ) : (
+                    <p className={cn("whitespace-pre-wrap break-words", m.tipo !== "texto" && "italic text-zinc-600 dark:text-zinc-300")}>{m.texto}</p>
+                  )}
                   <p className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-zinc-500">{hora(m.em)}{m.de_mim && (m.status === "READ" ? <CheckCheck className="h-3 w-3 text-sky-500" /> : m.status === "DELIVERY_ACK" ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />)}</p>
+                </div>
                 </div>
               </div>
             );

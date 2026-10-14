@@ -208,3 +208,49 @@ def test_setores_e_responsaveis_por_numero(servidor, cartao_demo):
     assert n_fin not in tels(ana)
     for con in (comercial, financeiro, aberto):
         c.delete(f"/whatsapp/conexoes/{con['id']}")
+
+
+def test_audio_foto_do_contato_e_imagem(servidor, cartao_demo):
+    c, _ = _cadastrar("imobiliaria", cartao_demo)
+    con, inst = _conectar(c, "Comercial")
+    numero = _numero()
+    audio = {"audioMessage": {"url": "https://mmg.whatsapp.net/x", "mimetype": "audio/ogg; codecs=opus", "seconds": 7,
+                              "mediaKey": "abc=", "ptt": True, "waveform": "AAAA"}}
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": numero, "nome": "Cliente Áudio", "texto": "x", "message": audio, "tipo": "audioMessage"})
+    foto = {"imageMessage": {"url": "https://mmg.whatsapp.net/y", "mimetype": "image/jpeg", "caption": "fachada", "jpegThumbnail": "QUJD"}}
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": numero, "nome": "Cliente Áudio", "texto": "x", "message": foto, "tipo": "imageMessage"})
+
+    conv = next(x for x in c.get("/whatsapp/conversas").json() if x["telefone"] == numero)
+    msgs = c.get(f"/whatsapp/conversas/{conv['id']}/mensagens").json()["mensagens"]
+    m_audio, m_foto = msgs[0], msgs[1]
+    assert m_audio["midia"]["tipo"] == "audio" and m_audio["midia"]["segundos"] == 7
+    assert m_foto["midia"]["tipo"] == "imagem" and m_foto["texto"] == "[Foto] fachada"
+
+    # Áudio: pede à Evolution em MP4 (toca no Safari) com a mensagem crua, sem miniatura nem onda.
+    r = c.get(f"/whatsapp/mensagens/{m_audio['id']}/midia")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("audio/mp4") and r.content == b"ID3fake-audio-bytes"
+    pedido = httpx.get(f"{EVO}/_teste/midia").json()[-1]
+    assert pedido["convertToMp4"] is True and "waveform" not in pedido["message"]["message"]["audioMessage"]
+    assert pedido["message"]["key"]["id"] == m_audio["id"].split("|", 1)[1]
+    img = c.get(f"/whatsapp/mensagens/{m_foto['id']}/midia")
+    assert img.status_code == 200 and img.headers["content-type"] == "image/png"
+    # Texto não tem arquivo.
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": numero, "nome": "Cliente Áudio", "texto": "só texto"})
+    texto = c.get(f"/whatsapp/conversas/{conv['id']}/mensagens").json()["mensagens"][-1]
+    assert texto["midia"] is None and c.get(f"/whatsapp/mensagens/{texto['id']}/midia").status_code == 404
+
+    # Foto do contato: vem do WhatsApp, servida pelo CRM; sem foto, 404 (a tela mostra as iniciais).
+    f = c.get(f"/whatsapp/conversas/{conv['id']}/foto")
+    assert f.status_code == 200 and f.headers["content-type"] == "image/png"
+    sem = _numero()[:-4] + "0000"
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": sem, "nome": "Sem Foto", "texto": "oi"})
+    conv2 = next(x for x in c.get("/whatsapp/conversas").json() if x["telefone"] == sem)
+    assert c.get(f"/whatsapp/conversas/{conv2['id']}/foto").status_code == 404
+
+    # Quem não pode ver a conversa não baixa o arquivo nem a foto.
+    outro, _ = _membro(c, "Dani")
+    pid = c.get("/equipe").json()
+    c.put(f"/whatsapp/conexoes/{con['id']}", json={"nome": "Comercial", "responsaveis": [p["pessoa_id"] for p in pid if p["nome"] == "Dona Teste"][:1]})
+    assert outro.get(f"/whatsapp/mensagens/{m_audio['id']}/midia").status_code == 404
+    assert outro.get(f"/whatsapp/conversas/{conv['id']}/foto").status_code == 404
+    c.delete(f"/whatsapp/conexoes/{con['id']}")

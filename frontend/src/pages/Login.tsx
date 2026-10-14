@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { primeiroNome } from "@/lib/format";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -21,6 +21,15 @@ export default function Login() {
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+
+  // O login é da plataforma: apaga qualquer resto da última empresa (título, cores e dados em memória).
+  useEffect(() => {
+    document.title = "SAX CRM";
+    const raiz = document.documentElement;
+    Array.from(raiz.style).filter((v) => v.startsWith("--")).forEach((v) => raiz.style.removeProperty(v));
+    qc.removeQueries({ queryKey: ["config"] });
+    qc.removeQueries({ queryKey: ["auth"] });
+  }, [qc]);
 
   const entrar = useMutation({
     mutationFn: (dados: { email: string; senha: string }) => apiPost<Principal>("/auth/login", dados),

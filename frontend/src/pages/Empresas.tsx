@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCatalogoPlanos } from "@/lib/diferenciais";
 import { CatalogoComercial, ComercialDialog } from "@/components/empresas/Comercial";
+import { Administradores } from "@/components/empresas/Administradores";
 import { ConfigPagamentos, DadosContratada, DominiosClientes, PainelSegmentos, ServidorWhatsApp } from "@/components/empresas/Plataforma";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +51,7 @@ export default function Empresas() {
   const [modal, setModal] = useState(false);
   const [usoAberto, setUsoAberto] = useState<string | null>(null);
   const [comercial, setComercial] = useState<EmpresaResumo | null>(null);
-  const [aba, setAba] = useState<"painel" | "empresas" | "planos" | "pagamentos">("painel");
+  const [aba, setAba] = useState<"painel" | "empresas" | "planos" | "pagamentos" | "admins">("painel");
   const [filtroSeg, setFiltroSeg] = useState<string>("");
   const [linkAtivacao, setLinkAtivacao] = useState<{ empresa: string; email: string; link: string; enviado: boolean } | null>(null);
   const { data: catalogo } = useCatalogoPlanos();
@@ -208,12 +209,13 @@ export default function Empresas() {
         </Button>
       </div>
 
-      <div className="flex w-fit rounded-lg bg-muted p-1" role="tablist" aria-label="Seções">
+      <div className="flex w-fit max-w-full overflow-x-auto rounded-lg bg-muted p-1" role="tablist" aria-label="Seções">
         {([
           ["painel", "Painel por segmento"],
           ["empresas", "Empresas"],
           ["planos", "Planos e adicionais"],
           ["pagamentos", "Pagamentos"],
+          ["admins", "Administradores"],
         ] as const).map(([v, r]) => (
           <button key={v} role="tab" aria-selected={aba === v} onClick={() => setAba(v)} className={cn("rounded-md px-4 py-1.5 text-sm font-medium", aba === v ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")} data-testid={`aba-${v}`}>
             {r}
@@ -223,8 +225,10 @@ export default function Empresas() {
 
       {aba === "painel" ? (
         <PainelSegmentos onFiltrar={(sg) => { setFiltroSeg(sg); setAba("empresas"); }} />
+      ) : aba === "admins" ? (
+        <Administradores />
       ) : aba === "pagamentos" ? (
-        <div className="grid gap-6"><ConfigPagamentos /><DadosContratada /><DominiosClientes /><ServidorWhatsApp /></div>
+        <div className="grid gap-6"><ConfigPagamentos /><ServidorWhatsApp /><DadosContratada /><DominiosClientes /></div>
       ) : aba === "planos" ? (
         <CatalogoComercial />
       ) : (

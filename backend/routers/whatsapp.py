@@ -20,7 +20,7 @@ import hmac
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
@@ -342,7 +342,72 @@ async def mensagens(conversa_id: str, principal: Principal = Depends(_atender)):
         await _mudou()
     return {"conversa": _saida_conversa({**conv, "nao_lidas": 0}),
             "mensagens": [{"id": m["_id"], "texto": m.get("texto"), "tipo": m.get("tipo") or "texto", "de_mim": bool(m.get("de_mim")),
-                           "em": _iso(m.get("em")), "autor": m.get("autor"), "status": m.get("status")} for m in docs]}
+                           "em": _iso(m.get("em")), "autor": m.get("autor"), "status": m.get("status"), "midia": _saida_midia(m)} for m in docs]}
+
+
+TIPO_POR_ROTULO = {"Foto": "imagem", "Figurinha": "imagem", "Áudio": "audio", "Vídeo": "video", "Documento": "documento"}
+
+
+def _saida_midia(m: dict) -> dict | None:
+    """Mídia tocável na tela. Mensagens antigas (sem os dados guardados) tentam pelo id na Evolution."""
+    md = m.get("midia")
+    if md:
+        return {"tipo": md.get("tipo"), "mime": md.get("mime"), "nome": md.get("nome"), "segundos": md.get("segundos")}
+    tipo = TIPO_POR_ROTULO.get(m.get("tipo") or "")
+    return {"tipo": tipo, "mime": None, "nome": None, "segundos": None} if tipo else None
+
+
+@router.get("/mensagens/{mensagem_id}/midia")
+async def midia(mensagem_id: str, principal: Principal = Depends(_atender)):
+    """Áudio, foto, vídeo ou documento da mensagem, buscado na Evolution na hora (não guardamos o arquivo)."""
+    m = await db.wa_mensagens.find_one({"_id": mensagem_id})
+    if not m:
+        raise HTTPException(404, "Mensagem não encontrada")
+    conv = await _conversa(m["conversa_id"], principal)
+    instancia = mensagem_id.split("|", 1)[0]
+    md = m.get("midia") or {}
+    tipo = md.get("tipo") or TIPO_POR_ROTULO.get(m.get("tipo") or "")
+    if not tipo:
+        raise HTTPException(404, "Esta mensagem não tem arquivo")
+    key = m.get("chave_wa") or {"id": mensagem_id.split("|", 1)[1], "remoteJid": conv.get("jid"), "fromMe": bool(m.get("de_mim"))}
+    try:
+        conteudo, mime = await wa.baixar_midia(instancia, key, md.get("crua"), converter_audio=tipo == "audio")
+    except wa.ErroWhatsApp as e:
+        raise HTTPException(413 if e.status == 413 else 404, e.mensagem)
+    nome = (md.get("nome") or "").replace('"', "")
+    cabecalhos = {"Cache-Control": "private, max-age=86400"}
+    if tipo == "documento" and nome:
+        cabecalhos["Content-Disposition"] = f'inline; filename="{nome[:120]}"'
+    return Response(conteudo, media_type=mime, headers=cabecalhos)
+
+
+FOTO_VALIDADE = 24 * 3600
+
+
+@router.get("/conversas/{conversa_id}/foto")
+async def foto(conversa_id: str, principal: Principal = Depends(_atender)):
+    """Foto de perfil do contato. O link do WhatsApp expira: renovamos uma vez por dia e servimos daqui."""
+    conv = await _conversa(conversa_id, principal)
+    agora = now_utc()
+    em = conv.get("foto_em")
+    url = conv.get("foto_url")
+    fresca = isinstance(em, datetime) and (agora - (em if em.tzinfo else em.replace(tzinfo=timezone.utc))).total_seconds() < FOTO_VALIDADE
+    if not fresca:
+        url = await wa.foto_perfil(conversa_id.split("|", 1)[0], conv.get("jid") or "")
+        await db.wa_conversas.update_one({"_id": conversa_id}, {"$set": {"foto_url": url, "foto_em": agora}})
+    if not url:
+        raise HTTPException(404, "Contato sem foto")
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as c:
+            r = await c.get(url)
+    except httpx.HTTPError:
+        raise HTTPException(404, "Foto indisponível")
+    if r.status_code != 200 or not r.headers.get("content-type", "").startswith("image/"):
+        await db.wa_conversas.update_one({"_id": conversa_id}, {"$set": {"foto_em": None}})  # link venceu: renova na próxima
+        raise HTTPException(404, "Foto indisponível")
+    return Response(r.content, media_type=r.headers["content-type"], headers={"Cache-Control": "private, max-age=86400"})
 
 
 class EnvioIn(BaseModel):
@@ -479,9 +544,11 @@ async def _mensagem_recebida(instancia: str, item: dict) -> None:
         em = now_utc()
     conversa_id = f"{instancia}|{jid}"
     try:
+        midia = wa.midia_da_mensagem(item.get("message") or {})
         await db.wa_mensagens.insert_one({"_id": f"{instancia}|{msg_id}", "conversa_id": conversa_id, "texto": texto[:4096], "tipo": tipo,
                                           "de_mim": de_mim, "em": em, "recebido_em": now_utc(), "autor": None if not de_mim else "Celular",
-                                          "status": item.get("status")})
+                                          "status": item.get("status"), "midia": midia,
+                                          "chave_wa": {"id": msg_id, "remoteJid": key.get("remoteJid"), "fromMe": de_mim}})
     except DuplicateKeyError:
         return  # reenvio do webhook ou mensagem que o próprio CRM mandou
     nome = None if de_mim else (item.get("pushName") or "").strip()[:80] or None

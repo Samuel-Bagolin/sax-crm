@@ -119,14 +119,22 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    veem as conversas dele; número sem os dois é aberto (cada um vê as dele e as sem dono). Gestor vê tudo;
    conversa passada para alguém aparece para essa pessoa. Número de uma pessoa só: conversa nova já nasce dela
    (sem rodízio). Regra em `_acesso`/`_pode_ver`. Contato novo vira lead (origem WhatsApp) nos segmentos com
-   Leads. Teste local: `tests/fake_evolution.py` na porta 8098.
+   Leads. Mídia (áudio, foto, vídeo, documento) não fica guardada: guardamos a mensagem crua (`midia.crua`, sem
+   miniatura) e `/whatsapp/mensagens/{id}/midia` pede o arquivo à Evolution na hora (áudio em MP4 para tocar no
+   Safari; sem ffmpeg no servidor, vai o original; limite ~4 MB do Vercel). Foto do contato em
+   `/whatsapp/conversas/{id}/foto`, renovada uma vez por dia. Teste local: `tests/fake_evolution.py` na porta 8098.
 11. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
    `FIREBASE_SERVICE_ACCOUNT`; o resto é gerado e guardado no banco (`lib/autoconfig.py`).
 12. **Marca.** A tela de login é da plataforma: sempre a marca SAX, nunca a de um cliente (`/configuracoes/publica`
    sem sessão só usa a empresa com `?empresa=slug`). A logo da empresa vai na URL com `logo_v` (muda com o
    arquivo, fura o cache na hora). Upload de logo passa por `prepararImagem` (`lib/imagem.ts`): reduz e tira o
    fundo branco que encosta na borda. O cabeçalho mostra logo e nome da empresa; o menu da conta, CNPJ,
-   segmento e plano.
+   segmento e plano. O nome da empresa é um só: `nome_software` do configurador e `controle.empresas.nome`
+   andam juntos (trocar em um troca no outro). O login limpa título, cores e cache da última empresa.
+13. **Administradores da plataforma** (`routers/administradores.py`, Empresas > Administradores). Equipe SAX
+   (papel sysadmin em `controle.usuarios`), só no plano de controle. Conta nasce com senha aleatória e a pessoa
+   define a dela pelo link de ativação (24 h, uso único). Desativar sobe `session_version` e derruba a sessão.
+   O configurador do sistema (`config:read/write`) é só deles; gestor recebe 403.
 
 ## Texto da interface
 

@@ -410,6 +410,12 @@ async def update_empresa(
     if data:
         data["updated_at"] = now_utc()
         await controle.empresas.update_one({"id": empresa_id}, {"$set": data})
+        if data.get("nome") and data["nome"] != doc.get("nome"):
+            # Mesmo nome no configurador da empresa (cabeçalho, site, e-mails).
+            from lib.db import client
+            from models.config import CONFIG_ID
+
+            await client[doc["db_name"]].configuracoes.update_one({"id": CONFIG_ID}, {"$set": {"nome_software": data["nome"]}})
     return to_empresa(await controle.empresas.find_one({"id": empresa_id}))
 
 

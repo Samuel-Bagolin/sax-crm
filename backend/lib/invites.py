@@ -11,7 +11,8 @@ from models.common import now_utc
 
 def app_url():
     url = os.environ.get("APP_URL", "").rstrip("/")
-    if not url.startswith("https://"):
+    local = url.startswith(("http://localhost", "http://127.0.0.1"))  # só no computador de quem desenvolve
+    if not url.startswith("https://") and not local:
         raise HTTPException(503, "Configure APP_URL HTTPS para enviar convites")
     return url
 
