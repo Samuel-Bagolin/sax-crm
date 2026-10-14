@@ -21,6 +21,7 @@ class Etapa(BaseModel):
     probabilidade: int = Field(default=20, ge=0, le=100)
     dias_parado: int | None = Field(default=None, ge=1, le=365)  # "rotting": alerta após N dias
     cor: str | None = None
+    requisito: Literal["contato", "reuniao"] | None = None  # etapa com cadeado (lib/requisitos.py)
 
 
 class Funil(BaseModel):
@@ -38,6 +39,7 @@ class EtapaInput(BaseModel):
     probabilidade: int = Field(default=20, ge=0, le=100)
     dias_parado: int | None = Field(default=None, ge=1, le=365)
     cor: str | None = None
+    requisito: Literal["contato", "reuniao"] | None = None
 
 
 class FunilInput(BaseModel):
@@ -124,6 +126,10 @@ class Entrada(BaseModel):
     fila_desde: datetime | None = None
     devolvido_de: str | None = None  # vendedor que perdeu o lead por não atender no prazo
     portal_lead_id: str | None = None  # id do lead no portal (evita duplicar em reenvios)
+    praca: str | None = None  # lib/supervisoes.py
+    supervisao_id: str | None = None
+    unidade_id: str | None = None
+    pixel: str | None = None
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -140,6 +146,10 @@ class EntradaCreate(BaseModel):
     corretor_id: str | None = None
     valor_estimado: Nonnegative | None = None
     etiquetas: List[str] = Field(default_factory=list)
+    praca: str | None = None
+    supervisao_id: str | None = None
+    unidade_id: str | None = None
+    pixel: str | None = Field(default=None, max_length=120)
 
 
 class EntradaUpdate(BaseModel):
@@ -185,6 +195,7 @@ class Atividade(BaseModel):
     notas: str | None = None
     concluida: bool = False
     concluida_em: datetime | None = None
+    resultado: Literal["positivo", "negativo"] | None = None  # contato com/sem sucesso, reunião realizada ou não
     created_by: str | None = None
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
@@ -203,6 +214,7 @@ class AtividadeCreate(BaseModel):
     corretor_id: str | None = None
     notas: str | None = None
     concluida: bool = False
+    resultado: Literal["positivo", "negativo"] | None = None
 
 
 class AtividadeUpdate(BaseModel):
@@ -217,6 +229,7 @@ class AtividadeUpdate(BaseModel):
     corretor_id: str | None = None
     notas: str | None = None
     concluida: bool | None = None
+    resultado: Literal["positivo", "negativo"] | None = None
 
 
 # ------------------------------------------------------------------ histórico / notas
@@ -314,3 +327,6 @@ class NegocioResumo(BaseModel):
     situacao_atividade: Literal["atrasada", "hoje", "futura", "nenhuma"] = "nenhuma"
     parado: bool = False
     contrato_id: str | None = None
+    praca: str | None = None
+    supervisao_id: str | None = None
+    unidade_id: str | None = None

@@ -73,7 +73,8 @@ def test_importa_planilha_sem_senhas_e_sem_duplicar(sysadmin, cartao_demo):  # n
     assert [e["nome"] for e in funil["etapas"]] == ["Novo lead", "Primeiro contato", "Proposta"]
     assert neg[0]["etapa_id"] == funil["etapas"][1]["id"]
     entradas = c.get("/entradas").json()
-    assert any(e["nome"] == "Bar Sem Negócio" and e["na_fila"] for e in entradas)
+    # lead sem negócio fica sem dono, na praça dele: quem distribui é o supervisor (não vai para a fila livre)
+    assert any(e["nome"] == "Bar Sem Negócio" and not e["corretor_id"] and e["praca"] == "Curitiba" for e in entradas)
 
     # importar de novo não duplica
     de_novo = sysadmin.post(f"/plataforma/empresas/{empresa_id}/importar-revendas", json={"arquivo_base64": arquivo, "simular": False}).json()

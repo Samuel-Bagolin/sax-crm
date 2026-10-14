@@ -128,3 +128,7 @@ class LeadDoSite(BaseModel):
     mensagem: str | None = None
     codigo_imovel: str | None = None
     origem: str = "Site"
+    # Rede de lojas (lib/supervisoes.py): pixel/campanha define a supervisão; localidade define a praça.
+    pixel: str | None = Field(default=None, max_length=120)
+    localidade: str | None = Field(default=None, max_length=120)
+    etiquetas: list[str] = Field(default_factory=list, max_length=10)

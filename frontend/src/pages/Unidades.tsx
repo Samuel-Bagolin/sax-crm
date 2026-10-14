@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SupervisoesPainel } from "@/components/rede/SupervisoesPainel";
+import { useRede } from "@/lib/rede";
 
 interface Unidade {
   id: string;
@@ -20,6 +22,7 @@ interface Unidade {
   telefone: string | null;
   whatsapp: string | null;
   cadeiras: number | null;
+  supervisao_id?: string | null;
 }
 
 /** Nome do posto de atendimento no segmento: cadeira na barbearia, consultório nas clínicas. */
@@ -35,6 +38,7 @@ export default function Unidades() {
   const q = useQuery({ queryKey: ["unidades"], queryFn: () => apiGet<Unidade[]>("/unidades") });
   const [edit, setEdit] = useState<Unidade | "nova" | null>(null);
   const plano = usePlano();
+  const { nomeSup } = useRede();
   const ativas = (q.data ?? []).filter((u) => u.ativa).length;
   const limite = plano.data?.unidades ?? null;
   return (
@@ -54,12 +58,14 @@ export default function Unidades() {
             <div className="min-w-0 flex-1">
               <p className="font-semibold">{u.nome} {u.principal && <span className="ml-1 rounded bg-muted px-1.5 text-[11px] font-normal">principal</span>} {!u.ativa && <span className="ml-1 rounded bg-muted px-1.5 text-[11px] font-normal">desativada</span>}</p>
               <p className="flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-3.5 w-3.5" /> {[u.endereco, u.cidade].filter(Boolean).join(", ") || "Sem endereço"}</p>
-              {!seg.vendas && <p className="text-sm text-muted-foreground">{u.cadeiras ? `${u.cadeiras} ${nomePosto(seg.chave, u.cadeiras !== 1).toLowerCase()}` : `${nomePosto(seg.chave, true)} não informados`}</p>}
+              {seg.comercio && u.supervisao_id && <p className="text-sm text-muted-foreground">Supervisão: {nomeSup(u.supervisao_id)}</p>}
+              {!seg.vendas && !seg.comercio && <p className="text-sm text-muted-foreground">{u.cadeiras ? `${u.cadeiras} ${nomePosto(seg.chave, u.cadeiras !== 1).toLowerCase()}` : `${nomePosto(seg.chave, true)} não informados`}</p>}
             </div>
             <Button variant="ghost" size="icon-sm" onClick={() => setEdit(u)} aria-label={`Editar ${u.nome}`}><Pencil className="h-4 w-4" /></Button>
           </li>
         ))}
       </ul>
+      {seg.comercio && <SupervisoesPainel />}
       <UnidadeDialog unidade={edit} onClose={() => setEdit(null)} />
     </div>
   );
@@ -68,17 +74,18 @@ export default function Unidades() {
 function UnidadeDialog({ unidade, onClose }: { unidade: Unidade | "nova" | null; onClose: () => void }) {
   const qc = useQueryClient();
   const seg = useSegmento();
-  const [f, setF] = useState({ nome: "", endereco: "", cidade: "", telefone: "", whatsapp: "", cadeiras: "", ativa: true });
+  const { rede } = useRede();
+  const [f, setF] = useState({ nome: "", endereco: "", cidade: "", telefone: "", whatsapp: "", cadeiras: "", ativa: true, supervisao_id: "" });
   useEffect(() => {
-    if (unidade === "nova") setF({ nome: "", endereco: "", cidade: "", telefone: "", whatsapp: "", cadeiras: "", ativa: true });
-    else if (unidade) setF({ nome: unidade.nome, endereco: unidade.endereco ?? "", cidade: unidade.cidade ?? "", telefone: unidade.telefone ?? "", whatsapp: unidade.whatsapp ?? "", cadeiras: unidade.cadeiras ? String(unidade.cadeiras) : "", ativa: unidade.ativa });
+    if (unidade === "nova") setF({ nome: "", endereco: "", cidade: "", telefone: "", whatsapp: "", cadeiras: "", ativa: true, supervisao_id: "" });
+    else if (unidade) setF({ nome: unidade.nome, endereco: unidade.endereco ?? "", cidade: unidade.cidade ?? "", telefone: unidade.telefone ?? "", whatsapp: unidade.whatsapp ?? "", cadeiras: unidade.cadeiras ? String(unidade.cadeiras) : "", ativa: unidade.ativa, supervisao_id: unidade.supervisao_id ?? "" });
   }, [unidade]);
   const salvar = useMutation({
     mutationFn: () => {
-      const corpo = { ...f, endereco: f.endereco || null, cidade: f.cidade || null, telefone: f.telefone || null, whatsapp: f.whatsapp || null, cadeiras: f.cadeiras ? Number(f.cadeiras) : null };
+      const corpo = { ...f, supervisao_id: f.supervisao_id || null, endereco: f.endereco || null, cidade: f.cidade || null, telefone: f.telefone || null, whatsapp: f.whatsapp || null, cadeiras: f.cadeiras ? Number(f.cadeiras) : null };
       return unidade === "nova" ? apiPost("/unidades", corpo) : apiPut(`/unidades/${(unidade as Unidade).id}`, corpo);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["unidades"] }); toast.success("Salvo"); onClose(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["unidades"] }); qc.invalidateQueries({ queryKey: ["rede"] }); toast.success("Salvo"); onClose(); },
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível salvar"),
   });
   return (
@@ -92,7 +99,15 @@ function UnidadeDialog({ unidade, onClose }: { unidade: Unidade | "nova" | null;
             <div className="grid gap-1.5"><Label htmlFor="u-cid">Cidade</Label><Input id="u-cid" value={f.cidade} onChange={(e) => setF({ ...f, cidade: e.target.value })} /></div>
             <div className="grid gap-1.5"><Label htmlFor="u-wpp">WhatsApp</Label><Input id="u-wpp" inputMode="tel" value={f.whatsapp} onChange={(e) => setF({ ...f, whatsapp: e.target.value })} /></div>
           </div>
-          {!seg.vendas && (
+          {seg.comercio && rede && rede.supervisoes.length > 0 && (
+            <div className="grid gap-1.5"><Label htmlFor="u-sup">Supervisão</Label>
+              <select id="u-sup" value={f.supervisao_id} onChange={(e) => setF({ ...f, supervisao_id: e.target.value })} className="h-9 rounded-md border bg-background px-2 text-sm">
+                <option value="">Sem supervisão (praça toda)</option>
+                {rede.supervisoes.filter((x) => !f.cidade || !x.praca || x.praca === f.cidade).map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+              </select>
+            </div>
+          )}
+          {!seg.vendas && !seg.comercio && (
             <div className="grid gap-1.5"><Label htmlFor="u-cad">{nomePosto(seg.chave, true)} de atendimento</Label>
               <Input id="u-cad" inputMode="numeric" value={f.cadeiras} onChange={(e) => setF({ ...f, cadeiras: e.target.value.replace(/\D/g, "").slice(0, 3) })} placeholder="Ex.: 4" data-testid="u-cadeiras" />
               <p className="text-xs text-muted-foreground">Usado no painel de ocupação: quantas estão em uso e quantas ficam paradas.</p>

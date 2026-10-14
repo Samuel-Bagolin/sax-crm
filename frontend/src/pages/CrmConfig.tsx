@@ -47,7 +47,7 @@ function EditorFunil({ funil, onSalvo, onCancelar }: { funil: Funil | null; onSa
       const corpo = {
         nome: nome.trim(),
         padrao,
-        etapas: etapas.map((e) => ({ id: e.id ?? undefined, nome: e.nome.trim(), probabilidade: Number(e.probabilidade) || 0, dias_parado: e.dias_parado ? Number(e.dias_parado) : null })),
+        etapas: etapas.map((e) => ({ id: e.id ?? undefined, nome: e.nome.trim(), probabilidade: Number(e.probabilidade) || 0, dias_parado: e.dias_parado ? Number(e.dias_parado) : null, requisito: e.requisito || null })),
       };
       return funil ? apiPut<Funil>(`/funis/${funil.id}`, corpo) : apiPost<Funil>("/funis", corpo);
     },
@@ -84,6 +84,7 @@ function EditorFunil({ funil, onSalvo, onCancelar }: { funil: Funil | null; onSa
               <th className="w-36 pb-2 font-medium" title="Destaca o negócio em vermelho após N dias parado">
                 Alerta de parado
               </th>
+              <th className="w-40 pb-2 font-medium" title="O card só entra nesta etapa com a evidência registrada">Exige</th>
               <th className="w-10" />
             </tr>
           </thead>
@@ -113,6 +114,13 @@ function EditorFunil({ funil, onSalvo, onCancelar }: { funil: Funil | null; onSa
                     <Input type="number" min={1} max={365} value={e.dias_parado ?? ""} onChange={(ev) => mudar(i, "dias_parado", ev.target.value || null)} className="w-20" placeholder="—" aria-label="Dias para alerta" />
                     dias
                   </div>
+                </td>
+                <td className="py-1.5 pr-2">
+                  <select value={e.requisito ?? ""} onChange={(ev) => mudar(i, "requisito", ev.target.value || null)} className="h-8 w-full rounded-md border bg-background px-1.5 text-xs" aria-label="Evidência exigida">
+                    <option value="">Nada</option>
+                    <option value="contato">Contato com sucesso</option>
+                    <option value="reuniao">Reunião realizada</option>
+                  </select>
                 </td>
                 <td>
                   <Button type="button" variant="ghost" size="icon-sm" disabled={etapas.length <= 1} onClick={() => setEtapas((l) => l.filter((_, j) => j !== i))} aria-label="Remover etapa">
@@ -382,7 +390,7 @@ export default function CrmConfig() {
                     <div key={e.id} className="etapa-seta -ml-1 min-w-[130px] flex-1 bg-muted px-5 py-2 first:ml-0">
                       <p className="truncate text-xs font-medium">{e.nome}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {e.probabilidade}%{e.dias_parado ? `, alerta em ${e.dias_parado}d` : ""}
+                        {e.probabilidade}%{e.dias_parado ? `, alerta em ${e.dias_parado}d` : ""}{e.requisito ? `, exige ${e.requisito === "contato" ? "contato" : "reunião"}` : ""}
                       </p>
                     </div>
                   ))}

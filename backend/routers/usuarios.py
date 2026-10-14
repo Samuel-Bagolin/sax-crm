@@ -35,6 +35,10 @@ def publico(doc: dict) -> UsuarioPublico:
         creci=doc.get("creci"),
         cor=doc.get("cor"),
         gerencia_site=bool(doc.get("gerencia_site")),
+        perfil=doc.get("perfil"),
+        pracas=list(doc.get("pracas") or []),
+        supervisoes=list(doc.get("supervisoes") or []),
+        unidade_id=doc.get("unidade_id"),
         tem_foto=bool(doc.get("tem_foto")),
         foto_v=int(doc.get("foto_v", 0)),
         created_at=utc_aware(doc.get("created_at")),
@@ -58,6 +62,9 @@ async def list_usuarios(response: Response, offset: int = Query(0, ge=0), limit:
 
 @router.post("", response_model=UsuarioPublico, status_code=201)
 async def create_usuario(input: UsuarioCreate, principal: Principal = Depends(require("usuario:manage"))):
+    atuacao = await _atuacao(input, None)
+    if atuacao.get("papel"):
+        input.papel = atuacao["papel"]
     if not pode_conceder(principal, input.papel):
         raise HTTPException(status_code=403, detail="Você não pode conceder este perfil")
 
@@ -99,7 +106,7 @@ async def create_usuario(input: UsuarioCreate, principal: Principal = Depends(re
         gerencia_site=input.gerencia_site,
     )
     try:
-        await db.usuarios.insert_one(usuario.model_dump())
+        await db.usuarios.insert_one({**usuario.model_dump(), **{k: v for k, v in atuacao.items() if k != "papel"}})
     except DuplicateKeyError:
         raise HTTPException(409, "Já existe um usuário com este e-mail")
     if principal.empresa_id:
@@ -107,7 +114,28 @@ async def create_usuario(input: UsuarioCreate, principal: Principal = Depends(re
         empresa = await controle.empresas.find_one({"id": principal.empresa_id})
         if empresa:
             await indexar_usuario(usuario.email, principal.empresa_id, empresa["db_name"])
-    return publico(usuario.model_dump())
+    return publico({**usuario.model_dump(), **{k: v for k, v in atuacao.items() if k != "papel"}})
+
+
+async def _atuacao(input, papel_atual: str | None) -> dict:
+    """Perfil do CRM de lojas (lib/supervisoes.py): define o papel e onde a pessoa atua."""
+    from lib.supervisoes import PERFIS
+
+    data: dict = {}
+    if "perfil" in input.model_fields_set:
+        data["perfil"] = input.perfil
+        if input.perfil:
+            data["papel"] = PERFIS[input.perfil][0]
+    if input.pracas is not None:
+        data["pracas"] = [p.strip() for p in input.pracas if p and p.strip()][:30]
+    if input.supervisoes is not None:
+        validas = {s["id"] for s in await db.supervisoes.find({}, {"id": 1}).to_list(200)}
+        data["supervisoes"] = [s for s in input.supervisoes if s in validas]
+    if "unidade_id" in input.model_fields_set:
+        if input.unidade_id and not await db.unidades.find_one({"id": input.unidade_id}, {"id": 1}):
+            raise HTTPException(422, "Loja não encontrada")
+        data["unidade_id"] = input.unidade_id
+    return data
 
 
 @router.patch("/{usuario_id}", response_model=UsuarioPublico)
@@ -127,10 +155,14 @@ async def update_usuario(
     if usuario_id == principal.usuario_id and input.ativo is False:
         raise HTTPException(status_code=409, detail="Você não pode desativar a própria conta")
 
-    data: dict = {}
+    data: dict = await _atuacao(input, doc.get("papel"))
+    if data.get("papel") and not pode_conceder(principal, data["papel"]):
+        raise HTTPException(status_code=403, detail="Você não pode conceder este perfil")
+    if usuario_id == principal.usuario_id and data.get("papel") and data["papel"] != doc["papel"]:
+        raise HTTPException(409, "Você não pode reduzir o próprio perfil")
     if input.nome is not None:
         data["nome"] = input.nome.strip()
-    if input.papel is not None:
+    if input.papel is not None and "papel" not in data:
         data["papel"] = input.papel
     if input.ativo is not None:
         if input.ativo and doc.get("ativo") is False and principal.empresa_id:

@@ -171,7 +171,7 @@ def _filtro_entradas(principal: Principal) -> dict:
     """Gestor vê tudo. Vendedor vê os leads dele e os da fila livre (que qualquer um pode pegar)."""
     if principal.is_admin:
         return {}
-    return {"$or": [{"corretor_id": principal.pessoa_id or "__sem_vinculo__"}, {"na_fila": True}]}
+    return {"$or": [{"corretor_id": principal.pessoa_id or "__sem_vinculo__"}, {"na_fila": True}, *principal.filtro_escopo()]}
 
 
 async def _proximo_rodizio() -> str | None:
@@ -245,8 +245,19 @@ async def list_entradas(status: str | None = Query(None), principal: Principal =
 @router.post("/entradas", response_model=Entrada, status_code=201)
 async def criar_entrada(input: EntradaCreate, principal: Principal = Depends(require("entrada:write"))):
     data = input.model_dump()
+    if data.get("pixel") and not data.get("supervisao_id"):
+        from lib.supervisoes import rotear
+
+        praca, sup = await rotear(data["pixel"], data.get("praca"))
+        data["praca"], data["supervisao_id"] = praca or data.get("praca"), sup
     if not principal.is_admin:
-        data["corretor_id"] = principal.pessoa_id
+        if not (principal.supervisiona and data.get("corretor_id") in principal.escopo_equipe):
+            data["corretor_id"] = principal.pessoa_id
+        if principal.supervisiona:
+            if data.get("supervisao_id") not in [None, *principal.escopo_supervisoes]:
+                data["supervisao_id"] = None
+            if not data.get("praca") and len(principal.escopo_pracas) == 1:
+                data["praca"] = principal.escopo_pracas[0]
     elif not data.get("corretor_id") and (await carregar_crm_config()).distribuicao == "rodizio":
         data["corretor_id"] = await _proximo_rodizio()
     await reference("imoveis", data.get("imovel_id"))
@@ -264,7 +275,7 @@ async def _carregar_entrada(entrada_id: str, principal: Principal, acao: str) ->
     doc = await db.entradas.find_one({"id": entrada_id})
     if not doc:
         raise HTTPException(404, "Lead não encontrado")
-    if not principal.is_admin and doc.get("corretor_id") != principal.pessoa_id:
+    if not principal.is_admin and doc.get("corretor_id") != principal.pessoa_id and not principal.no_escopo(doc):
         raise HTTPException(404, "Lead não encontrado")
     authorize(principal, acao)
     return doc
@@ -348,7 +359,11 @@ async def converter_entrada(entrada_id: str, input: ConverterEntrada, principal:
     etapa = next((e for e in funil["etapas"] if e["id"] == input.etapa_id), funil["etapas"][0])
     corretor = input.corretor_id if principal.is_admin and input.corretor_id else doc.get("corretor_id")
     if not principal.is_admin:
-        corretor = principal.pessoa_id
+        # Supervisor converte para um líder que acompanha (ou mantém quem já atendia); os demais ficam com o negócio.
+        if principal.supervisiona and input.corretor_id in principal.escopo_equipe:
+            corretor = input.corretor_id
+        elif not (principal.supervisiona and corretor in principal.escopo_equipe):
+            corretor = principal.pessoa_id
 
     lead = Lead(
         nome=(input.titulo or "").strip() or (f"{doc['nome']}, {'Locação' if doc.get('interesse') == 'locacao' else 'Compra'}" if principal.segmento == "imobiliaria" else doc["nome"]),
@@ -357,6 +372,7 @@ async def converter_entrada(entrada_id: str, input: ConverterEntrada, principal:
         observacoes=doc.get("mensagem"), funil_id=funil["id"], etapa_id=etapa["id"], status="aberto",
         estagio=estagio_legado(funil, etapa["id"], "aberto"), etapa_desde=now_utc(),
         etiquetas=doc.get("etiquetas") or [], entrada_id=entrada_id, etapas_alcancadas=[etapa["id"]],
+        praca=doc.get("praca"), supervisao_id=doc.get("supervisao_id"), unidade_id=doc.get("unidade_id"), pixel=doc.get("pixel"),
     )
     await db.leads.insert_one(lead.model_dump())
     await db.entradas.update_one({"id": entrada_id}, {"$set": {"status": "convertido", "negocio_id": lead.id, "cliente_id": cliente_id, "updated_at": now_utc(),
@@ -440,8 +456,12 @@ async def criar_atividade(input: AtividadeCreate, background: BackgroundTasks, p
     await db.atividades.insert_one(atividade.model_dump())
     if atividade.negocio_id:
         await registrar(atividade.negocio_id, "atividade",
-                        f"{TIPO_LABEL[atividade.tipo]} agendada: {atividade.assunto} ({atividade.data[8:10]}/{atividade.data[5:7]}{' ' + atividade.hora if atividade.hora else ''})",
+                        f"{TIPO_LABEL[atividade.tipo]} {'registrada' if atividade.concluida else 'agendada'}: {atividade.assunto} ({atividade.data[8:10]}/{atividade.data[5:7]}{' ' + atividade.hora if atividade.hora else ''})",
                         principal)
+        if atividade.concluida:
+            from lib.requisitos import avancar
+
+            await avancar(atividade.negocio_id, atividade.model_dump(), principal)
     from routers.google import agendar, sincronizar_atividade
     await agendar(background, sincronizar_atividade, atividade.id)
     return atividade
@@ -460,16 +480,22 @@ async def editar_atividade(atividade_id: str, input: AtividadeUpdate, background
     if "concluida" in data and data["concluida"] != doc.get("concluida"):
         data["concluida_em"] = now_utc() if data["concluida"] else None
         if data["concluida"] and doc.get("negocio_id"):
-            await registrar(doc["negocio_id"], "atividade", f"{TIPO_LABEL.get(doc['tipo'], 'Atividade')} concluída: {doc['assunto']}", principal)
+            res = {"positivo": " (com sucesso)", "negativo": " (sem sucesso)"}.get(data.get("resultado") or doc.get("resultado"), "")
+            await registrar(doc["negocio_id"], "atividade", f"{TIPO_LABEL.get(doc['tipo'], 'Atividade')} concluída{res}: {doc['assunto']}", principal)
         if data["concluida"] and doc.get("entrada_id"):
             # Concluir a primeira ação do lead conta como primeiro atendimento (SLA).
             await db.entradas.update_one({"id": doc["entrada_id"], "primeiro_contato_em": None}, {"$set": {"primeiro_contato_em": now_utc()}})
             await db.entradas.update_one({"id": doc["entrada_id"], "status": "novo"}, {"$set": {"status": "em_contato", "updated_at": now_utc()}})
     data["updated_at"] = now_utc()
     await db.atividades.update_one({"id": atividade_id}, {"$set": data})
+    depois = await db.atividades.find_one({"id": atividade_id})
+    if depois.get("concluida") and depois.get("negocio_id") and ("concluida" in data or "resultado" in data):
+        from lib.requisitos import avancar
+
+        await avancar(depois["negocio_id"], depois, principal)
     from routers.google import agendar, sincronizar_atividade
     await agendar(background, sincronizar_atividade, atividade_id)
-    return to_atividade(await db.atividades.find_one({"id": atividade_id}))
+    return to_atividade(depois)
 
 
 @router.delete("/atividades/{atividade_id}", status_code=204)

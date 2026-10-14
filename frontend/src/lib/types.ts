@@ -134,6 +134,9 @@ export type StatusNegocio = "aberto" | "ganho" | "perdido";
 export interface Lead {
   id: string;
   nome: string;
+  praca?: string | null;
+  supervisao_id?: string | null;
+  unidade_id?: string | null;
   cliente_id: string | null;
   imovel_id: string | null;
   veiculo_id?: string | null;
@@ -414,6 +417,10 @@ export interface UsuarioPublico {
   tem_foto: boolean;
   foto_v: number;
   created_at: string;
+  perfil?: "diretoria" | "gerente_op" | "gerente_exp" | "supervisor" | "lider" | null;
+  pracas?: string[];
+  supervisoes?: string[];
+  unidade_id?: string | null;
 }
 
 export interface MinhasComissoes {
@@ -564,6 +571,7 @@ export interface Etapa {
   probabilidade: number;
   dias_parado: number | null;
   cor: string | null;
+  requisito?: "contato" | "reuniao" | null;
 }
 
 export interface Funil {
@@ -606,6 +614,9 @@ export type SituacaoAtividade = "atrasada" | "hoje" | "futura" | "nenhuma";
 export interface NegocioResumo {
   id: string;
   nome: string;
+  praca?: string | null;
+  supervisao_id?: string | null;
+  unidade_id?: string | null;
   valor_estimado: number | null;
   funil_id: string | null;
   etapa_id: string | null;

@@ -3,7 +3,7 @@ import { LinhaAceite } from "@/components/termo/ComprovanteTermo";
 import { abrirEmpresaEmNovaAba } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BarChart3, Building, Download, FileSpreadsheet, LogIn, Mail, Pencil, Plus, ShieldCheck, Upload, UtensilsCrossed } from "lucide-react";
+import { BarChart3, Building, Download, FileSpreadsheet, LogIn, Mail, Pencil, Plus, ShieldCheck, Upload } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
 import { brl } from "@/lib/format";
 import type { Ambiente, EmpresaResumo, UsoEmpresa } from "@/lib/types";
@@ -55,12 +55,6 @@ export default function Empresas() {
   const [aba, setAba] = useState<"painel" | "empresas" | "planos" | "pagamentos" | "admins">("painel");
   const [filtroSeg, setFiltroSeg] = useState<string>("");
   const [importar, setImportar] = useState<EmpresaResumo | null>(null);
-  const [demo, setDemo] = useState<{ nome: string; emails: string[]; senha: string; site: string } | null>(null);
-  const criarDemo = useMutation({
-    mutationFn: () => apiPost<{ nome: string; emails: string[]; senha: string; site: string }>("/plataforma/demos/pudim"),
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ["empresas"] }); qc.invalidateQueries({ queryKey: ["uso-empresas"] }); setDemo(r); },
-    onError: (err) => toast.error(detalheErro(err) ?? "Não foi possível criar a demonstração."),
-  });
   const [linkAtivacao, setLinkAtivacao] = useState<{ empresa: string; email: string; link: string; enviado: boolean } | null>(null);
   const { data: catalogo } = useCatalogoPlanos();
   const [form, setForm] = useState({
@@ -221,12 +215,6 @@ export default function Empresas() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" disabled={criarDemo.isPending}
-            onClick={() => window.confirm("Criar a empresa [DEMO] O Pudim Perfeito (comércio) com dados fictícios para apresentação?") && criarDemo.mutate()}
-            data-testid="empresa-demo-pudim">
-            <UtensilsCrossed className="h-4 w-4" />
-            {criarDemo.isPending ? "Criando..." : "Demo do Pudim"}
-          </Button>
           <Button size="sm" onClick={() => setModal(true)} data-testid="empresa-nova-button">
             <Plus className="h-4 w-4" />
             Nova empresa
@@ -520,35 +508,6 @@ export default function Empresas() {
       <ComercialDialog empresa={comercial} onClose={() => setComercial(null)} />
 
       {importar && <ImportarRevendas empresa={importar} onClose={() => setImportar(null)} />}
-
-      <Dialog open={!!demo} onOpenChange={(o) => !o && setDemo(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{demo?.nome} criada</DialogTitle>
-            <DialogDescription>
-              Dados fictícios: lojas em Curitiba, São Paulo e Brasília, leads do Meta, funis de revenda e eventos, cardápio no site e fluxo no WhatsApp.
-              Anote a senha agora, ela não aparece de novo. Você também pode usar o botão Entrar no card da empresa.
-            </DialogDescription>
-          </DialogHeader>
-          {demo && (
-            <div className="space-y-3 text-sm" data-testid="demo-pudim-acessos">
-              <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">Senha de todos os acessos</p>
-                <p className="font-mono text-base font-semibold">{demo.senha}</p>
-              </div>
-              <ul className="space-y-1">
-                {demo.emails.map((e, i) => (
-                  <li key={e} className="flex justify-between gap-2"><span className="font-mono text-xs">{e}</span><span className="text-xs text-muted-foreground">{i === 0 ? "gestor" : "equipe"}</span></li>
-                ))}
-              </ul>
-              <p className="text-xs text-muted-foreground">Site de exemplo: /s/{demo.site}</p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button onClick={() => { navigator.clipboard?.writeText(`${demo?.emails.join("\n")}\nSenha: ${demo?.senha}`); toast.success("Acessos copiados."); }}>Copiar acessos</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={!!linkAtivacao} onOpenChange={(o) => !o && setLinkAtivacao(null)}>
         <DialogContent className="sm:max-w-lg">

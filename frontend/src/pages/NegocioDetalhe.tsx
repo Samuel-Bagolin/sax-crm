@@ -27,6 +27,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
+import { BlocoPedidos, BlocoRede, PedidoDialog, ResultadoDialog, pedeResultado } from "@/components/rede/NegocioRede";
 import { brl, dataBR, dataHoraBR, primeiroNome } from "@/lib/format";
 import { ATIVIDADE, dataCurta, diasDesde, isoLocal, linkWhatsapp, useEquipe } from "@/lib/crm";
 import { useAuth } from "@/lib/useAuth";
@@ -102,6 +103,8 @@ export default function NegocioDetalhe() {
   const [visitaAberta, setVisitaAberta] = useState(false);
   const [aba, setAba] = useState<"nota" | "atividade">("nota");
   const [nota, setNota] = useState("");
+  const [pedidoGanho, setPedidoGanho] = useState(false);
+  const [resultado, setResultado] = useState<Atividade | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["negocio", id],
@@ -239,7 +242,7 @@ export default function NegocioDetalhe() {
             </Button>
             {n.status === "aberto" ? (
               <>
-                <Button size="sm" className="bg-hoje text-white hover:bg-hoje/85" onClick={() => acao.mutate({ rota: "ganhar" })} data-testid="btn-ganhar">
+                <Button size="sm" className="bg-hoje text-white hover:bg-hoje/85" onClick={() => (seg.comercio ? setPedidoGanho(true) : acao.mutate({ rota: "ganhar" }))} data-testid="btn-ganhar">
                   <Trophy className="h-3.5 w-3.5" /> Ganho
                 </Button>
                 <Button size="sm" className="bg-atrasada text-white hover:bg-atrasada/85" onClick={() => setPerder(true)} data-testid="btn-perder">
@@ -416,6 +419,10 @@ export default function NegocioDetalhe() {
             {responsavel?.telefone && <Linha rotulo={`Telefone do ${seg.termos.profissional.toLowerCase()}`}>{responsavel.telefone}</Linha>}
             {n.observacoes && <p className="mt-2 whitespace-pre-wrap rounded-md bg-muted/60 p-2 text-sm">{n.observacoes}</p>}
           </Bloco>
+          {seg.comercio && <BlocoRede negocio={n} onSalvo={invalidar} />}
+          {seg.comercio && <BlocoPedidos negocio={n} onMudou={invalidar} />}
+          {seg.comercio && <PedidoDialog negocio={n} aberto={pedidoGanho} onClose={() => setPedidoGanho(false)} onSalvo={() => { invalidar(); qc.invalidateQueries({ queryKey: ["pedidos"] }); }} />}
+          {resultado && <ResultadoDialog atividade={resultado} onClose={() => setResultado(null)} onFeito={invalidar} />}
         </div>
 
         {/* Coluna principal */}
@@ -496,7 +503,7 @@ export default function NegocioDetalhe() {
                     <button
                       type="button"
                       aria-label="Concluir atividade"
-                      onClick={() => concluir.mutate(a)}
+                      onClick={() => (seg.comercio && pedeResultado(a) ? setResultado(a) : concluir.mutate(a))}
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/40 hover:border-hoje hover:bg-hoje/10"
                     />
                     <meta.icon className="h-4 w-4 shrink-0 text-muted-foreground" />

@@ -9,7 +9,7 @@ from typing import Literal
 import jwt
 from fastapi import Depends, HTTPException, Request, Response
 from passlib.context import CryptContext
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from lib.db import AMBIENTE, controle, db, definir_empresa
 
@@ -98,6 +98,11 @@ class Principal(BaseModel):
     segmento: str = "imobiliaria"  # lib/segmentos.py
     assinatura: dict | None = None  # resumo da assinatura da plataforma (cadastro público)
     bloqueio: str | None = None  # motivo do bloqueio por cobrança; None = acesso liberado
+    # Supervisor de lojas (lib/supervisoes.py): além do que é dele, vê as supervisões e a praça que acompanha.
+    escopo_supervisoes: list[str] = Field(default_factory=list)
+    escopo_pracas: list[str] = Field(default_factory=list)
+    escopo_praca_toda: bool = False  # sem supervisão escolhida: vê a praça inteira
+    escopo_equipe: list[str] = Field(default_factory=list)  # pessoa_id dos líderes que ele acompanha
 
     @property
     def is_admin(self) -> bool:
@@ -107,6 +112,34 @@ class Principal(BaseModel):
     @property
     def is_sysadmin(self) -> bool:
         return self.papel == "sysadmin"
+
+    @property
+    def supervisiona(self) -> bool:
+        return bool(self.escopo_supervisoes or self.escopo_pracas)
+
+    def no_escopo(self, recurso: dict) -> bool:
+        """Registro que o supervisor acompanha: dos líderes dele, da supervisão dele ou da praça (sem supervisão)."""
+        if not self.supervisiona:
+            return False
+        if recurso.get("corretor_id") and recurso.get("corretor_id") in self.escopo_equipe:
+            return True
+        if recurso.get("supervisao_id") and recurso.get("supervisao_id") in self.escopo_supervisoes:
+            return True
+        return bool(recurso.get("praca") in self.escopo_pracas and (self.escopo_praca_toda or not recurso.get("supervisao_id")))
+
+    def filtro_escopo(self) -> list[dict]:
+        """O mesmo de `no_escopo` como predicados de query (para somar ao "é meu")."""
+        if not self.supervisiona:
+            return []
+        f: list[dict] = []
+        if self.escopo_equipe:
+            f.append({"corretor_id": {"$in": self.escopo_equipe}})
+        if self.escopo_supervisoes:
+            f.append({"supervisao_id": {"$in": self.escopo_supervisoes}})
+        if self.escopo_pracas:
+            f.append({"praca": {"$in": self.escopo_pracas}} if self.escopo_praca_toda
+                     else {"praca": {"$in": self.escopo_pracas}, "supervisao_id": None})
+        return f
 
     @property
     def pode_site(self) -> bool:
@@ -197,7 +230,7 @@ def authorize(principal: Principal, action: str, resource: dict | None = None) -
     # L3 — relação/dono. Admin já retornou acima; corretor só alcança o que é seu.
     if _precisa_dono(action):
         dono = resource.get("corretor_id")
-        if dono is None or dono != principal.pessoa_id:
+        if (dono is None or dono != principal.pessoa_id) and not principal.no_escopo(resource):
             raise HTTPException(status_code=404, detail="Registro não encontrado")
 
 
@@ -215,7 +248,9 @@ def filtro_do_principal(principal: Principal, recurso: str) -> dict:
         return {}
     if recurso in {"leads", "transacoes", "contratos", "visitas", "atividades", "entradas"}:
         # Um corretor sem pessoa_id vinculada não enxerga nada (fail-closed).
-        return {"corretor_id": principal.pessoa_id or "__sem_vinculo__"}
+        meu = {"corretor_id": principal.pessoa_id or "__sem_vinculo__"}
+        escopo = principal.filtro_escopo()
+        return {"$or": [meu, *escopo]} if escopo else meu
     return {}
 
 
@@ -273,7 +308,14 @@ async def _principal_do_request(request: Request) -> Principal | None:
         trocar_senha=bool(doc.get("trocar_senha")),
         gerencia_site=bool(doc.get("gerencia_site")),
         **_dados_empresa(empresa, sysadmin=bool(sysadmin_global)),
+        **(await _escopo_supervisor(doc) if doc.get("perfil") == "supervisor" and doc["papel"] == "corretor" else {}),
     )
+
+
+async def _escopo_supervisor(doc: dict) -> dict:
+    from lib.supervisoes import escopo_do_supervisor
+
+    return await escopo_do_supervisor(doc)
 
 
 def _dados_empresa(empresa: dict | None, sysadmin: bool) -> dict:

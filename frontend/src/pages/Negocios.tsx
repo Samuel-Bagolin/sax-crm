@@ -19,6 +19,7 @@ import AtividadeModal, { type PadraoAtividade } from "@/components/crm/Atividade
 import PerderDialog from "@/components/crm/PerderDialog";
 import IndicadorAtividade from "@/components/crm/IndicadorAtividade";
 import { cn } from "@/lib/utils";
+import { useRede } from "@/lib/rede";
 
 type Visao = "quadro" | "lista";
 type StatusFiltro = "aberto" | "ganho" | "perdido" | "todos";
@@ -45,7 +46,9 @@ function CardNegocio({
   onDragStart,
   onDragEnd,
   arrastando,
+  rotuloRede,
 }: {
+  rotuloRede?: string | null;
   n: NegocioResumo;
   onAbrir: () => void;
   onAgendar: () => void;
@@ -85,6 +88,7 @@ function CardNegocio({
           <span className="h-5 w-5 rounded-full border border-dashed border-muted-foreground/50" title="Sem responsável" />
         )}
         <span className="num text-xs font-semibold">{n.valor_estimado ? brlCompacto(n.valor_estimado) : "—"}</span>
+        {rotuloRede && <span className="truncate rounded-sm bg-primary/10 px-1.5 text-[10px] font-medium text-primary" data-testid="card-supervisao">{rotuloRede}</span>}
         {n.etiquetas.slice(0, 1).map((t) => (
           <span key={t} className="truncate rounded-sm bg-latao/15 px-1.5 text-[10px] font-medium text-foreground">
             {t}
@@ -106,6 +110,10 @@ export default function Negocios() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { isAdmin } = useAuth();
+  const { ativa: temRede, rede, nomeSup } = useRede();
+  const supervisiona = !!rede && (rede.eu.supervisoes.length > 0 || rede.eu.pracas.length > 0);
+  const [praca, setPraca] = useState("");
+  const [supervisao, setSupervisao] = useState("");
   const { data: funis = [] } = useFunis();
   const { data: equipe = [] } = useEquipe();
 
@@ -153,14 +161,14 @@ export default function Negocios() {
     const t = busca.trim().toLowerCase();
     const base = negocios.filter((n) =>
       alerta === "sem_passo" ? n.situacao_atividade === "nenhuma" : alerta === "parados" ? n.parado : alerta === "atrasadas" ? n.situacao_atividade === "atrasada" : true,
-    );
+    ).filter((n) => (!praca || n.praca === praca) && (!supervisao || (supervisao === "__sem" ? !n.supervisao_id : n.supervisao_id === supervisao)));
     if (!t) return base;
     return base.filter((n) =>
       [n.nome, n.cliente_nome, n.imovel_titulo, n.imovel_codigo, n.cliente_telefone, n.corretor_nome]
         .filter(Boolean)
         .some((x) => x!.toLowerCase().includes(t)),
     );
-  }, [negocios, busca, alerta]);
+  }, [negocios, busca, alerta, praca, supervisao]);
 
   const porEtapa = useMemo(() => {
     const mapa: Record<string, NegocioResumo[]> = {};
@@ -237,7 +245,12 @@ export default function Negocios() {
       setDestinoFunil(funis.find((f) => f.id !== n.funil_id)?.id ?? "");
       setMoverFunil(n);
     } else if (destino === "__excluir") setExcluir(n);
-    else if (destino !== n.etapa_id) mover.mutate({ id: n.id, etapa: destino });
+    else if (destino !== n.etapa_id) {
+      // Rede de lojas: arrastar pede confirmação (card arrastado sem querer bagunça o funil e o relatório).
+      const nomeEtapa = funil?.etapas.find((e) => e.id === destino)?.nome;
+      if (temRede && !window.confirm(`Mover "${n.nome}" para "${nomeEtapa}"? Confirme só se a etapa foi mesmo concluída.`)) return;
+      mover.mutate({ id: n.id, etapa: destino });
+    }
   };
 
   const fecharNovo = () => {
@@ -296,7 +309,25 @@ export default function Negocios() {
               <option value="todos">Todos</option>
             </select>
           )}
-          {isAdmin && (
+          {temRede && rede && rede.pracas.length > 1 && (isAdmin || (supervisiona && rede.eu.pracas.length > 1)) && (
+            <select value={praca} onChange={(e) => { setPraca(e.target.value); setSupervisao(""); }} className="h-8 rounded-md border bg-card px-2 text-sm" aria-label="Praça" data-testid="filtro-praca">
+              <option value="">Todas as praças</option>
+              {(isAdmin ? rede.pracas : rede.eu.pracas).map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
+          {temRede && rede && (() => {
+            const ids = [...new Set(negocios.map((n) => n.supervisao_id).filter(Boolean))] as string[];
+            const opcoes = rede.supervisoes.filter((s) => ids.includes(s.id) && (!praca || s.praca === praca));
+            if (!opcoes.length) return null;
+            return (
+              <select value={supervisao} onChange={(e) => setSupervisao(e.target.value)} className="h-8 rounded-md border bg-card px-2 text-sm" aria-label="Supervisão" data-testid="filtro-supervisao">
+                <option value="">Todas as supervisões</option>
+                {opcoes.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                <option value="__sem">Sem supervisão</option>
+              </select>
+            );
+          })()}
+          {(isAdmin || supervisiona) && (
             <select value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="h-8 rounded-md border bg-card px-2 text-sm" aria-label="Responsável" data-testid="filtro-responsavel">
               <option value="">Toda a equipe</option>
               {corretores.map((m) => (
@@ -410,6 +441,7 @@ export default function Negocios() {
                       <CardNegocio
                         key={n.id}
                         n={n}
+                        rotuloRede={temRede ? (nomeSup(n.supervisao_id) ?? (rede && rede.pracas.length > 1 ? n.praca : null)) : null}
                         arrastando={arrastado?.id === n.id}
                         onAbrir={() => navigate(`/negocios/${n.id}`)}
                         onAgendar={() =>

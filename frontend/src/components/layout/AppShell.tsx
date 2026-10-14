@@ -32,7 +32,7 @@ import {
   Sun,
   UserRound,
   Users,
-  type LucideIcon, Gift } from "lucide-react";
+  type LucideIcon, Gift, Percent } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,6 +123,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
     titulo: "Operação",
     itens: [
       { to: "/financeiro", modulo: "financeiro", icon: CircleDollarSign, nivel: "todos" },
+      { to: "/comissoes", modulo: "crm", icon: Percent, rotulo: "Comissões", nivel: "todos", segmentos: ["comercio"] },
       { to: "/cashback", modulo: "pacientes", icon: Gift, rotulo: "Afiliados e cashback", curto: "Afiliados", nivel: "todos", segmentos: ["comercio", ...SERVICOS] },
       { to: "/relatorios", modulo: "crm", icon: ChartNoAxesColumn, rotulo: "Relatórios", nivel: "todos" },
       { to: "/chat", modulo: "chat", icon: MessageCircle, rotulo: "Chat da equipe", curto: "Chat", nivel: "todos", contador: "chat" },

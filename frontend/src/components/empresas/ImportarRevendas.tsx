@@ -11,8 +11,8 @@ interface Acesso { nome: string; email: string; perfil: string; papel: string; l
 interface Resultado { simulado: boolean; contagens: Record<string, number>; acessos: Acesso[]; avisos: string[] }
 
 const ROTULOS: [string, string][] = [
-  ["lojas", "Lojas"], ["usuarios", "Acessos novos"], ["clientes", "Clientes"], ["leads", "Leads"],
-  ["negocios", "Negócios"], ["atividades", "Atividades"], ["historico", "Histórico"], ["ja_importados", "Já importados antes"],
+  ["supervisoes", "Supervisões"], ["lojas", "Lojas"], ["usuarios", "Acessos novos"], ["clientes", "Clientes"], ["leads", "Leads"],
+  ["negocios", "Negócios"], ["atividades", "Atividades"], ["historico", "Histórico"], ["pedidos", "Pedidos"], ["atualizados", "Completados"], ["ja_importados", "Já importados antes"],
 ];
 
 function base64(arquivo: File): Promise<string> {
@@ -29,8 +29,9 @@ export function ImportarRevendas({ empresa, onClose }: { empresa: { id: string; 
   const qc = useQueryClient();
   const [arquivo, setArquivo] = useState<string | null>(null);
   const [nomeArquivo, setNomeArquivo] = useState("");
+  const [novosLinks, setNovosLinks] = useState(false);
   const enviar = useMutation({
-    mutationFn: (simular: boolean) => apiPost<Resultado>(`/plataforma/empresas/${empresa.id}/importar-revendas`, { arquivo_base64: arquivo, simular }),
+    mutationFn: (simular: boolean) => apiPost<Resultado>(`/plataforma/empresas/${empresa.id}/importar-revendas`, { arquivo_base64: arquivo, simular, novos_links: novosLinks }),
     onSuccess: (r) => { if (!r.simulado) { qc.invalidateQueries(); toast.success("Planilha importada."); } },
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível ler a planilha."),
   });
@@ -108,6 +109,12 @@ export function ImportarRevendas({ empresa, onClose }: { empresa: { id: string; 
                   ))}
                 </ul>
               </div>
+              {r.simulado && r.acessos.some((a) => a.situacao.startsWith("Ainda não ativou")) && (
+                <label className="flex items-start gap-2 rounded-lg border p-3">
+                  <input type="checkbox" className="mt-0.5" checked={novosLinks} onChange={(e) => setNovosLinks(e.target.checked)} />
+                  <span>Gerar link novo para quem ainda não ativou <span className="block text-xs text-muted-foreground">O link mandado antes deixa de valer. Use se ele venceu (24 horas).</span></span>
+                </label>
+              )}
               {r.simulado ? (
                 <Button onClick={() => enviar.mutate(false)} disabled={enviar.isPending} data-testid="importar-confirmar">
                   {enviar.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Importar agora

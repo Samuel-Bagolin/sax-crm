@@ -297,6 +297,7 @@ async def criar_demo_pudim(principal: Principal = Depends(require("empresa:manag
 class ImportarPlanilhaIn(BaseModel):
     arquivo_base64: str = Field(min_length=10, max_length=12_000_000)
     simular: bool = True
+    novos_links: bool = False  # gera link novo para quem foi importado antes e ainda não ativou
 
 
 @router.post("/empresas/{empresa_id}/importar-revendas")
@@ -314,7 +315,7 @@ async def importar_revendas(empresa_id: str, input: ImportarPlanilhaIn, principa
     except Exception:
         raise HTTPException(422, "Arquivo inválido")
     try:
-        r = await imp.importar(e, conteudo, simular=input.simular, por=principal.nome)
+        r = await imp.importar(e, conteudo, simular=input.simular, por=principal.nome, novos_links=input.novos_links)
     except imp.ErroPlanilha as err:
         raise HTTPException(422, str(err))
     finally:

@@ -42,6 +42,10 @@ class Lead(BaseModel):
     etiquetas: List[str] = Field(default_factory=list)
     entrada_id: str | None = None  # lead da caixa de entrada que originou o negócio
     etapas_alcancadas: List[str] = Field(default_factory=list)  # funil por alcance: voltar o card não apaga
+    praca: str | None = None  # lib/supervisoes.py
+    supervisao_id: str | None = None
+    unidade_id: str | None = None  # loja
+    pixel: str | None = None  # campanha do lead (define a supervisão)
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
     closed_at: datetime | None = None
@@ -61,6 +65,9 @@ class LeadCreate(BaseModel):
     etapa_id: str | None = None
     previsao_fechamento: ISODate | None = None
     etiquetas: List[str] = Field(default_factory=list)
+    praca: str | None = None
+    supervisao_id: str | None = None
+    unidade_id: str | None = None
 
 
 class LeadUpdate(BaseModel):
@@ -77,6 +84,9 @@ class LeadUpdate(BaseModel):
     etapa_id: str | None = None
     previsao_fechamento: ISODate | None = None
     etiquetas: List[str] | None = None
+    praca: str | None = None
+    supervisao_id: str | None = None
+    unidade_id: str | None = None
 
 
 class OrigemCount(BaseModel):

@@ -149,9 +149,12 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
 - Identidade SAX: roxo `#4a03a2` e laranja `#ff7a00`, logo em `components/shared/MarcaSax.tsx`.
 - Modo escuro neutro (grafite quente, como o Claude), laranja nos destaques; a cor primária da empresa só vale no claro. A barra lateral fica igual nos dois modos.
 - Segmento comércio (restaurante e doceria): cardápio no site (itens tipo produto), funis Revenda e Eventos e encomendas, lojas como unidades.
-- Demonstração: `POST /plataforma/demos/pudim` (botão Demo do Pudim em Empresas) cria "[DEMO] O Pudim Perfeito" com dados fictícios (`lib/demo_pudim.py`). Empresa com `demo_apresentacao` não pede o termo de adesão.
+- Demonstração: `POST /plataforma/demos/pudim` (sem botão na tela) cria "[DEMO] O Pudim Perfeito" com dados fictícios (`lib/demo_pudim.py`). Empresa com `demo_apresentacao` não pede o termo de adesão.
 - Afiliados e cashback (`lib/cashback.py`, tela /cashback): crédito por indicação e por compra, vale em todas as lojas, uso só em compras seguintes, FIFO por vencimento. Site: `?ref=CODIGO`, "Indique e ganhe" e balão de WhatsApp com um número por loja (conexões com `no_site`, senão o WhatsApp das Unidades).
-- Importar planilha CRM Revendas (`lib/importar_revendas.py`, botão no card da empresa de comércio): nunca importa senha nem hash; cada usuário recebe link de ativação. Idempotente por `planilha_id`.
+- Importar planilha CRM Revendas (`lib/importar_revendas.py`, botão no card da empresa de comércio): nunca importa senha nem hash; cada usuário recebe link de ativação. Idempotente por `planilha_id`; lê o que existe uma vez e grava em lote (cabe nos 60 s do Vercel). Reimportar completa o que faltou; link novo só com `novos_links`.
+- Rede de lojas (`lib/supervisoes.py`, `routers/supervisoes.py`): praça (cidade da loja) e supervisões com pixels. `usuarios.perfil` diretoria/gerentes = gestor; `supervisor` vê o dele, as supervisões dele, os líderes que acompanha e a praça sem supervisão (sem supervisão marcada, a praça toda) via `Principal.filtro_escopo`/`no_escopo`; `lider` só os cards dele. Negócio, lead e pedido guardam `praca`, `supervisao_id`, `unidade_id`. Lead do webhook com `pixel`/`localidade` é roteado por `rotear`.
+- Etapa com cadeado (`lib/requisitos.py`, `etapa.requisito` contato/reuniao): o card só entra com atividade concluída e resultado não negativo; resultado positivo avança o card. Voltar sempre pode.
+- Pedidos e comissões (`routers/pedidos.py`, tela /comissoes): pedido só em negócio ganho (registrar o pedido marca ganho), data não futura; % nos N primeiros pedidos do cliente; aprovada e paga ficam congeladas; ninguém aprova a própria (só diretoria); paga no dia X do mês seguinte.
 
 ## Como trabalhar em dupla
 

@@ -28,6 +28,7 @@ class Unidade(BaseModel):
     telefone: str | None = None
     whatsapp: str | None = None
     cadeiras: int | None = None  # postos de atendimento (cadeiras da barbearia, salas ou consultórios)
+    supervisao_id: str | None = None  # rede de lojas (lib/supervisoes.py)
 
 
 class UnidadeIn(BaseModel):
@@ -38,6 +39,7 @@ class UnidadeIn(BaseModel):
     whatsapp: str | None = Field(default=None, max_length=30)
     cadeiras: int | None = Field(default=None, ge=0, le=200)
     ativa: bool = True
+    supervisao_id: str | None = None
 
 
 def _saida(d: dict) -> Unidade:

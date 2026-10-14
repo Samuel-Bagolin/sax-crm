@@ -41,6 +41,10 @@ class UsuarioPublico(BaseModel):
     tem_foto: bool = False
     foto_v: int = 0
     created_at: datetime
+    perfil: str | None = None
+    pracas: list[str] = Field(default_factory=list)
+    supervisoes: list[str] = Field(default_factory=list)
+    unidade_id: str | None = None
 
 
 class UsuarioCreate(BaseModel):
@@ -53,6 +57,10 @@ class UsuarioCreate(BaseModel):
     creci: str | None = Field(default=None, max_length=40)
     cor: str | None = Field(default=None, max_length=20)
     gerencia_site: bool = False
+    perfil: Literal["diretoria", "gerente_op", "gerente_exp", "supervisor", "lider"] | None = None
+    pracas: list[str] | None = Field(default=None, max_length=30)  # ["TODAS"] ou cidades
+    supervisoes: list[str] | None = Field(default=None, max_length=30)
+    unidade_id: str | None = None
 
 
 class UsuarioUpdate(BaseModel):
@@ -65,6 +73,10 @@ class UsuarioUpdate(BaseModel):
     creci: str | None = Field(default=None, max_length=40)
     cor: str | None = Field(default=None, max_length=20)
     gerencia_site: bool | None = None
+    perfil: Literal["diretoria", "gerente_op", "gerente_exp", "supervisor", "lider"] | None = None
+    pracas: list[str] | None = Field(default=None, max_length=30)  # ["TODAS"] ou cidades
+    supervisoes: list[str] | None = Field(default=None, max_length=30)
+    unidade_id: str | None = None
 
 
 class FotoInput(BaseModel):

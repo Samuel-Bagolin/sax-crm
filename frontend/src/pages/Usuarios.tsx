@@ -18,6 +18,7 @@ import Avatar from "@/components/shared/Avatar";
 import FotoUploader from "@/components/shared/FotoUploader";
 import { cn } from "@/lib/utils";
 import { useSegmento } from "@/lib/segmento";
+import { PERFIS_REDE, useRede, type PerfilRede } from "@/lib/rede";
 
 const PAPEL_LABEL: Record<Papel2, string> = { sysadmin: "Administrador de sistema", admin: "Gestor", corretor: "Corretor" };
 
@@ -31,6 +32,10 @@ interface Form {
   creci: string;
   cor: string;
   gerencia_site: boolean;
+  perfil: PerfilRede | "";
+  pracas: string[];
+  supervisoes: string[];
+  unidade_id: string;
 }
 
 /** Registro profissional por segmento: CRECI, CRO, CRP/CRFa. Barbearia e loja não têm. */
@@ -46,20 +51,24 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
   const seg = useSegmento();
   const registro = rotuloRegistro(seg.chave);
   const { isSysadmin, principal } = useAuth();
-  const [f, setF] = useState<Form>({ nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: "", creci: "", cor: "", gerencia_site: false });
+  const { ativa: temRede, rede } = useRede();
+  const vazio = { perfil: "" as const, pracas: [] as string[], supervisoes: [] as string[], unidade_id: "" };
+  const [f, setF] = useState<Form>({ nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: "", creci: "", cor: "", gerencia_site: false, ...vazio });
   useEffect(() => {
     if (!aberto) return;
     setF(
       usuario
-        ? { nome: usuario.nome, email: usuario.email, senha: "", papel: usuario.papel, telefone: usuario.telefone ?? "", cargo: usuario.cargo ?? "", creci: usuario.creci ?? "", cor: usuario.cor ?? "", gerencia_site: !!usuario.gerencia_site }
-        : { nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: cargoPadrao(seg.chave, seg.termos.profissional), creci: "", cor: "", gerencia_site: false },
+        ? { nome: usuario.nome, email: usuario.email, senha: "", papel: usuario.papel, telefone: usuario.telefone ?? "", cargo: usuario.cargo ?? "", creci: usuario.creci ?? "", cor: usuario.cor ?? "", gerencia_site: !!usuario.gerencia_site,
+            perfil: usuario.perfil ?? "", pracas: usuario.pracas ?? [], supervisoes: usuario.supervisoes ?? [], unidade_id: usuario.unidade_id ?? "" }
+        : { nome: "", email: "", senha: "", papel: "corretor", telefone: "", cargo: cargoPadrao(seg.chave, seg.termos.profissional), creci: "", cor: "", gerencia_site: false, ...vazio },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto, usuario]);
 
   const salvar = useMutation({
     mutationFn: () => {
-      const extra = { telefone: f.telefone.trim() || null, cargo: f.cargo.trim() || null, creci: f.creci.trim() || null, cor: f.cor || null, gerencia_site: f.papel === "corretor" ? f.gerencia_site : false };
+      const atuacao = temRede && f.perfil ? { perfil: f.perfil, pracas: f.pracas, supervisoes: f.supervisoes, unidade_id: f.unidade_id || null } : {};
+      const extra = { telefone: f.telefone.trim() || null, cargo: f.cargo.trim() || null, creci: f.creci.trim() || null, cor: f.cor || null, gerencia_site: f.papel === "corretor" ? f.gerencia_site : false, ...atuacao };
       if (usuario) {
         return apiPatch<UsuarioPublico>(`/usuarios/${usuario.id}`, {
           nome: f.nome.trim(),
@@ -139,6 +148,57 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
               {isSysadmin && !principal?.empresa_id && <option value="sysadmin">Administrador de sistema</option>}
             </select>
           </div>
+          {temRede && rede && (
+            <div className="grid gap-3 rounded-lg border p-3 sm:col-span-2" data-testid="usuario-rede">
+              <div className="space-y-1.5">
+                <Label htmlFor="us-perfil-rede">Perfil na rede de lojas</Label>
+                <select id="us-perfil-rede" value={f.perfil} disabled={usuario?.id === principal?.usuario_id}
+                  onChange={(e) => { const v = e.target.value as PerfilRede | ""; setF({ ...f, perfil: v, papel: v === "supervisor" || v === "lider" ? "corretor" : v ? "admin" : f.papel }); }}
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30">
+                  <option value="">Sem perfil de rede (usa o perfil de acesso)</option>
+                  {PERFIS_REDE.map((p) => <option key={p.v} value={p.v}>{p.rotulo}</option>)}
+                </select>
+                {f.perfil && <p className="text-xs text-muted-foreground">{PERFIS_REDE.find((p) => p.v === f.perfil)?.dica}</p>}
+              </div>
+              {(f.perfil === "gerente_op" || f.perfil === "gerente_exp" || f.perfil === "supervisor") && (
+                <div className="space-y-1.5">
+                  <Label>Praças</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {f.perfil !== "supervisor" && (
+                      <button type="button" onClick={() => setF({ ...f, pracas: f.pracas.includes("TODAS") ? [] : ["TODAS"] })}
+                        className={cn("rounded-full border px-2.5 py-1 text-xs", f.pracas.includes("TODAS") && "border-primary bg-primary text-primary-foreground")}>Todas</button>
+                    )}
+                    {rede.pracas.map((p) => (
+                      <button key={p} type="button" onClick={() => setF({ ...f, pracas: f.pracas.includes(p) ? f.pracas.filter((x) => x !== p) : [...f.pracas.filter((x) => x !== "TODAS"), p] })}
+                        className={cn("rounded-full border px-2.5 py-1 text-xs", f.pracas.includes(p) && "border-primary bg-primary text-primary-foreground")}>{p}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(f.perfil === "supervisor" || f.perfil === "lider") && rede.supervisoes.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>Supervisões</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {rede.supervisoes.filter((sp) => sp.ativa).map((sp) => (
+                      <button key={sp.id} type="button" onClick={() => setF({ ...f, supervisoes: f.supervisoes.includes(sp.id) ? f.supervisoes.filter((x) => x !== sp.id) : [...f.supervisoes, sp.id] })}
+                        className={cn("rounded-full border px-2.5 py-1 text-xs", f.supervisoes.includes(sp.id) && "border-primary bg-primary text-primary-foreground")}>{sp.nome}</button>
+                    ))}
+                  </div>
+                  {f.perfil === "supervisor" && <p className="text-xs text-muted-foreground">Sem supervisão marcada, o supervisor acompanha a praça inteira.</p>}
+                </div>
+              )}
+              {f.perfil === "lider" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="us-loja">Loja</Label>
+                  <select id="us-loja" value={f.unidade_id} onChange={(e) => setF({ ...f, unidade_id: e.target.value })}
+                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30">
+                    <option value="">Sem loja</option>
+                    {rede.lojas.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Cor na agenda da equipe</Label>
             <div className="flex flex-wrap gap-2">
@@ -188,6 +248,7 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
 
 export default function Usuarios() {
   const seg = useSegmento();
+  const { rede } = useRede();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { principal } = useAuth();
@@ -261,6 +322,10 @@ export default function Usuarios() {
           <div className="min-w-0 flex-1">
             <h3 className="truncate font-semibold">{u.nome}</h3>
             <p className="truncate text-xs text-muted-foreground">{u.cargo || (u.papel === "corretor" ? seg.termos.profissional : PAPEL_LABEL[u.papel])}</p>
+            {rede && (() => {
+              const m = rede.equipe.find((x) => x.pessoa_id === u.pessoa_id);
+              return m?.atua_em ? <p className="truncate text-xs text-muted-foreground" data-testid="usuario-atua-em">Atua em: {m.atua_em}</p> : null;
+            })()}
             <p className="mt-1 flex flex-wrap gap-1">
               <span className={cn("rounded-sm px-1.5 text-[11px] font-medium", u.papel === "corretor" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>{u.papel === "corretor" ? seg.termos.profissional : PAPEL_LABEL[u.papel]}</span>
               {u.creci && <span className="rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{rotuloRegistro(seg.chave) ?? "Registro"} {u.creci}</span>}

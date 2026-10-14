@@ -107,6 +107,7 @@ async def resumir(docs: list[dict]) -> list[NegocioResumo]:
             proxima_atividade_assunto=prox["assunto"] if prox else None,
             proxima_atividade_tipo=prox["tipo"] if prox else None,
             situacao_atividade=situacao, parado=parado, contrato_id=contratos.get(lead.id),
+            praca=lead.praca, supervisao_id=lead.supervisao_id, unidade_id=lead.unidade_id,
         ))
     return saida
 
@@ -117,7 +118,7 @@ def _filtro_lista(principal: Principal, funil_id: str | None, status: str | None
         filtro["funil_id"] = funil_id
     if status and status != "todos":
         filtro["status"] = status
-    if corretor_id and principal.is_admin:
+    if corretor_id and (principal.is_admin or principal.supervisiona):
         filtro["corretor_id"] = corretor_id
     return filtro
 
@@ -221,11 +222,23 @@ async def get_lead(lead_id: str, principal: Principal = Depends(require("lead:re
     )
 
 
+def _escopo_supervisor(principal: Principal, data: dict, criar: bool = False) -> None:
+    """Supervisor só põe o negócio em praça e supervisão que ele acompanha."""
+    if data.get("supervisao_id") and data["supervisao_id"] not in principal.escopo_supervisoes:
+        data.pop("supervisao_id")
+    if data.get("praca") and data["praca"] not in principal.escopo_pracas:
+        data.pop("praca")
+    if criar and not data.get("praca") and len(principal.escopo_pracas) == 1:
+        data["praca"] = principal.escopo_pracas[0]
+
+
 @router.post("", response_model=Lead, status_code=201)
 async def create_lead(input: LeadCreate, principal: Principal = Depends(require("lead:create"))):
     data = input.model_dump()
-    if not principal.is_admin:
+    if not principal.is_admin and not (principal.supervisiona and data.get("corretor_id") in principal.escopo_equipe):
         data["corretor_id"] = principal.pessoa_id
+    if not principal.is_admin and principal.supervisiona:
+        _escopo_supervisor(principal, data, criar=True)
     await reference("imoveis", data.get("imovel_id"))
     await reference("veiculos", data.get("veiculo_id"))
     await reference("pessoas", data.get("cliente_id"), principal)
@@ -272,6 +285,12 @@ async def _aplicar(doc: dict, data: dict, principal: Principal) -> dict:
         if not etapa:
             raise HTTPException(422, "Etapa não pertence ao funil")
         anterior = _etapa(funil, doc.get("etapa_id")) if funil else None
+        if data.get("funil_id", doc.get("funil_id")) == doc.get("funil_id"):
+            from lib.requisitos import bloqueio
+
+            motivo = await bloqueio(doc, funil, data["etapa_id"])
+            if motivo:
+                raise HTTPException(409, motivo)
         data["etapa_desde"] = now_utc()
         eventos.append(("etapa", f"Etapa: {anterior['nome'] if anterior else '—'} → {etapa['nome']}"))
 
@@ -316,7 +335,14 @@ async def update_lead(lead_id: str, input: LeadUpdate, principal: Principal = De
     doc = await _carregar(lead_id, principal)
     data = patch_data(input, ("nome", "origem", "estagio", "funil_id", "etapa_id"))
     if not principal.is_admin:
-        data.pop("corretor_id", None)
+        # Supervisor define o responsável entre os líderes que acompanha; líder não troca o dono.
+        if not (principal.supervisiona and data.get("corretor_id") in [*principal.escopo_equipe, principal.pessoa_id]):
+            data.pop("corretor_id", None)
+        if principal.supervisiona:
+            _escopo_supervisor(principal, data)
+        else:
+            for k in ("praca", "supervisao_id"):
+                data.pop(k, None)
     await reference("imoveis", data.get("imovel_id"))
     await reference("veiculos", data.get("veiculo_id"))
     await reference("pessoas", data.get("cliente_id"), principal)

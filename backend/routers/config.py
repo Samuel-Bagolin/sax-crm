@@ -303,8 +303,14 @@ async def receber_lead_do_site(input: LeadDoSite, x_api_key: str | None = Header
     if (await carregar_crm_config()).distribuicao == "rodizio":
         from routers.crm import _proximo_rodizio
         corretor_id = await _proximo_rodizio()
+    from lib.supervisoes import rotear
+
+    praca, supervisao_id = await rotear(input.pixel, input.localidade)
     entrada = Entrada(id=lid, nome=input.nome.strip(), telefone=input.telefone, email=email, origem=input.origem or "Site",
-                      mensagem=input.mensagem, imovel_id=imovel_id, cliente_id=pid, corretor_id=corretor_id)
+                      mensagem=input.mensagem, imovel_id=imovel_id, cliente_id=pid, corretor_id=corretor_id,
+                      praca=praca, supervisao_id=supervisao_id, pixel=(input.pixel or "").strip() or None,
+                      etiquetas=[e.strip()[:40] for e in input.etiquetas if e and e.strip()][:10],
+                      na_fila=False)
     r = await db.entradas.update_one({"_id": "site:" + lid}, {"$setOnInsert": entrada.model_dump()}, upsert=True)
     if r.upserted_id is not None:
         from lib import automacoes
