@@ -3,7 +3,7 @@ import { LinhaAceite } from "@/components/termo/ComprovanteTermo";
 import { abrirEmpresaEmNovaAba } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BarChart3, Building, Download, LogIn, Mail, Plus, ShieldCheck, Upload } from "lucide-react";
+import { BarChart3, Building, Download, LogIn, Mail, Pencil, Plus, ShieldCheck, Upload } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
 import { brl } from "@/lib/format";
 import type { Ambiente, EmpresaResumo, UsoEmpresa } from "@/lib/types";
@@ -109,6 +109,15 @@ export default function Empresas() {
       toast.success("Situação da empresa atualizada.");
     },
     onError: (err) => toast.error(detalheErro(err) ?? "Não foi possível atualizar."),
+  });
+
+  const renomear = useMutation({
+    mutationFn: ({ e, nome }: { e: EmpresaResumo; nome: string }) => apiPatch(`/empresas/${e.id}`, { nome }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["empresas"] });
+      toast.success("Nome atualizado no painel e no sistema da empresa.");
+    },
+    onError: (err) => toast.error(detalheErro(err) ?? "Não foi possível renomear."),
   });
 
   const mudarPlano = useMutation({
@@ -280,6 +289,10 @@ export default function Empresas() {
                   <span className="flex items-center gap-2">
                     <Building className="h-4 w-4 shrink-0 text-primary" />
                     {e.nome}
+                    <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Renomear ${e.nome}`} title="Renomear"
+                      onClick={() => { const n = window.prompt("Novo nome da empresa", e.nome)?.trim(); if (n && n.length >= 2 && n !== e.nome) renomear.mutate({ e, nome: n }); }} data-testid="empresa-renomear">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                   </span>
                   <span className="flex flex-wrap gap-1 text-[11px] font-normal">
                     <span className="rounded bg-accent px-1.5 py-0.5 text-accent-foreground">{e.segmento_nome ?? "Imobiliária"}</span>
