@@ -38,7 +38,7 @@ _COR = re.compile(r"^#[0-9a-fA-F]{6}$")
 TITULO_IMOB = "Encontre o imóvel certo para você"
 SUBTITULO_IMOB = "Casas, apartamentos e terrenos selecionados pela nossa equipe."
 VENDAS = ("imobiliaria", "veiculos")
-COM_FORMULARIO = ("imobiliaria", "veiculos", "odontologia", "estetica")  # segmentos com caixa de leads
+COM_FORMULARIO = ("imobiliaria", "veiculos", "odontologia", "estetica", "comercio")  # segmentos com caixa de leads
 LIMITE_ITENS = 300
 LIMITE_FOTO_ITEM = 600 * 1024
 
@@ -56,6 +56,8 @@ TEXTOS_SEGMENTO = {
                   "catalogo": "Serviços", "msg": "Olá! Vi no site o serviço {titulo} e quero marcar um horário.", "tipo": "servico"},
     "terapia": {"titulo": "Um espaço para cuidar de você", "subtitulo": "Atendimento acolhedor, presencial e online.",
                 "catalogo": "Atendimentos", "msg": "Olá! Vi no site {titulo} e quero agendar.", "tipo": "servico"},
+    "comercio": {"titulo": "Feito com carinho, todos os dias", "subtitulo": "Peça pelo WhatsApp, retire na loja ou encomende para o seu evento.",
+                 "catalogo": "Cardápio", "msg": "Olá! Vi no cardápio {titulo} e quero fazer um pedido.", "tipo": "produto"},
 }
 
 

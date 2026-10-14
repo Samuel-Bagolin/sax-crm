@@ -79,7 +79,7 @@ export default function Login() {
             seu tipo de negócio.
           </h1>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">
-            Imobiliária, loja de veículos, odontologia, clínica terapêutica, barbearia e estética. Cada um com menu,
+            Imobiliária, loja de veículos, odontologia, clínica terapêutica, barbearia, estética e restaurante. Cada um com menu,
             funil, agenda e telas feitas para a sua rotina.
           </p>
           <div className="mt-10 hidden lg:block">

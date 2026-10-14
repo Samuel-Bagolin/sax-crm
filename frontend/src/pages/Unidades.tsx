@@ -26,6 +26,7 @@ interface Unidade {
 export function nomePosto(seg: string, plural = false) {
   if (seg === "barbearia") return plural ? "Cadeiras" : "Cadeira";
   if (seg === "estetica") return plural ? "Salas" : "Sala";
+  if (seg === "comercio") return plural ? "Mesas" : "Mesa";
   return plural ? "Consultórios" : "Consultório";
 }
 

@@ -15,6 +15,7 @@ CATEGORIAS: dict[str, str] = {
     "vendas": "Vendas e estoque",
     "saude": "Saúde",
     "beleza": "Beleza e bem-estar",
+    "comercio": "Comércio e alimentação",
 }
 
 # Módulos (áreas do menu). Os antigos continuam com o mesmo nome.
@@ -119,6 +120,24 @@ SEGMENTOS: dict[str, dict] = {
         "motivos_perda": ["Valor acima do esperado", "Fechou em outra clínica", "Medo do procedimento", "Sem retorno", "Vai deixar para depois"],
         "etiquetas": ["Toxina", "Preenchimento", "Bioestimulador", "Corporal", "Pacote", "Retorno"],
     },
+    "comercio": {
+        "nome": "Comércio e restaurante",
+        "categoria": "comercio",
+        "descricao": "Cardápio no site com pedido pelo WhatsApp, revendas e encomendas para eventos, lojas e clientes.",
+        "modulos": ["dashboard", "pacientes", "crm", "agenda", "financeiro", "usuarios"],
+        "termos": {"cliente": "Cliente", "clientes": "Clientes", "profissional": "Atendente", "profissionais": "Equipe",
+                   "item": "Produto", "itens": "Produtos", "unidade": "Loja", "unidades": "Lojas",
+                   "atendimento": "Encomenda", "atendimentos": "Encomendas"},
+        "funis": [("Revenda", True, [("Interessado", 10, 2), ("Primeiro contato", 25, 3), ("Degustação ou apresentação", 50, 5),
+                                     ("Primeiro pedido", 80, 7), ("Revendedor ativo", 95, 30)]),
+                  ("Eventos e encomendas", False, [("Pedido recebido", 20, 1), ("Orçamento enviado", 45, 2),
+                                                   ("Sinal pago", 80, 3), ("Em produção", 90, 2)])],
+        "origens": ["WhatsApp", "Instagram", "Formulário do Meta (Lead Ads)", "Site", "iFood e apps de entrega", "Loja física",
+                    "Indicação", "Google"],
+        "motivos_perda": ["Preço", "Sem retorno", "Comprou de outro fornecedor", "Data indisponível", "Fora da área de entrega",
+                          "Pedido mínimo"],
+        "etiquetas": ["Revenda", "Evento", "Corporativo", "Recorrente", "Delivery", "VIP"],
+    },
 }
 
 SEGMENTO_PADRAO = "imobiliaria"
@@ -173,6 +192,9 @@ PRECOS_SEGMENTO: dict[str, dict] = {
                   "unidades": (1, 1, 3, None), "implantacao": (0, 0, 0, 999)},
     "estetica": {"precos": (129, 249, 449, 899), "usuarios": (2, 5, 10, None), "itens": (None,) * 4,
                  "unidades": (1, 1, 3, None), "implantacao": (0, 0, 499, 1500)},
+    # Comércio: preços de partida definidos pela SAX (out/2026); o administrador ajusta na tela de Planos.
+    "comercio": {"precos": (99, 199, 349, 699), "usuarios": (3, 8, 20, None), "itens": (None,) * 4,
+                 "unidades": (1, 1, 3, None), "implantacao": (0, 0, 499, 1500)},
 }
 
 _RECURSOS_TIER: dict[str, tuple[list[str], ...]] = {
@@ -188,6 +210,7 @@ _RECURSOS_TIER: dict[str, tuple[list[str], ...]] = {
     "estetica": (["chat", "site", "agenda_online", "prontuario", "mapa_facial"],
                  ["chat", "site", "agenda_online", "prontuario", "mapa_facial", "automacoes"],
                  ["chat", "site", "agenda_online", "prontuario", "mapa_facial", "automacoes", "assinatura", "google", "whatsapp"], None),
+    "comercio": (["chat", "site"], ["chat", "site", "automacoes"], ["chat", "site", "automacoes", "google", "whatsapp"], None),
 }
 
 _RESUMO_TIER = {
@@ -201,6 +224,8 @@ _RESUMO_TIER = {
                   "Até 15 barbeiros e 3 unidades", "Rede e franquia sem limite"),
     "estetica": ("Agenda, mapa facial 3D e orçamentos", "Até 5 profissionais e automações",
                  "Até 3 clínicas, contratos e Google Agenda", "Rede de clínicas sem limite"),
+    "comercio": ("Cardápio no site, clientes e funil de revenda", "Até 8 pessoas na equipe e automações",
+                 "Até 3 lojas e WhatsApp com fluxos de atendimento", "Rede de lojas e franquia sem limite"),
 }
 
 
@@ -260,6 +285,15 @@ PLANO_CONTAS_SEGMENTO: dict[str, list[tuple]] = {
         ("2.4", "Custo dos veículos", "despesa", "2"), ("2.4.1", "Compra de veículos", "despesa", "2.4"),
         ("2.4.2", "Preparação, funilaria e mecânica", "despesa", "2.4"), ("2.4.3", "Documentação e transferência", "despesa", "2.4"),
         ("2.4.4", "Repasse de veículos consignados", "despesa", "2.4"),
+    ],
+    "comercio": [
+        ("1", "Receitas", "receita", None), ("1.1", "Vendas", "receita", "1"),
+        ("1.1.1", "Vendas no balcão", "receita", "1.1"), ("1.1.2", "Delivery e apps", "receita", "1.1"),
+        ("1.1.3", "Encomendas e eventos", "receita", "1.1"), ("1.1.4", "Revenda e atacado", "receita", "1.1"),
+        *_CONTAS_COMUNS_DESPESA,
+        ("2.4", "Custo da produção", "despesa", "2"), ("2.4.1", "Ingredientes e insumos", "despesa", "2.4"),
+        ("2.4.2", "Embalagens", "despesa", "2.4"), ("2.4.3", "Taxas de apps de entrega", "despesa", "2.4"),
+        ("2.4.4", "Entregas e motoboy", "despesa", "2.4"),
     ],
     "_servicos": [
         ("1", "Receitas", "receita", None), ("1.1", "Atendimentos", "receita", "1"),

@@ -45,7 +45,7 @@ const PALETAS: { nome: string; p: string; d: string }[] = [
   { nome: "Azul e ciano", p: "#1d4ed8", d: "#06b6d4" },
 ];
 
-/** Sites de exemplo dos 6 segmentos, no site de vendas do SAX CRM. */
+/** Sites de exemplo de cada segmento, no site de vendas do SAX CRM. */
 const SITE_MODELOS = "https://site-crm-sax.vercel.app/modelo.html";
 
 // Barra do topo, onde fica o nome da empresa.

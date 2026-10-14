@@ -313,7 +313,7 @@ export interface ConfiguracaoPublica {
   segmento?: SegmentoInfo | null;
 }
 
-export type SegmentoChave = "imobiliaria" | "veiculos" | "odontologia" | "terapia" | "barbearia" | "estetica";
+export type SegmentoChave = "imobiliaria" | "veiculos" | "odontologia" | "terapia" | "barbearia" | "estetica" | "comercio";
 
 export interface TermosSegmento {
   cliente: string;

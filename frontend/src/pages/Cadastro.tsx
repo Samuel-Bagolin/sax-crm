@@ -13,6 +13,7 @@ import {
   Scissors,
   Smile,
   Sparkles,
+  UtensilsCrossed,
 } from "lucide-react";
 import { apiGet, apiPost, detalheErro } from "@/lib/api";
 import { brl } from "@/lib/format";
@@ -45,6 +46,7 @@ const ICONES: Record<SegmentoChave, typeof Building2> = {
   terapia: HeartPulse,
   barbearia: Scissors,
   estetica: Sparkles,
+  comercio: UtensilsCrossed,
 };
 
 const PASSOS = ["Segmento", "Plano", "Sua empresa", "Pagamento"];

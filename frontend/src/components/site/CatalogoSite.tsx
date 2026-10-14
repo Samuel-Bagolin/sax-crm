@@ -77,7 +77,7 @@ export function CatalogoSite({ pode, tipoPadrao, titulo, podeImportar }: { pode:
       <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold">{titulo}</h3>
-          <p className="text-sm text-muted-foreground">Cadastre o que você oferece: serviços, tratamentos e produtos. Cada item tem botão de WhatsApp no site.</p>
+          <p className="text-sm text-muted-foreground">Cadastre o que você oferece. Cada item tem botão de WhatsApp no site.</p>
         </div>
         {pode && (
           <div className="flex flex-wrap gap-2">
@@ -97,14 +97,17 @@ export function CatalogoSite({ pode, tipoPadrao, titulo, podeImportar }: { pode:
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input className="pl-9" placeholder="Buscar no catálogo" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar no catálogo" />
           </div>
+          {/* Só os tipos que existem no catálogo: um restaurante não vê "Tratamentos (0)". */}
+          {(["servico", "tratamento", "produto"] as const).filter((t) => lista.some((i) => i.tipo === t)).length > 1 && (
           <div className="flex flex-wrap gap-1.5">
-            {(["todos", "servico", "tratamento", "produto"] as const).map((t) => (
+            {(["todos", "servico", "tratamento", "produto"] as const).filter((t) => t === "todos" || lista.some((i) => i.tipo === t)).map((t) => (
               <button key={t} type="button" onClick={() => setTipo(t)} aria-pressed={tipo === t}
                 className={cn("rounded-full border px-3 py-1.5 text-sm", tipo === t ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")}>
                 {t === "todos" ? `Todos (${lista.length})` : `${TIPOS_ITEM[t].rotulo}s (${lista.filter((i) => i.tipo === t).length})`}
               </button>
             ))}
           </div>
+          )}
         </div>
       )}
 

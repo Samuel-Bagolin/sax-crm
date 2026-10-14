@@ -18,7 +18,7 @@ export const TERMOS_PADRAO: TermosSegmento = {
 
 /** Como chamar a empresa do cliente na tela (logo da imobiliária, site da loja, clínica...). */
 const EMPRESA: Record<SegmentoChave, string> = {
-  imobiliaria: "imobiliária", veiculos: "loja", odontologia: "clínica", terapia: "clínica", barbearia: "barbearia", estetica: "clínica",
+  imobiliaria: "imobiliária", veiculos: "loja", odontologia: "clínica", terapia: "clínica", barbearia: "barbearia", estetica: "clínica", comercio: "loja",
 };
 /** Registro profissional do segmento. Loja e barbearia não têm. */
 const REGISTRO: Partial<Record<SegmentoChave, string>> = {
@@ -47,6 +47,7 @@ export function useSegmento() {
     imobiliaria: chave === "imobiliaria",
     vendas: chave === "imobiliaria" || chave === "veiculos",
     barbearia: chave === "barbearia",
+    comercio: chave === "comercio",
     odonto: chave === "odontologia",
     /** "imobiliária", "loja", "clínica" ou "barbearia" (minúsculo). */
     empresa: EMPRESA[chave] ?? "empresa",

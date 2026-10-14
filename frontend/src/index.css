@@ -141,13 +141,14 @@
     --chart-5: #d773ad;
     --chart-6: #a4a94a;
     --radius: 0.5rem;
-    --sidebar: #1f1e1d;
-    --sidebar-foreground: #e9e7df;
+    /* A barra lateral não muda no escuro: mesma cor do claro (roxo SAX ou a da empresa). */
+    --sidebar: #4a03a2;
+    --sidebar-foreground: #ece6fb;
     --sidebar-primary: #ff7a00;
-    --sidebar-primary-foreground: #1f1e1d;
-    --sidebar-accent: #2f2e2b;
+    --sidebar-primary-foreground: #2a0164;
+    --sidebar-accent: #3a0285;
     --sidebar-accent-foreground: #ffffff;
-    --sidebar-border: #34332f;
+    --sidebar-border: #5d1bb5;
     --sidebar-ring: #ff7a00;
     --atrasada: #f07272;
     --hoje: #4cc282;

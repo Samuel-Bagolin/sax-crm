@@ -124,6 +124,14 @@ export const ANAMNESE: Record<string, { chave: string; pergunta: string; tipo: "
     { chave: "herpes", pergunta: "Histórico de herpes labial?", tipo: "sim_nao" },
     { chave: "expectativa", pergunta: "Expectativa de resultado", tipo: "texto" },
   ],
+  comercio: [
+    { chave: "preferencias", pergunta: "Sabores e produtos preferidos", tipo: "texto" },
+    { chave: "restricao", pergunta: "Tem restrição alimentar (lactose, glúten, açúcar)?", tipo: "sim_nao" },
+    { chave: "restricao_qual", pergunta: "Qual restrição?", tipo: "texto" },
+    { chave: "empresa", pergunta: "Empresa (pedidos corporativos e eventos)", tipo: "texto" },
+    { chave: "datas", pergunta: "Datas especiais (aniversário, eventos)", tipo: "texto" },
+    { chave: "entrega", pergunta: "Endereço de entrega preferido", tipo: "texto" },
+  ],
   barbearia: [
     { chave: "preferencias", pergunta: "Preferências de corte e acabamento", tipo: "texto" },
     { chave: "alergia", pergunta: "Alergia a algum produto?", tipo: "sim_nao" },

@@ -64,7 +64,8 @@ async def situacao(principal: Principal = Depends(principal_atual)):
     c = await ta.contratada()
     e = await _empresa(principal.empresa_id)
     registro = await controle[ta.COLECAO].find_one({"_id": _id(e["id"])})
-    exigir = ta.configurada(c) and _pode_aceitar(principal) and not registro
+    # Empresa de demonstração com dados fictícios (lib/demo_pudim.py) não é contrato: não pede o termo.
+    exigir = ta.configurada(c) and _pode_aceitar(principal) and not registro and not e.get("demo_apresentacao")
     saida = {"exigir": exigir, "versao": ta.VERSAO, "aceite": ta.resumo(registro), "pode_aceitar": _pode_aceitar(principal)}
     if exigir:
         doc = ta.documento_da_empresa(e)

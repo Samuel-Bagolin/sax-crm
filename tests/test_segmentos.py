@@ -62,10 +62,10 @@ def _cadastrar(segmento: str, cartao: str, plano: str | None = None, periodicida
     return c, {**corpo, "email": email}
 
 
-def test_opcoes_tem_seis_segmentos_e_planos():
+def test_opcoes_tem_sete_segmentos_e_planos():
     o = httpx.get(f"{API}/publico/cadastro/opcoes").json()
     chaves = {s["chave"] for s in o["segmentos"]}
-    assert chaves == {"imobiliaria", "veiculos", "odontologia", "terapia", "barbearia", "estetica"}
+    assert chaves == {"imobiliaria", "veiculos", "odontologia", "terapia", "barbearia", "estetica", "comercio"}
     assert all(len(o["planos"][k]) >= 4 for k in chaves)
     assert o["planos"]["barbearia"][0]["preco_mensal"] < o["planos"]["imobiliaria"][0]["preco_mensal"]
 
@@ -253,3 +253,30 @@ def test_aprovar_e_vender_uma_vez(cartao_demo):
     assert v.post(f"/veiculos/{vid}/vender", json={"valor": 69000}).status_code == 200
     assert v.post(f"/veiculos/{vid}/vender", json={"valor": 69000}).status_code == 409
     assert len([t for t in v.get("/transacoes").json() if t.get("veiculo_id") == vid]) == 1
+
+
+def test_demo_do_pudim_cria_empresa_de_comercio_com_dados():
+    root = httpx.Client(base_url=API, timeout=120)
+    root.post("/auth/login", json={"email": os.environ["CRM_SYSADMIN"], "senha": os.environ["CRM_SYSADMIN_SENHA"]})
+    antiga = next((e for e in root.get("/empresas").json() if e["slug"] == "demo-pudim-perfeito"), None)
+    if antiga:
+        assert root.delete(f"/empresas/{antiga['id']}", params={"confirmar": "demo-pudim-perfeito"}).status_code == 204
+    r = root.post("/plataforma/demos/pudim")
+    assert r.status_code == 201, r.text
+    d = r.json()
+    assert root.post("/plataforma/demos/pudim").status_code == 409  # não duplica
+    g = httpx.Client(base_url=API, timeout=60)
+    me = g.post("/auth/login", json={"email": d["emails"][0], "senha": d["senha"]}).json()
+    assert me["segmento"] == "comercio" and me["papel"] == "admin"
+    assert len(g.get("/unidades").json()) == 3
+    assert {f["nome"] for f in g.get("/funis").json()} == {"Revenda", "Eventos e encomendas"}
+    assert len(g.get("/leads").json()) >= 10 and len(g.get("/entradas").json()) >= 5
+    assert any("Comissão 7%" in t["descricao"] for t in g.get("/transacoes").json())
+    assert all(i["tipo"] == "produto" for i in g.get("/site-imobiliaria/itens").json())
+    assert g.get("/whatsapp/fluxos").json()[0]["gatilho"] == "nova_conversa"
+    # líder de loja só vê os negócios da loja dela
+    b = httpx.Client(base_url=API, timeout=60)
+    b.post("/auth/login", json={"email": d["emails"][3], "senha": d["senha"]})
+    assert 0 < len(b.get("/leads").json()) < len(g.get("/leads").json())
+    sem = httpx.Client(base_url=API).post("/plataforma/demos/pudim")
+    assert sem.status_code in (401, 403)

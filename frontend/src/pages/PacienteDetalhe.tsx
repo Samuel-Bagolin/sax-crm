@@ -90,7 +90,7 @@ export default function PacienteDetalhe() {
           {odonto && <TabsTrigger value="odonto" data-testid="aba-odonto">Odontograma 3D</TabsTrigger>}
           {facial && <TabsTrigger value="facial" data-testid="aba-facial">Mapa facial 3D</TabsTrigger>}
           {comOrcamento && <TabsTrigger value="orcamentos">Orçamentos ({f.tratamentos.length})</TabsTrigger>}
-          <TabsTrigger value="anamnese">{seg.chave === "barbearia" ? "Preferências" : "Anamnese"}</TabsTrigger>
+          <TabsTrigger value="anamnese">{seg.chave === "barbearia" || seg.chave === "comercio" ? "Preferências" : "Anamnese"}</TabsTrigger>
           {seg.prontuario && <TabsTrigger value="prontuario" data-testid="aba-prontuario">Prontuário</TabsTrigger>}
           <TabsTrigger value="dados">Cadastro</TabsTrigger>
           {isAdmin && f.financeiro && <TabsTrigger value="financeiro">Financeiro</TabsTrigger>}

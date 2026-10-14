@@ -75,6 +75,8 @@ interface ItemNav {
 }
 
 const VENDAS: SegmentoChave[] = ["imobiliaria", "veiculos"];
+/** Segmentos com Leads, Negócios e Agenda de atividades (vendas e comércio). */
+const COMERCIAL: SegmentoChave[] = [...VENDAS, "comercio"];
 
 /** Troca {clientes}, {profissionais} etc. pelo vocabulário do segmento. */
 function comTermos(texto: string, t: TermosSegmento): string {
@@ -92,23 +94,25 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
   {
     titulo: "Comercial",
     itens: [
-      { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: VENDAS },
-      { to: "/whatsapp", modulo: "crm", icon: MessageSquareText, rotulo: "WhatsApp", curto: "WhatsApp", nivel: "todos", segmentos: VENDAS, recurso: "whatsapp" },
-      { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Negócios", nivel: "todos", segmentos: VENDAS },
-      { to: "/agenda", modulo: "agenda", icon: CalendarDays, nivel: "todos", contador: "atividades", segmentos: VENDAS },
+      { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: COMERCIAL },
+      { to: "/whatsapp", modulo: "crm", icon: MessageSquareText, rotulo: "WhatsApp", curto: "WhatsApp", nivel: "todos", segmentos: COMERCIAL },
+      { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Negócios", nivel: "todos", segmentos: COMERCIAL },
+      { to: "/pacientes", modulo: "pacientes", icon: Contact, rotulo: "{clientes}", nivel: "todos", segmentos: ["comercio"] },
+      { to: "/agenda", modulo: "agenda", icon: CalendarDays, nivel: "todos", contador: "atividades", segmentos: COMERCIAL },
       { to: "/imoveis", modulo: "imoveis", icon: Building2, nivel: "todos", segmentos: ["imobiliaria"] },
       { to: "/veiculos", modulo: "veiculos", icon: Car, rotulo: "Estoque", nivel: "todos", segmentos: ["veiculos"] },
       { to: "/proprietarios", modulo: "imoveis", icon: KeyRound, rotulo: "Proprietários", curto: "Donos", nivel: "todos", segmentos: ["imobiliaria"] },
       { to: "/contratos", modulo: "contratos", icon: FileSignature, nivel: "todos", segmentos: ["imobiliaria", "veiculos"] },
       { to: "/meu-site", modulo: "imoveis", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: ["imobiliaria"] },
       { to: "/meu-site", modulo: "veiculos", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: ["veiculos"] },
+      { to: "/meu-site", modulo: "crm", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: ["comercio"] },
     ],
   },
   {
     titulo: "Atendimento",
     itens: [
       { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: COM_ORCAMENTO },
-      { to: "/whatsapp", modulo: "pacientes", icon: MessageSquareText, rotulo: "WhatsApp", curto: "WhatsApp", nivel: "todos", segmentos: SERVICOS, recurso: "whatsapp" },
+      { to: "/whatsapp", modulo: "pacientes", icon: MessageSquareText, rotulo: "WhatsApp", curto: "WhatsApp", nivel: "todos", segmentos: SERVICOS },
       { to: "/pacientes", modulo: "pacientes", icon: Contact, rotulo: "{clientes}", nivel: "todos", segmentos: SERVICOS },
       { to: "/atendimentos", modulo: "atendimentos", icon: CalendarDays, rotulo: "Agenda", nivel: "todos", segmentos: SERVICOS },
       { to: "/clube", modulo: "atendimentos", icon: Crown, rotulo: "Assinantes", curto: "Clube", nivel: "todos", segmentos: ["barbearia"] },
@@ -342,12 +346,12 @@ export default function AppShell() {
   // Cores do menu lateral (Sistema → Identidade visual). Padrão: as do tema (roxo SAX + laranja).
   useEffect(() => {
     const raiz = document.documentElement;
-    const vars = escuro || ehPadrao(config.cor_menu, config.cor_menu_destaque) ? null : variaveisMenu(config.cor_menu, config.cor_menu_destaque);
+    const vars = ehPadrao(config.cor_menu, config.cor_menu_destaque) ? null : variaveisMenu(config.cor_menu, config.cor_menu_destaque);
     const nomes = Object.keys(variaveisMenu("#000000", "#000000")!);
     nomes.forEach((n) => raiz.style.removeProperty(n));
     if (vars) Object.entries(vars).forEach(([n, v]) => raiz.style.setProperty(n, v));
     return () => nomes.forEach((n) => raiz.style.removeProperty(n));
-  }, [config.cor_menu, config.cor_menu_destaque, escuro]);
+  }, [config.cor_menu, config.cor_menu_destaque]);
 
   const caminho = location.pathname;
   const segTitulo = useSegmento();

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
-import { Armchair, Building2, CalendarCheck, Car, Crown, FileCheck2, HeartPulse, MapPin, Scissors, Smile, Sparkles, Syringe, type LucideIcon } from "lucide-react";
+import { Armchair, Building2, CalendarCheck, Car, Crown, FileCheck2, HeartPulse, MapPin, MessageCircle, Scissors, ShoppingBag, Smile, Sparkles, Syringe, UtensilsCrossed, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/* Vitrine da tela de login: passa pelos 6 negócios atendidos, um de cada vez, com uma cena
+/* Vitrine da tela de login: passa pelos 7 negócios atendidos, um de cada vez, com uma cena
    ilustrativa de cada CRM. Para quando a pessoa passa o mouse (ou pede menos movimento). */
 
 interface Cena {
@@ -227,12 +227,51 @@ function TelaEstetica() {
   );
 }
 
+// Pudim no prato: corpo com degradê, calda de caramelo escorrendo e o brilho por cima.
+function Pudim() {
+  return (
+    <svg viewBox="0 0 120 100" className="h-24 w-28 shrink-0" aria-hidden="true">
+      <defs>
+        <linearGradient id="pudim-corpo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ffe9a8" /><stop offset="1" stopColor="#f6c867" /></linearGradient>
+        <linearGradient id="pudim-calda" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#a14a0b" /><stop offset="1" stopColor="#c66a17" /></linearGradient>
+      </defs>
+      <ellipse cx="60" cy="86" rx="52" ry="10" fill="#ffffff" stroke="#eadfcf" strokeWidth="1.5" />
+      <ellipse cx="60" cy="84" rx="40" ry="6" fill="#c66a17" opacity=".55" />
+      <path d="M30 82 L38 34 Q60 26 82 34 L90 82 Q60 90 30 82 Z" fill="url(#pudim-corpo)" />
+      <path d="M38 34 Q60 26 82 34 Q82 40 79 41 Q78 52 75 52 Q72 52 72 43 Q66 45 62 44 Q61 58 57 58 Q53 58 54 44 Q47 44 45 42 Q44 49 41 49 Q38 49 38.5 40 Z" fill="url(#pudim-calda)" />
+      <ellipse cx="60" cy="33" rx="22" ry="5" fill="#8a3c08" />
+      <path d="M47 31 Q55 28 63 29" stroke="#fff" strokeOpacity=".55" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <path d="M41 60 Q43 70 42 78" stroke="#fff" strokeOpacity=".5" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function TelaComercio() {
+  return (
+    <Moldura rotulo="Cardápio e WhatsApp">
+      <div className="flex items-center gap-3">
+        <div className="rounded-xl bg-gradient-to-b from-[#fff8e8] to-[#fdebc8]"><Pudim /></div>
+        <div className="min-w-0">
+          <p className="font-semibold leading-snug">Pudim de doce de leite</p>
+          <p className="mt-0.5 text-xs text-[#6b5f86]">Inteiro, serve 10 fatias</p>
+          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#25d366] px-2.5 py-1 text-[11px] font-semibold text-white"><MessageCircle className="h-3 w-3" /> Pedir no WhatsApp</span>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-1.5 text-[11px]">
+        <p className="ml-auto max-w-[80%] rounded-lg rounded-tr-sm bg-[#dcf8c6] px-2.5 py-1.5">Quero 3 para sábado, para revender no meu café.</p>
+        <p className="max-w-[62%] rounded-lg rounded-tl-sm bg-[#f1edf8] px-2.5 py-1.5">Robô: chamei o time de <b>Revenda Curitiba</b>.</p>
+      </div>
+    </Moldura>
+  );
+}
+
 const CENAS: Cena[] = [
   { chave: "imobiliaria", nome: "Imobiliária", icone: Building2, titulo: "Do lead do portal ao contrato assinado.", aviso: { icone: CalendarCheck, titulo: "Visita confirmada", sub: "Amanhã, 10:00" }, Tela: TelaImovel },
   { chave: "veiculos", nome: "Veículos", icone: Car, titulo: "Estoque que gira e lead que não esfria.", aviso: { icone: CalendarCheck, titulo: "Test drive marcado", sub: "Sábado, 9:30" }, Tela: TelaVeiculo },
   { chave: "odontologia", nome: "Odontologia", icone: Smile, titulo: "Odontograma 3D que vira orçamento.", aviso: { icone: FileCheck2, titulo: "Orçamento aprovado", sub: "3 parcelas no Financeiro" }, Tela: TelaOdonto },
   { chave: "terapia", nome: "Psicologia e fono", icone: HeartPulse, titulo: "Agenda recorrente e prontuário protegido.", aviso: { icone: CalendarCheck, titulo: "Agendado pelo link", sub: "Sessão com a Juliana" }, Tela: TelaTerapia },
   { chave: "barbearia", nome: "Barbearia", icone: Scissors, titulo: "Cadeira ocupada, assinante que volta.", aviso: { icone: Crown, titulo: "Assinante do clube", sub: "Bruno veio 4 vezes no mês" }, Tela: TelaBarbearia },
+  { chave: "comercio", nome: "Restaurante", icone: UtensilsCrossed, titulo: "Cardápio no site, pedido no WhatsApp.", aviso: { icone: ShoppingBag, titulo: "Card no funil de Revenda", sub: "Loja Curitiba, sem digitar nada" }, Tela: TelaComercio },
   { chave: "estetica", nome: "Estética", icone: Sparkles, titulo: "Mapa facial 3D que vira orçamento.", aviso: { icone: Syringe, titulo: "Retorno em 120 dias", sub: "Lembrete agendado" }, Tela: TelaEstetica },
 ];
 

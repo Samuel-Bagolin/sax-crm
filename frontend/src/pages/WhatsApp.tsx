@@ -227,7 +227,7 @@ export default function WhatsApp() {
           <section className={cn("min-h-0 flex-col", conversa ? "flex" : "hidden md:flex")}>
             {conversa ? (
               <Conversa key={conversa.id} c={conversa} versao={versao} voltar={() => setAtiva(null)} equipe={equipe.filter((m) => m.pessoa_id && m.ativo !== false).map((m) => ({ id: m.pessoa_id!, nome: m.nome }))}
-                isAdmin={isAdmin} minhaPessoa={principal?.pessoa_id ?? null} temLeads={seg.vendas || seg.chave === "odontologia" || seg.chave === "estetica"}
+                isAdmin={isAdmin} minhaPessoa={principal?.pessoa_id ?? null} temLeads={seg.vendas || seg.comercio || seg.chave === "odontologia" || seg.chave === "estetica"}
                 conexao={conexoes.find((x) => x.id === conversa.conexao_id)} />
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-muted-foreground">

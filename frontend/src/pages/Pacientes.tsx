@@ -36,7 +36,7 @@ export default function Pacientes() {
   const [busca, setBusca] = useState("");
   const [novo, setNovo] = useState(false);
   const lista = useQuery({ queryKey: ["pacientes-lista"], queryFn: () => apiGet<PacienteResumo[]>("/pacientes") });
-  const retorno = useQuery({ queryKey: ["retorno"], queryFn: () => apiGet<Retorno[]>("/atendimentos/retorno") });
+  const retorno = useQuery({ queryKey: ["retorno"], queryFn: () => apiGet<Retorno[]>("/atendimentos/retorno"), enabled: seg.servicos });
   const filtrada = useMemo(() => {
     const t = busca.trim().toLowerCase();
     return (lista.data ?? []).filter((p) => !t || `${p.nome} ${p.telefone ?? ""} ${p.email ?? ""} ${p.cpf_cnpj ?? ""}`.toLowerCase().includes(t));

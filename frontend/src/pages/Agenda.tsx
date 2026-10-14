@@ -444,7 +444,7 @@ export default function Agenda() {
               Toda a equipe
             </button>
             {membros.map((m, i) => (
-              <EquipeItem key={m.usuario_id} m={m} cor={corDoMembro(m, i)} ativo={corretor === m.pessoa_id} onClick={() => escolherCorretor(m.pessoa_id)} />
+              <EquipeItem key={m.usuario_id} m={m} cor={corDoMembro(m, i)} ativo={corretor === m.pessoa_id} onClick={() => escolherCorretor(m.pessoa_id)} semVisitas={seg.comercio} />
             ))}
             {!membros.length && <p className="px-2 py-4 text-xs text-muted-foreground">Cadastre {profs} em Equipe para ver a agenda de cada um.</p>}
           </div>
@@ -517,9 +517,11 @@ export default function Agenda() {
                 <BellRing className="h-3.5 w-3.5" /> Lembretes
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => setVisita({ v: null, data: visao === "dia" ? inicio : hoje, corretor })}>
-              {seg.veiculos ? <Car className="h-3.5 w-3.5" /> : <Home className="h-3.5 w-3.5" />} {seg.veiculos ? "Test drive" : "Visita"}
-            </Button>
+            {!seg.comercio && (
+              <Button variant="outline" size="sm" onClick={() => setVisita({ v: null, data: visao === "dia" ? inicio : hoje, corretor })}>
+                {seg.veiculos ? <Car className="h-3.5 w-3.5" /> : <Home className="h-3.5 w-3.5" />} {seg.veiculos ? "Test drive" : "Visita"}
+              </Button>
+            )}
             <Button size="sm" onClick={() => novo(visao === "dia" ? inicio : hoje, null)} data-testid="btn-nova-atividade">
               <Plus className="h-3.5 w-3.5" /> Atividade
             </Button>
@@ -654,7 +656,7 @@ export default function Agenda() {
   );
 }
 
-function EquipeItem({ m, cor, ativo, onClick }: { m: MembroEquipe; cor: string; ativo: boolean; onClick: () => void }) {
+function EquipeItem({ m, cor, ativo, onClick, semVisitas }: { m: MembroEquipe; cor: string; ativo: boolean; onClick: () => void; semVisitas?: boolean }) {
   return (
     <button
       type="button"
@@ -666,7 +668,7 @@ function EquipeItem({ m, cor, ativo, onClick }: { m: MembroEquipe; cor: string; 
       <span className="min-w-0 flex-1">
         <span className={cn("block truncate text-sm", ativo && "font-semibold")}>{m.nome}</span>
         <span className="block text-[11px] text-muted-foreground">
-          {m.atividades_hoje} hoje, {m.visitas_semana} visita(s) na semana
+          {m.atividades_hoje} hoje{semVisitas ? "" : `, ${m.visitas_semana} visita(s) na semana`}
         </span>
       </span>
       {m.atividades_atrasadas > 0 && (

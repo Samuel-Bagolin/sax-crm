@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useSegmento } from "@/lib/segmento";
 import { usePessoasEquipe, type Conexao, type Setor } from "@/components/whatsapp/NumerosWhatsApp";
 
 type TipoPasso = "mensagem" | "menu" | "transferir" | "encerrar";
@@ -29,15 +30,45 @@ const passoVazio = (tipo: TipoPasso): Passo => ({
   opcoes: tipo === "menu" ? [{ rotulo: "", proximo: null }, { rotulo: "", proximo: null }] : [],
 });
 
-function exemplo(): Fluxo {
-  const menu = passoVazio("menu"), vendas = passoVazio("transferir"), atend = passoVazio("transferir"), horario = passoVazio("encerrar");
-  const ola = { ...passoVazio("mensagem"), texto: "Olá! Obrigado por falar com a gente.", proximo: menu.id };
-  menu.texto = "Como podemos ajudar? Responda com o número:";
-  menu.opcoes = [{ rotulo: "Comprar ou alugar", proximo: vendas.id }, { rotulo: "Já sou cliente", proximo: atend.id }, { rotulo: "Horário de atendimento", proximo: horario.id }];
-  vendas.texto = "Perfeito! Já vou te passar para um dos nossos especialistas.";
-  atend.texto = "Certo! Um atendente vai falar com você em instantes.";
-  horario.texto = "Atendemos de segunda a sexta, das 9h às 18h, e aos sábados das 9h às 13h.";
-  return { nome: "Boas-vindas", ativo: true, gatilho: "nova_conversa", palavras: [], conexoes: [], passos: [ola, menu, vendas, atend, horario] };
+type OpcaoExemplo = [rotulo: string, tipo: "transferir" | "encerrar", resposta: string];
+const EXEMPLOS: Record<string, { saudacao: string; pergunta: string; opcoes: OpcaoExemplo[] }> = {
+  imobiliaria: { saudacao: "Olá! Obrigado por falar com a gente.", pergunta: "Como podemos ajudar? Responda com o número:", opcoes: [
+    ["Comprar ou alugar um imóvel", "transferir", "Perfeito! Já vou te passar para um dos nossos corretores."],
+    ["Anunciar meu imóvel", "transferir", "Ótimo! Um corretor vai falar com você sobre a avaliação do imóvel."],
+    ["Já sou cliente", "transferir", "Certo! Alguém da equipe vai te atender em instantes."]] },
+  veiculos: { saudacao: "Olá! Obrigado por falar com a gente.", pergunta: "Como podemos ajudar? Responda com o número:", opcoes: [
+    ["Quero comprar um veículo", "transferir", "Show! Já vou te passar para um dos nossos vendedores."],
+    ["Quero vender ou dar meu carro na troca", "transferir", "Certo! Um vendedor vai avaliar o seu carro com você."],
+    ["Financiamento", "transferir", "Beleza! Vamos simular o financiamento com você."]] },
+  odontologia: { saudacao: "Olá! Obrigado por falar com a clínica.", pergunta: "Como podemos ajudar? Responda com o número:", opcoes: [
+    ["Agendar uma avaliação", "transferir", "Perfeito! Já vou te passar para a recepção marcar o melhor horário."],
+    ["Já sou paciente", "transferir", "Certo! A recepção vai te atender em instantes."],
+    ["Estou com dor (urgência)", "transferir", "Entendido. Vamos priorizar o seu atendimento agora."]] },
+  terapia: { saudacao: "Olá! Que bom que você entrou em contato.", pergunta: "Como podemos ajudar? Responda com o número:", opcoes: [
+    ["Agendar a primeira consulta", "transferir", "Perfeito! Já vou te passar para a recepção."],
+    ["Já sou paciente", "transferir", "Certo! Vamos te atender em instantes."],
+    ["Valores e convênios", "transferir", "Um momento, vamos te passar as informações."]] },
+  barbearia: { saudacao: "Fala! Valeu por chamar a gente.", pergunta: "O que você precisa? Responda com o número:", opcoes: [
+    ["Agendar um horário", "transferir", "Beleza! Já vou te passar para a recepção."],
+    ["Clube de assinantes", "transferir", "Show! Vamos te explicar como funciona o clube."],
+    ["Endereço e horário de funcionamento", "encerrar", "[Coloque aqui o endereço e o horário da barbearia.]"]] },
+  estetica: { saudacao: "Olá! Obrigado por falar com a gente.", pergunta: "Como podemos ajudar? Responda com o número:", opcoes: [
+    ["Agendar uma avaliação", "transferir", "Perfeito! Já vou te passar para a recepção."],
+    ["Já sou cliente", "transferir", "Certo! Vamos te atender em instantes."],
+    ["Valores dos procedimentos", "transferir", "Um momento, a equipe vai te passar os valores."]] },
+  comercio: { saudacao: "Olá! Que bom ter você por aqui.", pergunta: "Como podemos ajudar? Responda com o número:", opcoes: [
+    ["Fazer um pedido", "transferir", "Delícia! Já vou te passar para a loja montar o seu pedido."],
+    ["Encomenda para evento", "transferir", "Que legal! Nossa equipe de eventos vai falar com você."],
+    ["Quero revender", "transferir", "Ótimo! Nosso time de revenda vai te chamar."],
+    ["Endereço e horário", "encerrar", "[Coloque aqui o endereço e o horário das lojas.]"]] },
+};
+
+function exemplo(segmento: string): Fluxo {
+  const e = EXEMPLOS[segmento] ?? EXEMPLOS.imobiliaria;
+  const finais = e.opcoes.map(([, tipo, resposta]) => ({ ...passoVazio(tipo), texto: resposta }));
+  const menu = { ...passoVazio("menu"), texto: e.pergunta, opcoes: e.opcoes.map(([rotulo], i) => ({ rotulo, proximo: finais[i].id })) };
+  const ola = { ...passoVazio("mensagem"), texto: e.saudacao, proximo: menu.id };
+  return { nome: "Boas-vindas", ativo: true, gatilho: "nova_conversa", palavras: [], conexoes: [], passos: [ola, menu, ...finais] };
 }
 
 /** Fluxos de resposta automática: o robô atende primeiro e passa para a equipe. Só o gestor edita. */
@@ -55,6 +86,7 @@ export function FluxosWhatsApp({ conexoes, setores }: { conexoes: Conexao[]; set
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa", "fluxos"] }); toast.success("Fluxo removido."); },
   });
   const nomeNumero = Object.fromEntries(conexoes.map((c) => [c.id, c.nome]));
+  const seg = useSegmento();
 
   return (
     <div className="grid content-start gap-4 overflow-y-auto">
@@ -63,7 +95,7 @@ export function FluxosWhatsApp({ conexoes, setores }: { conexoes: Conexao[]; set
           <h2 className="flex items-center gap-2 font-semibold"><Bot className="h-5 w-5 text-primary" /> Fluxos de resposta</h2>
           <p className="text-sm text-muted-foreground">O robô responde na hora, mostra um menu e passa o cliente para a pessoa ou o setor certo. Quando alguém da equipe responde, o robô para.</p>
         </div>
-        <Button onClick={() => setEditando(q.data?.length ? { ...exemplo(), nome: "", passos: [passoVazio("mensagem")] } : exemplo())} data-testid="fluxo-novo"><Plus className="h-4 w-4" /> Novo fluxo</Button>
+        <Button onClick={() => setEditando(q.data?.length ? { ...exemplo(seg.chave), nome: "", passos: [passoVazio("mensagem")] } : exemplo(seg.chave))} data-testid="fluxo-novo"><Plus className="h-4 w-4" /> Novo fluxo</Button>
       </section>
 
       {!q.data?.length ? (

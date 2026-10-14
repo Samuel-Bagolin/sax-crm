@@ -147,7 +147,9 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
 - Sem travessão (—) nos textos da tela e dos e-mails. Use vírgula, ponto ou dois-pontos.
 - Mensagem de erro diz o que aconteceu e o que fazer, sem pedir desculpas.
 - Identidade SAX: roxo `#4a03a2` e laranja `#ff7a00`, logo em `components/shared/MarcaSax.tsx`.
-- Modo escuro neutro (grafite quente, como o Claude), laranja nos destaques; as cores da empresa só valem no claro.
+- Modo escuro neutro (grafite quente, como o Claude), laranja nos destaques; a cor primária da empresa só vale no claro. A barra lateral fica igual nos dois modos.
+- Segmento comércio (restaurante e doceria): cardápio no site (itens tipo produto), funis Revenda e Eventos e encomendas, lojas como unidades.
+- Demonstração: `POST /plataforma/demos/pudim` (botão Demo do Pudim em Empresas) cria "[DEMO] O Pudim Perfeito" com dados fictícios (`lib/demo_pudim.py`). Empresa com `demo_apresentacao` não pede o termo de adesão.
 
 ## Como trabalhar em dupla
 

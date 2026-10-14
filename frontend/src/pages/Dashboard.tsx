@@ -84,7 +84,10 @@ export default function Dashboard() {
 
 function DashboardImobiliaria() {
   const { isAdmin } = useAuth();
-  const imoveisQ = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<Imovel[]>("/imoveis") });
+  // Comércio usa o mesmo painel de vendas, com clientes no lugar do estoque.
+  const comercio = useSegmento().comercio;
+  const imoveisQ = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<Imovel[]>("/imoveis"), enabled: !comercio });
+  const clientesQ = useQuery({ queryKey: ["pacientes-lista"], queryFn: () => apiGet<{ id: string }[]>("/pacientes"), enabled: comercio });
   const leadsQ = useQuery({ queryKey: ["leads"], queryFn: () => apiGet<Lead[]>("/leads") });
   const metricasQ = useQuery({ queryKey: ["metricas"], queryFn: () => apiGet<LeadMetricas>("/leads/metricas") });
   // Fluxo de caixa é do gestor; o corretor vê o resumo das próprias comissões.
@@ -124,14 +127,25 @@ function DashboardImobiliaria() {
         data-testid="dashboard-kpis"
         className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-4"
       >
-        <StatCard
-          titulo="Imóveis ativos"
-          valor={imoveisQ.isLoading ? "…" : String(ativos)}
-          sub={`${captados} captados · ${publicados} publicados`}
-          icon={Building2}
-          teste="kpi-imoveis-ativos"
-          tinta="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
-        />
+        {comercio ? (
+          <StatCard
+            titulo="Clientes"
+            valor={clientesQ.isLoading ? "…" : String(clientesQ.data?.length ?? 0)}
+            sub="na base da empresa"
+            icon={Users}
+            teste="kpi-clientes"
+            tinta="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+          />
+        ) : (
+          <StatCard
+            titulo="Imóveis ativos"
+            valor={imoveisQ.isLoading ? "…" : String(ativos)}
+            sub={`${captados} captados · ${publicados} publicados`}
+            icon={Building2}
+            teste="kpi-imoveis-ativos"
+            tinta="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+          />
+        )}
         <StatCard
           titulo="Negócios em andamento"
           valor={metricasQ.isLoading ? "…" : String(leadsAbertos.length)}

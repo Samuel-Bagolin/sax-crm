@@ -37,7 +37,7 @@ webhook_router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 admin_router = APIRouter(prefix="/plataforma/whatsapp", tags=["plataforma"])
 
 LIMITE_NUMEROS = 5
-COM_LEADS = ("imobiliaria", "veiculos", "odontologia", "estetica")
+COM_LEADS = ("imobiliaria", "veiculos", "odontologia", "estetica", "comercio")
 STATUS = {"open": "conectado", "connecting": "conectando", "close": "desconectado", "refused": "desconectado"}
 
 

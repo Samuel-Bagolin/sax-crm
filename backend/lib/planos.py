@@ -44,6 +44,7 @@ RECURSOS_SEGMENTO = {
     "terapia": ["agenda_online", "prontuario", "automacoes", "google", "assinatura", "chat", "site", "whatsapp"],
     "barbearia": ["agenda_online", "automacoes", "google", "chat", "site", "whatsapp"],
     "estetica": ["agenda_online", "prontuario", "mapa_facial", "automacoes", "google", "assinatura", "chat", "site", "whatsapp"],
+    "comercio": ["automacoes", "google", "chat", "site", "whatsapp"],
 }
 _ROTULO_SEGMENTO = {
     ("site", "imobiliaria"): "Site com os seus imóveis e WhatsApp",
@@ -52,6 +53,7 @@ _ROTULO_SEGMENTO = {
     ("site", "estetica"): "Site com procedimentos, produtos e WhatsApp",
     ("site", "barbearia"): "Site da barbearia com serviços e agendamento",
     ("site", "terapia"): "Site da clínica com atendimentos e agendamento",
+    ("site", "comercio"): "Site com cardápio e pedido pelo WhatsApp",
 }
 
 
@@ -145,6 +147,8 @@ async def carregar_catalogo(forcar: bool = False) -> None:
         docs = await controle.planos_catalogo.find({}).to_list(None)
     if not await controle.planos_meta.find_one({"_id": "segmentos_v1"}):
         docs = await _migrar_segmentos(docs)
+    if not await controle.planos_meta.find_one({"_id": "segmento_comercio_v1"}):
+        docs = await _novos_segmentos(docs, "segmento_comercio_v1", {"comercio"})
     for d in docs:
         feitas = d.get("migracoes") or []
         for mig, recurso, regra in _MIGRACOES_RECURSO:
@@ -188,6 +192,24 @@ async def _migrar_segmentos(docs: list[dict]) -> list[dict]:
                 pass
     try:
         await controle.planos_meta.insert_one({"_id": "segmentos_v1", "em": time.time()})
+    except Exception:
+        pass
+    return await controle.planos_catalogo.find({}).to_list(None)
+
+
+async def _novos_segmentos(docs: list[dict], marca: str, segmentos: set[str]) -> list[dict]:
+    """Segmento lançado depois: os planos sugeridos dele entram uma vez no catálogo (os outros não mudam)."""
+    from lib.segmentos import planos_sugeridos
+
+    existentes = {d["chave"] for d in docs}
+    for chave, p in planos_sugeridos(list(RECURSOS)).items():
+        if p["segmento"] in segmentos and chave not in existentes:
+            try:
+                await controle.planos_catalogo.insert_one({"_id": chave, "chave": chave, **p})
+            except Exception:
+                pass
+    try:
+        await controle.planos_meta.insert_one({"_id": marca, "em": time.time()})
     except Exception:
         pass
     return await controle.planos_catalogo.find({}).to_list(None)

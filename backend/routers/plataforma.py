@@ -274,3 +274,21 @@ async def webhook_asaas(request: Request):
         except Exception:
             pass
     return resultado
+
+
+# ------------------------------------------------------------------ empresas de demonstração
+
+
+@router.post("/demos/pudim", status_code=201)
+async def criar_demo_pudim(principal: Principal = Depends(require("empresa:manage"))):
+    """Cria a empresa "[DEMO] O Pudim Perfeito" (comércio) com dados fictícios para apresentação.
+
+    Devolve os acessos da equipe de demonstração e a senha gerada, mostrada só nesta resposta."""
+    from lib import demo_pudim
+
+    try:
+        r = await demo_pudim.criar(principal.email)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    logger.info("demonstração do Pudim criada por %s", principal.email)
+    return r
