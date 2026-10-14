@@ -282,3 +282,20 @@ async def editar_perfil(input: PerfilUpdate, principal: Principal = Depends(prin
             if espelho:
                 await db.pessoas.update_one({"id": principal.pessoa_id}, {"$set": espelho})
     return publico(await banco.usuarios.find_one({"id": principal.usuario_id}, {"senha_hash": 0}))
+
+
+@router.post("/{usuario_id}/link-acesso")
+async def link_de_acesso(usuario_id: str, principal: Principal = Depends(require("usuario:manage"))):
+    """Gera um link de uso único (24 h) para a pessoa criar ou trocar a senha. Vai por e-mail quando houver
+    provedor configurado; o link também volta aqui para o gestor mandar pelo WhatsApp."""
+    from lib.email import email_configurado
+    from lib.invites import invite
+
+    alvo = await db.usuarios.find_one({"id": usuario_id})
+    if not alvo or alvo.get("papel") == "sysadmin":
+        raise HTTPException(404, "Usuário não encontrado")
+    if not alvo.get("ativo", True):
+        raise HTTPException(409, "Ative o usuário antes de gerar o link")
+    empresa = await controle.empresas.find_one({"id": principal.empresa_id}, {"nome": 1}) if principal.empresa_id else None
+    link = await invite(db, alvo, (empresa or {}).get("nome") or "SAX")
+    return {"link": link, "email": alvo["email"], "enviado": email_configurado()}

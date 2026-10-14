@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 export interface Conexao {
   id: string; nome: string; status: "conectado" | "conectando" | "desconectado" | "aguardando_qr"; numero: string | null; perfil: string | null;
   criado_em: string | null; setor_id: string | null; responsaveis: string[];
+  no_site?: boolean; nome_site?: string | null; ordem_site?: number;
 }
 export interface Setor { id: string; nome: string; membros: string[] }
 
@@ -132,8 +133,12 @@ function EditarNumero({ conexao, setores, pessoas, onClose }: { conexao: Conexao
   const [nome, setNome] = useState(conexao.nome);
   const [setor, setSetor] = useState(conexao.setor_id ?? "");
   const [resp, setResp] = useState<string[]>(conexao.responsaveis);
+  const [noSite, setNoSite] = useState(conexao.no_site ?? true);
+  const [nomeSite, setNomeSite] = useState(conexao.nome_site ?? "");
   const salvar = useMutation({
-    mutationFn: () => apiPut<Conexao>(`/whatsapp/conexoes/${conexao.id}`, { nome: nome.trim(), setor_id: setor || null, responsaveis: resp }),
+    mutationFn: () => apiPut<Conexao>(`/whatsapp/conexoes/${conexao.id}`, {
+      nome: nome.trim(), setor_id: setor || null, responsaveis: resp, no_site: noSite, nome_site: nomeSite.trim() || null, ordem_site: conexao.ordem_site ?? 50,
+    }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa"] }); toast.success("Número atualizado."); onClose(); },
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível salvar."),
   });
@@ -157,6 +162,19 @@ function EditarNumero({ conexao, setores, pessoas, onClose }: { conexao: Conexao
             {!setores.length && <p className="text-xs text-muted-foreground">Crie setores logo abaixo da lista de números.</p>}
           </div>
           <div className="grid gap-1.5"><Label>Responsáveis</Label><Marcar pessoas={pessoas} valor={resp} onChange={setResp} testid="wa-num-responsaveis" /></div>
+          <div className="grid gap-2 rounded-lg border p-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={noSite} onChange={(e) => setNoSite(e.target.checked)} data-testid="wa-num-no-site" />
+              Mostrar no balão de WhatsApp do site
+            </label>
+            {noSite && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="wa-num-nome-site" className="text-xs">Nome que o cliente vê no site</Label>
+                <Input id="wa-num-nome-site" value={nomeSite} onChange={(e) => setNomeSite(e.target.value)} maxLength={50} placeholder={`Ex.: Curitiba - Batel (vazio usa "${nome || "o nome do número"}")`} />
+                <p className="text-xs text-muted-foreground">Com mais de um número no site, o cliente escolhe a loja e a conversa cai direto no número dela.</p>
+              </div>
+            )}
+          </div>
           <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
             {quem.length === 0 ? "Sem setor e sem responsáveis: toda a equipe vê as conversas sem dono deste número."
               : quem.length === 1 ? "Só uma pessoa atende: as conversas novas já chegam com ela."

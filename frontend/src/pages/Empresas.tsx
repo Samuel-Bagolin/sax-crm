@@ -3,7 +3,7 @@ import { LinhaAceite } from "@/components/termo/ComprovanteTermo";
 import { abrirEmpresaEmNovaAba } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BarChart3, Building, Download, LogIn, Mail, Pencil, Plus, ShieldCheck, Upload, UtensilsCrossed } from "lucide-react";
+import { BarChart3, Building, Download, FileSpreadsheet, LogIn, Mail, Pencil, Plus, ShieldCheck, Upload, UtensilsCrossed } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
 import { brl } from "@/lib/format";
 import type { Ambiente, EmpresaResumo, UsoEmpresa } from "@/lib/types";
@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { useCatalogoPlanos } from "@/lib/diferenciais";
 import { CatalogoComercial, ComercialDialog } from "@/components/empresas/Comercial";
 import { Administradores } from "@/components/empresas/Administradores";
+import { ImportarRevendas } from "@/components/empresas/ImportarRevendas";
 import { ConfigPagamentos, DadosContratada, DominiosClientes, PainelSegmentos, ServidorWhatsApp } from "@/components/empresas/Plataforma";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +54,7 @@ export default function Empresas() {
   const [comercial, setComercial] = useState<EmpresaResumo | null>(null);
   const [aba, setAba] = useState<"painel" | "empresas" | "planos" | "pagamentos" | "admins">("painel");
   const [filtroSeg, setFiltroSeg] = useState<string>("");
+  const [importar, setImportar] = useState<EmpresaResumo | null>(null);
   const [demo, setDemo] = useState<{ nome: string; emails: string[]; senha: string; site: string } | null>(null);
   const criarDemo = useMutation({
     mutationFn: () => apiPost<{ nome: string; emails: string[]; senha: string; site: string }>("/plataforma/demos/pudim"),
@@ -400,6 +402,11 @@ export default function Empresas() {
                 >
                   <Download className="h-4 w-4" /> Backup
                 </Button>
+                {e.segmento === "comercio" && (
+                  <Button variant="outline" size="sm" onClick={() => setImportar(e)} data-testid={`empresa-importar-${e.slug}`}>
+                    <FileSpreadsheet className="h-4 w-4" /> Importar planilha
+                  </Button>
+                )}
                 <label
                   className={buttonVariants({ variant: "outline", size: "sm" }) + " cursor-pointer"}
                   data-testid={`empresa-restaurar-${e.slug}`}
@@ -511,6 +518,8 @@ export default function Empresas() {
       )}
 
       <ComercialDialog empresa={comercial} onClose={() => setComercial(null)} />
+
+      {importar && <ImportarRevendas empresa={importar} onClose={() => setImportar(null)} />}
 
       <Dialog open={!!demo} onOpenChange={(o) => !o && setDemo(null)}>
         <DialogContent>

@@ -153,8 +153,9 @@ async def criar(por: str) -> dict:
     for nome, cidade, principal in LOJAS:
         uid = new_id()
         lojas[cidade] = uid
+        # WhatsApp da loja: na demonstração todas apontam para o número da SAX, para o clique funcionar na apresentação
         await banco.unidades.insert_one({"id": uid, "nome": nome, "principal": principal, "ativa": True, "endereco": None,
-                                         "cidade": cidade, "telefone": None, "whatsapp": None, "created_at": agora})
+                                         "cidade": cidade, "telefone": None, "whatsapp": "5541991998738", "created_at": agora})
 
     # ---------------------------------------------------------------- equipe
     equipe: dict[str, str] = {}  # cidade (ou "geral") -> pessoa_id do responsável
@@ -327,5 +328,35 @@ async def criar(por: str) -> dict:
         ],
         "atualizado_em": agora, "criado_por": "Demonstração",
     })
+
+    # ---------------------------------------------------------------- afiliados e cashback (vale em todas as lojas)
+    from lib import cashback as cb
+    from lib.db import definir_empresa
+
+    definir_empresa(db_name)
+    try:
+        await banco.configuracoes.update_one({"id": "singleton"}, {"$set": {"cashback": cb.CashbackConfig(
+            ativo=True, pct_indicacao=7, compras_indicacao=2, pct_compra=3, validade_dias=90, max_pct_uso=50).model_dump()}})
+        afiliados = {}
+        for nome_af, tel in [("Juliana Prado", "(41) 99876-1201"), ("Paulo Ricci", "(11) 99876-1202")]:
+            p = await cb.cliente_por_telefone(tel) or await cb.criar_cliente(nome_af, tel)
+            afiliados[nome_af] = p
+            await cb.tornar_afiliado(p)
+        lojas_doc = {u["cidade"]: u for u in await banco.unidades.find({}).to_list(10)}
+        for nome_cli, tel, cidade, valor, afiliado in [
+            ("Renata Alves", "(41) 99712-3301", "Curitiba", 189.80, "Juliana Prado"),
+            ("Bruno Teixeira", "(11) 99712-3302", "São Paulo", 99.90, "Paulo Ricci"),
+            ("Marcela Dias", "(61) 99712-3303", "Brasília", 239.70, "Juliana Prado"),
+        ]:
+            cli = await cb.criar_cliente(nome_cli, tel)
+            await cb.registrar_compra(cliente=cli, valor=valor, usar=0, unidade=lojas_doc.get(cidade),
+                                      codigo=afiliados[afiliado]["afiliado_codigo"], descricao="Demonstração", por="Demonstração")
+        # a afiliada de Curitiba usa o cashback numa compra em Brasília: o crédito vale em qualquer loja
+        ju = afiliados["Juliana Prado"]
+        disponivel = (await cb.saldo(ju["id"]))["saldo"]
+        await cb.registrar_compra(cliente=ju, valor=89.90, usar=min(disponivel, 44.95), unidade=lojas_doc.get("Brasília"),
+                                  codigo=None, descricao="Demonstração", por="Demonstração")
+    finally:
+        definir_empresa(None)
 
     return {"empresa_id": empresa.id, "nome": NOME, "emails": emails, "senha": senha, "site": SLUG_SITE}

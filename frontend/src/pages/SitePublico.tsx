@@ -22,6 +22,7 @@ import {
   Phone,
   Ruler,
   Search,
+  Gift,
   Share2,
   Star,
   X,
@@ -190,6 +191,64 @@ function Logo({ marca, claro }: { marca: MarcaSite; claro?: boolean }) {
   );
 }
 
+// ------------------------------------------------------------------ indicação (cashback) e escolha da loja no WhatsApp
+
+type Indicacao = { codigo: string; nome: string };
+const chaveRef = (slug: string) => `sax-ref-${slug}`;
+const chaveLoja = (slug: string) => `sax-loja-${slug}`;
+
+function lerLocal<T>(chave: string): T | null {
+  try {
+    const v = localStorage.getItem(chave);
+    return v ? (JSON.parse(v) as T) : null;
+  } catch {
+    return null;
+  }
+}
+function gravarLocal(chave: string, valor: unknown) {
+  try {
+    localStorage.setItem(chave, JSON.stringify(valor));
+  } catch {
+    /* modo privado: segue sem lembrar */
+  }
+}
+
+/** Código de quem indicou: vem no link (?ref=CODIGO), é conferido no servidor e fica guardado neste navegador. */
+function useIndicacao(marca: MarcaSite): Indicacao | null {
+  const slug = marca.slug ?? "";
+  const [ind, setInd] = useState<Indicacao | null>(() => (marca.cashback ? lerLocal<Indicacao>(chaveRef(slug)) : null));
+  useEffect(() => {
+    if (!marca.cashback || !slug) return;
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (!ref) return;
+    apiGet<{ valido: boolean; codigo?: string; nome?: string }>(`/publico/site/${slug}/indicacao/${encodeURIComponent(ref)}`)
+      .then((r) => {
+        if (r.valido && r.codigo) {
+          const v = { codigo: r.codigo, nome: r.nome ?? "" };
+          gravarLocal(chaveRef(slug), v);
+          setInd(v);
+        }
+      })
+      .catch(() => undefined);
+  }, [slug, marca.cashback]);
+  return marca.cashback ? ind : null;
+}
+
+function comIndicacao(marca: MarcaSite, msg: string): string {
+  const ind = marca.cashback ? lerLocal<Indicacao>(chaveRef(marca.slug ?? "")) : null;
+  return ind ? `${msg}\nCódigo de indicação: ${ind.codigo}` : msg;
+}
+
+function contatosDe(marca: MarcaSite): { nome: string; numero: string }[] {
+  if (marca.contatos_whatsapp?.length) return marca.contatos_whatsapp;
+  return marca.whatsapp ? [{ nome: marca.nome, numero: marca.whatsapp }] : [];
+}
+
+const EVENTO_LOJAS = "sax-escolher-loja";
+function abrirLojas(msg: string, id?: string) {
+  window.dispatchEvent(new CustomEvent(EVENTO_LOJAS, { detail: { msg, id } }));
+}
+
 function IconeWhats({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
@@ -199,22 +258,23 @@ function IconeWhats({ className }: { className?: string }) {
 }
 
 function BotaoWhats({ marca, imovel, item, children, className, grande }: { marca: MarcaSite; imovel?: ImovelSitePublico; item?: ItemSitePublico; children?: ReactNode; className?: string; grande?: boolean }) {
-  const href = linkWhatsapp(marca.whatsapp, item ? msgItem(marca, item) : msgWhats(marca, imovel));
+  const contatos = contatosDe(marca);
+  const msg = item ? msgItem(marca, item) : msgWhats(marca, imovel);
+  const classe = cn(
+    "inline-flex items-center justify-center gap-2 rounded-full bg-[#1fa855] font-semibold text-white transition hover:bg-[#178a45] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1fa855]",
+    grande ? "h-12 px-6 text-[15px]" : "h-10 px-4 text-sm",
+    className,
+  );
+  const conteudo = (<><IconeWhats className={grande ? "h-5 w-5" : "h-4 w-4"} />{children ?? "Chamar no WhatsApp"}</>);
+  if (contatos.length > 1) {
+    // Várias lojas: o cliente escolhe a loja e a conversa cai no número dela.
+    return <button type="button" onClick={() => abrirLojas(msg, imovel?.id ?? item?.id)} className={classe} data-testid="site-whats-escolher">{conteudo}</button>;
+  }
+  const href = linkWhatsapp(contatos[0]?.numero, comIndicacao(marca, msg));
   if (!href) return null;
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={() => registrar(marca.slug ?? "", "whatsapp", imovel?.id ?? item?.id)}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-full bg-[#1fa855] font-semibold text-white transition hover:bg-[#178a45] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1fa855]",
-        grande ? "h-12 px-6 text-[15px]" : "h-10 px-4 text-sm",
-        className,
-      )}
-    >
-      <IconeWhats className={grande ? "h-5 w-5" : "h-4 w-4"} />
-      {children ?? "Chamar no WhatsApp"}
+    <a href={href} target="_blank" rel="noopener noreferrer" onClick={() => registrar(marca.slug ?? "", "whatsapp", imovel?.id ?? item?.id)} className={classe}>
+      {conteudo}
     </a>
   );
 }
@@ -373,20 +433,163 @@ function Rodape({ marca }: { marca: MarcaSite }) {
 }
 
 function WhatsFlutuante({ marca, imovel }: { marca: MarcaSite; imovel?: ImovelSitePublico }) {
-  const href = linkWhatsapp(marca.whatsapp, msgWhats(marca, imovel));
-  if (!href) return null;
+  const slug = marca.slug ?? "";
+  const contatos = contatosDe(marca);
+  const indicacao = useIndicacao(marca);
+  const [aberto, setAberto] = useState<{ msg: string; id?: string } | null>(null);
+  const [avisoFechado, setAvisoFechado] = useState(false);
+  const ultima = lerLocal<string>(chaveLoja(slug));
+  useEffect(() => {
+    const abrir = (e: Event) => setAberto((e as CustomEvent<{ msg: string; id?: string }>).detail);
+    window.addEventListener(EVENTO_LOJAS, abrir);
+    return () => window.removeEventListener(EVENTO_LOJAS, abrir);
+  }, []);
+  useEffect(() => {
+    if (!aberto) return;
+    const fechar = (e: KeyboardEvent) => e.key === "Escape" && setAberto(null);
+    window.addEventListener("keydown", fechar);
+    return () => window.removeEventListener("keydown", fechar);
+  }, [aberto]);
+  if (!contatos.length) return null;
+  const msgPadrao = msgWhats(marca, imovel);
+  const ordenados = ultima ? [...contatos].sort((a, b) => Number(b.numero === ultima) - Number(a.numero === ultima)) : contatos;
+  const cb = marca.cashback;
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label="Conversar no WhatsApp"
-      onClick={() => registrar(marca.slug ?? "", "whatsapp", imovel?.id)}
-      className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#1fa855] text-white shadow-[0_10px_30px_-8px_rgba(31,168,85,.7)] transition hover:scale-105 hover:bg-[#178a45]"
-      data-testid="site-whats-flutuante"
-    >
-      <IconeWhats className="h-7 w-7" />
-    </a>
+    <>
+      {indicacao && cb && !avisoFechado && (
+        <div className="fixed bottom-5 left-4 right-24 z-40 flex max-w-sm items-start gap-3 rounded-2xl bg-white p-3.5 text-sm shadow-[0_12px_40px_-12px_rgba(0,0,0,.35)]" style={{ color: TINTA }} role="status" data-testid="site-aviso-indicacao">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "color-mix(in srgb, var(--p) 14%, white)", color: "var(--p)" }}><Gift className="h-4 w-4" /></span>
+          <span className="min-w-0 flex-1">
+            <b className="block">Indicação de {indicacao.nome || "um amigo"}</b>
+            <span style={{ color: CINZA }}>
+              O código {indicacao.codigo} já vai junto na sua mensagem.{cb.pct_compra > 0 ? ` Você também acumula ${cb.pct_compra}% de cashback para as próximas compras.` : ""}
+            </span>
+          </span>
+          <button type="button" onClick={() => setAvisoFechado(true)} aria-label="Fechar aviso" className="rounded-full p-1 hover:bg-black/5"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+      {aberto && contatos.length > 1 && (
+        <div className="fixed inset-0 z-50 bg-black/20 sm:bg-transparent" onClick={() => setAberto(null)}>
+          <div
+            role="dialog" aria-modal="true" aria-label="Escolha a loja para conversar no WhatsApp"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-24 right-4 left-4 max-h-[min(70vh,560px)] overflow-hidden rounded-2xl bg-white shadow-[0_24px_60px_-20px_rgba(0,0,0,.45)] sm:left-auto sm:w-[360px]"
+            style={{ color: TINTA }} data-testid="site-whats-lojas"
+          >
+            <div className="flex items-start gap-3 bg-[#1fa855] px-5 py-4 text-white">
+              <IconeWhats className="mt-0.5 h-7 w-7 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-base font-semibold">Fale com a loja mais perto de você</p>
+                <p className="text-[13px] text-white/85">Escolha a loja e a conversa abre direto no WhatsApp dela.</p>
+              </div>
+            </div>
+            <ul className="grid max-h-[calc(min(70vh,560px)-84px)] gap-2 overflow-y-auto p-3">
+              {ordenados.map((c) => (
+                <li key={c.numero + c.nome}>
+                  <a
+                    href={linkWhatsapp(c.numero, comIndicacao(marca, aberto.msg)) ?? "#"}
+                    target="_blank" rel="noopener noreferrer"
+                    onClick={() => { gravarLocal(chaveLoja(slug), c.numero); registrar(slug, "whatsapp", aberto.id); setAberto(null); }}
+                    className="flex items-center gap-3 rounded-xl border-l-4 border-[#1fa855] bg-[#f6f8f7] px-3 py-3 transition hover:bg-[#ecf6f0]"
+                    data-testid="site-whats-loja"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1fa855] text-white"><Phone className="h-4 w-4" /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[15px] font-medium">{c.nome}</span>
+                      {c.numero === ultima && <span className="text-xs" style={{ color: CINZA }}>Sua última conversa</span>}
+                    </span>
+                    <IconeWhats className="h-5 w-5 shrink-0 text-[#1fa855]" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+      {contatos.length > 1 ? (
+        <button
+          type="button"
+          aria-label={aberto ? "Fechar lista de lojas" : "Conversar no WhatsApp"}
+          aria-expanded={!!aberto}
+          onClick={() => setAberto(aberto ? null : { msg: msgPadrao, id: imovel?.id })}
+          className="fixed bottom-5 right-5 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-[#1fa855] text-white shadow-[0_10px_30px_-8px_rgba(31,168,85,.7)] transition hover:scale-105 hover:bg-[#178a45]"
+          data-testid="site-whats-flutuante"
+        >
+          {aberto ? <X className="h-7 w-7" /> : <IconeWhats className="h-7 w-7" />}
+        </button>
+      ) : (
+        <a
+          href={linkWhatsapp(contatos[0].numero, comIndicacao(marca, msgPadrao)) ?? "#"}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Conversar no WhatsApp"
+          onClick={() => registrar(slug, "whatsapp", imovel?.id)}
+          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#1fa855] text-white shadow-[0_10px_30px_-8px_rgba(31,168,85,.7)] transition hover:scale-105 hover:bg-[#178a45]"
+          data-testid="site-whats-flutuante"
+        >
+          <IconeWhats className="h-7 w-7" />
+        </a>
+      )}
+    </>
+  );
+}
+
+/** "Indique e ganhe": o cliente gera o próprio código e o link para mandar aos amigos. */
+function IndiqueGanhe({ marca }: { marca: MarcaSite }) {
+  const cb = marca.cashback;
+  const [nome, setNome] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [isca, setIsca] = useState("");
+  const gerar = useMutation({
+    mutationFn: () => apiPost<{ codigo: string; link: string | null }>(`/publico/site/${marca.slug}/indicacao`, { nome, telefone, site: isca || null }),
+  });
+  if (!cb?.autocadastro) return null;
+  const link = gerar.data ? (gerar.data.link ?? `${window.location.origin}${window.location.pathname}?ref=${gerar.data.codigo}`) : "";
+  const convite = gerar.data ? `Conhece a ${marca.nome}? Pede por aqui com o meu código ${gerar.data.codigo}: ${link}` : "";
+  const campo = "h-11 w-full rounded-xl border bg-white px-3.5 text-[15px] outline-none focus:border-[var(--p)]";
+  return (
+    <section id="indique" className="scroll-mt-20" style={{ background: "color-mix(in srgb, var(--p) 8%, white)" }} data-testid="site-indique">
+      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-2 md:items-center">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider" style={{ color: "var(--p)" }}><Gift className="h-4 w-4" /> Indique e ganhe</p>
+          <h2 className="mt-2 text-[28px] font-bold leading-tight tracking-tight sm:text-4xl" style={{ fontFamily: "var(--f-titulo)" }}>
+            Indique um amigo e ganhe {cb.pct_indicacao}% de cashback
+          </h2>
+          <p className="mt-3 max-w-md text-base" style={{ color: CINZA }}>
+            Quando quem você indicou comprar, você ganha crédito para usar nas suas próximas compras, em qualquer uma das nossas lojas. O crédito vale por {cb.validade_dias} dias.
+          </p>
+        </div>
+        <div className="rounded-2xl bg-white p-5 sm:p-6" style={{ boxShadow: `0 0 0 1px ${LINHA}` }}>
+          {gerar.data ? (
+            <div className="grid gap-3" role="status">
+              <p className="text-sm" style={{ color: CINZA }}>Seu código</p>
+              <p className="text-3xl font-bold tracking-wider" style={{ fontFamily: "var(--f-titulo)", color: "var(--p)" }} data-testid="site-indique-codigo">{gerar.data.codigo}</p>
+              <p className="break-all rounded-lg px-3 py-2 text-sm" style={{ background: NEVOA }}>{link}</p>
+              <div className="flex flex-wrap gap-2">
+                <a href={linkWhatsapp("", convite) ?? `https://wa.me/?text=${encodeURIComponent(convite)}`} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex h-11 items-center gap-2 rounded-full bg-[#1fa855] px-5 text-sm font-semibold text-white"><IconeWhats className="h-4 w-4" /> Mandar para amigos</a>
+                <button type="button" onClick={() => { void navigator.clipboard?.writeText(link); }} className="inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold" style={{ borderColor: LINHA }}>
+                  <Share2 className="h-4 w-4" /> Copiar link
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); if (nome.trim().length >= 2 && telefone.replace(/\D/g, "").length >= 10) gerar.mutate(); }} noValidate>
+              <p className="text-base font-semibold" style={{ fontFamily: "var(--f-titulo)" }}>Gere o seu link de indicação</p>
+              <input aria-label="Seu nome" placeholder="Seu nome" value={nome} onChange={(e) => setNome(e.target.value)} className={campo} style={{ borderColor: LINHA }} autoComplete="name" />
+              <input aria-label="Seu WhatsApp" placeholder="WhatsApp com DDD" value={telefone} onChange={(e) => setTelefone(e.target.value)} className={campo} style={{ borderColor: LINHA }} inputMode="tel" autoComplete="tel" />
+              <input tabIndex={-1} autoComplete="off" aria-hidden className="absolute -left-[9999px] h-0 w-0 opacity-0" value={isca} onChange={(e) => setIsca(e.target.value)} name="site" />
+              {gerar.isError && <p className="text-sm text-[#c0362c]">{detalheErro(gerar.error) ?? "Não foi possível gerar agora."}</p>}
+              <button type="submit" disabled={gerar.isPending || nome.trim().length < 2 || telefone.replace(/\D/g, "").length < 10}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-full px-6 text-[15px] font-semibold disabled:opacity-50" style={{ background: "var(--p)", color: "var(--p-txt)" }} data-testid="site-indique-gerar">
+                {gerar.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Quero meu código
+              </button>
+              <p className="text-xs" style={{ color: CINZA }}>Usamos seu WhatsApp só para identificar você no programa.</p>
+            </form>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -397,7 +600,8 @@ function FormContato({ marca, imovel, titulo, inicial }: { marca: MarcaSite; imo
   const [isca, setIsca] = useState("");
   const enviar = useMutation({
     mutationFn: () =>
-      apiPost(`/publico/site/${marca.slug}/contato`, { nome, telefone, mensagem: mensagem || null, imovel_id: imovel?.id ?? null, site: isca || null }),
+      apiPost(`/publico/site/${marca.slug}/contato`, { nome, telefone, mensagem: mensagem || null, imovel_id: imovel?.id ?? null, site: isca || null,
+        codigo_indicacao: marca.cashback ? lerLocal<Indicacao>(chaveRef(marca.slug ?? ""))?.codigo ?? null : null }),
   });
   const submeter = (e: FormEvent) => {
     e.preventDefault();
@@ -669,6 +873,8 @@ function PaginaInicial({ slug }: { slug: string }) {
         </section>
       )}
 
+      <IndiqueGanhe marca={marca} />
+
       <section id="contato" className="mx-auto grid max-w-6xl scroll-mt-20 gap-10 px-4 py-14 sm:px-6 md:grid-cols-2">
         <div>
           <h2 className="text-[28px] font-bold leading-tight tracking-tight sm:text-4xl" style={{ fontFamily: "var(--f-titulo)" }}>
@@ -814,6 +1020,8 @@ function PaginaServicos({ marca, itens, sobre }: { marca: MarcaSite; itens: Item
           </div>
         </section>
       )}
+
+      <IndiqueGanhe marca={marca} />
 
       <section id="contato" className={cn("mx-auto grid max-w-6xl scroll-mt-20 gap-10 px-4 py-14 sm:px-6", marca.formulario && "md:grid-cols-2")}>
         <div>

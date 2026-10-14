@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CalendarDays, Camera, MoreHorizontal, Plus, Power, Trash2, Pencil } from "lucide-react";
+import { CalendarDays, Camera, KeyRound, MoreHorizontal, Plus, Power, Trash2, Pencil } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut, detalheErro } from "@/lib/api";
 import { brlCompacto, primeiroNome } from "@/lib/format";
 import { CORES_EQUIPE, corDoMembro, useEquipe } from "@/lib/crm";
@@ -225,6 +225,14 @@ export default function Usuarios() {
     },
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível alterar"),
   });
+  const linkAcesso = useMutation({
+    mutationFn: (u: UsuarioPublico) => apiPost<{ link: string; email: string; enviado: boolean }>(`/usuarios/${u.id}/link-acesso`).then((r) => ({ ...r, u })),
+    onSuccess: async (r) => {
+      try { await navigator.clipboard?.writeText(r.link); } catch { /* sem permissão de cópia */ }
+      toast.success(r.enviado ? `Link enviado para ${r.email} e copiado.` : `Link de acesso de ${r.u.nome} copiado. Mande pelo WhatsApp: vale 24 horas.`);
+    },
+    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível gerar o link."),
+  });
   const excluir = useMutation({
     mutationFn: (id: string) => apiDelete(`/usuarios/${id}`),
     onSuccess: () => {
@@ -278,6 +286,11 @@ export default function Usuarios() {
               )}
               {u.id !== principal?.usuario_id && (
                 <>
+                  {u.ativo && (
+                    <DropdownMenuItem onClick={() => linkAcesso.mutate(u)}>
+                      <KeyRound className="h-4 w-4" /> Link de acesso
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => alternarAtivo.mutate(u)}>
                     <Power className="h-4 w-4" /> {u.ativo ? "Desativar acesso" : "Reativar acesso"}
                   </DropdownMenuItem>

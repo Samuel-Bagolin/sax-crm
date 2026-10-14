@@ -186,6 +186,7 @@ class ContatoSite(BaseModel):
     mensagem: str | None = Field(default=None, max_length=1500)
     imovel_id: str | None = Field(default=None, max_length=64)
     item_id: str | None = Field(default=None, max_length=64)
+    codigo_indicacao: str | None = Field(default=None, max_length=20)
     site: str | None = None  # isca para robôs: pessoas não veem este campo
 
 
@@ -774,9 +775,31 @@ def _marca(config: SiteConfig, slug: str) -> dict:
     return m
 
 
+async def contatos_whatsapp() -> list[dict]:
+    """Números do balão de WhatsApp do site: os números conectados no CRM marcados para o site (um por loja).
+    Sem número conectado, usa o WhatsApp cadastrado em cada loja (Unidades)."""
+    contatos = []
+    for c in await db.wa_conexoes.find({}).to_list(20):
+        if c.get("status") == "conectado" and c.get("numero") and c.get("no_site", True):
+            contatos.append({"nome": (c.get("nome_site") or c.get("nome") or "WhatsApp").strip(), "numero": so_digitos(c["numero"]),
+                             "ordem": int(c.get("ordem_site") or 50)})
+    if not contatos:
+        for u in await db.unidades.find({}).to_list(100):
+            if u.get("ativa", True) and len(so_digitos(u.get("whatsapp"))) >= 10:
+                contatos.append({"nome": u.get("nome") or "Loja", "numero": so_digitos(u["whatsapp"]), "ordem": 0 if u.get("principal") else 50})
+    contatos.sort(key=lambda x: (x["ordem"], x["nome"].lower()))
+    return [{"nome": c["nome"], "numero": c["numero"]} for c in contatos]
+
+
 async def _marca_publica(config: SiteConfig, slug: str, seg: str) -> dict:
+    from lib.cashback import carregar_config as cb_config
+
+    cb = await cb_config()
     return {**_marca(config, slug), "segmento": seg, "titulo_catalogo": config.titulo_catalogo or textos(seg)["catalogo"],
-            "formulario": seg in COM_FORMULARIO, "agendar_url": await _agendar_url(config)}
+            "formulario": seg in COM_FORMULARIO, "agendar_url": await _agendar_url(config),
+            "contatos_whatsapp": await contatos_whatsapp(),
+            "cashback": {"ativo": cb.ativo, "pct_indicacao": cb.pct_indicacao, "pct_compra": cb.pct_compra,
+                         "autocadastro": cb.autocadastro_site, "validade_dias": cb.validade_dias} if cb.ativo else None}
 
 
 def _item_publico(d: dict, slug: str, config: SiteConfig) -> dict:
@@ -896,6 +919,10 @@ async def contato(slug: str, input: ContatoSite, request: Request):
         partes.append(f"Interesse no {'veículo' if veiculos else 'imóvel'} {imovel.get('codigo')}: {imovel.get('titulo')}")
     if item:
         partes.append(f"Interesse em {item.get('nome')} (pelo site)")
+    if input.codigo_indicacao:
+        from lib.cashback import normalizar_codigo
+
+        partes.append(f"Código de indicação: {normalizar_codigo(input.codigo_indicacao)}")
     fin = (imovel or {}).get("finalidade")
     entrada = Entrada(
         nome=input.nome.strip(), telefone=input.telefone.strip(), email=(input.email or "").strip().lower() or None,

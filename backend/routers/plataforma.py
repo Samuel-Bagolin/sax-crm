@@ -292,3 +292,35 @@ async def criar_demo_pudim(principal: Principal = Depends(require("empresa:manag
         raise HTTPException(409, str(e))
     logger.info("demonstração do Pudim criada por %s", principal.email)
     return r
+
+
+class ImportarPlanilhaIn(BaseModel):
+    arquivo_base64: str = Field(min_length=10, max_length=12_000_000)
+    simular: bool = True
+
+
+@router.post("/empresas/{empresa_id}/importar-revendas")
+async def importar_revendas(empresa_id: str, input: ImportarPlanilhaIn, principal: Principal = Depends(require("empresa:manage"))):
+    """Traz o CRM Revendas & Eventos (planilha Google) para a empresa. `simular` mostra o que vai entrar sem gravar."""
+    import base64
+
+    from lib import importar_revendas as imp
+
+    e = await controle.empresas.find_one({"id": empresa_id})
+    if not e:
+        raise HTTPException(404, "Empresa não encontrada")
+    try:
+        conteudo = base64.b64decode(input.arquivo_base64.split(",")[-1], validate=False)
+    except Exception:
+        raise HTTPException(422, "Arquivo inválido")
+    try:
+        r = await imp.importar(e, conteudo, simular=input.simular, por=principal.nome)
+    except imp.ErroPlanilha as err:
+        raise HTTPException(422, str(err))
+    finally:
+        from lib.db import definir_empresa
+
+        definir_empresa(None)
+    if not input.simular:
+        logger.info("planilha CRM Revendas importada em %s por %s: %s", e.get("slug"), principal.email, r["contagens"])
+    return r

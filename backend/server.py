@@ -22,7 +22,7 @@ from lib.email import mail_worker
 
 # Módulos do monolito modular — um router por domínio, todos registrados sob /api
 from routers import clube, veiculos, pacientes, atendimentos, agendar_publico, unidades, cadastro, plataforma, assinatura_plataforma, site_imobiliaria, proprietarios, rotina, fotos_imovel, match, planos, portais, propostas, proprietario
-from routers import termo, whatsapp, administradores
+from routers import termo, whatsapp, administradores, cashback
 from routers import agenda, assinaturas, relatorios, google, documentos, chat, auth, config, contratos, crm, empresas, financeiro, imoveis, leads, pessoas, usuarios, operacao
 from lib.crm import garantir_crm_todas
 
@@ -206,6 +206,8 @@ api_router.include_router(plataforma.webhook_router)
 api_router.include_router(assinatura_plataforma.router)
 api_router.include_router(termo.router)
 api_router.include_router(whatsapp.router)
+api_router.include_router(cashback.router)
+api_router.include_router(cashback.publico_router)
 api_router.include_router(whatsapp.webhook_router)
 api_router.include_router(whatsapp.admin_router)
 api_router.include_router(administradores.router)

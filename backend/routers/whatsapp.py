@@ -130,7 +130,8 @@ def _saida_conversa(c: dict) -> dict:
 def _saida_conexao(c: dict) -> dict:
     return {"id": c["id"], "nome": c.get("nome"), "status": c.get("status") or "aguardando_qr", "numero": c.get("numero"),
             "perfil": c.get("perfil"), "criado_em": _iso(c.get("criado_em")), "setor_id": c.get("setor_id"),
-            "responsaveis": list(c.get("responsaveis") or [])}
+            "responsaveis": list(c.get("responsaveis") or []), "no_site": c.get("no_site", True),
+            "nome_site": c.get("nome_site"), "ordem_site": int(c.get("ordem_site") or 50)}
 
 
 def _saida_setor(s: dict) -> dict:
@@ -240,6 +241,9 @@ class ConexaoEdit(BaseModel):
     nome: str = Field(min_length=2, max_length=40)
     setor_id: str | None = None
     responsaveis: list[str] = Field(default_factory=list, max_length=50)
+    no_site: bool = True  # aparece no balão de WhatsApp do site
+    nome_site: str | None = Field(default=None, max_length=50)  # ex.: "Curitiba - Batel"
+    ordem_site: int = Field(default=50, ge=0, le=999)
 
 
 @router.put("/conexoes/{conexao_id}")
@@ -247,9 +251,13 @@ async def editar_conexao(conexao_id: str, input: ConexaoEdit, principal: Princip
     await _conexao(conexao_id)
     if input.setor_id and not await db.wa_setores.find_one({"id": input.setor_id}):
         raise HTTPException(422, "Setor não encontrado")
-    mudar = {"nome": input.nome.strip(), "setor_id": input.setor_id or None, "responsaveis": await _validar_equipe(input.responsaveis)}
+    mudar = {"nome": input.nome.strip(), "setor_id": input.setor_id or None, "responsaveis": await _validar_equipe(input.responsaveis),
+             "no_site": input.no_site, "nome_site": (input.nome_site or "").strip() or None, "ordem_site": input.ordem_site}
     await db.wa_conexoes.update_one({"id": conexao_id}, {"$set": mudar})
     await _mudou()
+    from routers.site_imobiliaria import limpar_cache
+
+    limpar_cache()
     return _saida_conexao(await _conexao(conexao_id))
 
 

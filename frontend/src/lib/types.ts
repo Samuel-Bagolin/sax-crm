@@ -952,6 +952,8 @@ export interface ImovelSitePublico {
 export type MarcaSite = Omit<SiteConfig, "ativo" | "atualizado_em" | "atualizado_por"> & {
   logo_url: string | null; capa_url: string | null; segmento?: SegmentoChave;
   titulo_catalogo?: string; formulario?: boolean; agendar_url?: string | null;
+  contatos_whatsapp?: { nome: string; numero: string }[];
+  cashback?: { ativo: boolean; pct_indicacao: number; pct_compra: number; autocadastro: boolean; validade_dias: number } | null;
 };
 
 export interface ItemSitePublico {

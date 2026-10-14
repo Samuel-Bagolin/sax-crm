@@ -150,6 +150,8 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
 - Modo escuro neutro (grafite quente, como o Claude), laranja nos destaques; a cor primária da empresa só vale no claro. A barra lateral fica igual nos dois modos.
 - Segmento comércio (restaurante e doceria): cardápio no site (itens tipo produto), funis Revenda e Eventos e encomendas, lojas como unidades.
 - Demonstração: `POST /plataforma/demos/pudim` (botão Demo do Pudim em Empresas) cria "[DEMO] O Pudim Perfeito" com dados fictícios (`lib/demo_pudim.py`). Empresa com `demo_apresentacao` não pede o termo de adesão.
+- Afiliados e cashback (`lib/cashback.py`, tela /cashback): crédito por indicação e por compra, vale em todas as lojas, uso só em compras seguintes, FIFO por vencimento. Site: `?ref=CODIGO`, "Indique e ganhe" e balão de WhatsApp com um número por loja (conexões com `no_site`, senão o WhatsApp das Unidades).
+- Importar planilha CRM Revendas (`lib/importar_revendas.py`, botão no card da empresa de comércio): nunca importa senha nem hash; cada usuário recebe link de ativação. Idempotente por `planilha_id`.
 
 ## Como trabalhar em dupla
 
