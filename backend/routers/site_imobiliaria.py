@@ -31,7 +31,7 @@ DOC_ID = "singleton"
 COR_PADRAO = "#4a03a2"
 DESTAQUE_PADRAO = "#ff7a00"
 MSG_PADRAO = "Olá! Vi o imóvel {codigo} ({titulo}) no site e quero mais informações."
-RESERVADOS = {"admin", "api", "app", "login", "site", "www", "sax", "suporte", "s", "novo", "teste-sax"}
+RESERVADOS = {"admin", "api", "app", "login", "site", "www", "sax", "suporte", "s", "novo", "teste-sax", "dominio"}
 LIMITE_MIDIA = 900 * 1024  # bytes da imagem; o documento do Firestore tem 1 MiB
 _SLUG = re.compile(r"^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$")
 _COR = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -96,6 +96,7 @@ class SiteConfig(BaseModel):
     tem_logo: bool = False
     tem_capa: bool = False
     midia_v: int = 0
+    dominio: str | None = None  # domínio próprio sem www (lib/dominios.py)
     atualizado_em: datetime | None = None
     atualizado_por: str | None = None
 
@@ -366,7 +367,7 @@ async def salvar(input: SiteConfigInput, principal: Principal = Depends(_acesso_
         await controle.sites_index.insert_one({"_id": slug, "db_name": base, "em": now_utc()})
     dados = input.model_dump()
     dados.update(slug=slug, whatsapp=so_digitos(input.whatsapp), id=DOC_ID, tem_logo=atual.tem_logo, tem_capa=atual.tem_capa,
-                 midia_v=atual.midia_v, atualizado_em=now_utc(), atualizado_por=principal.nome)
+                 midia_v=atual.midia_v, dominio=atual.dominio, atualizado_em=now_utc(), atualizado_por=principal.nome)
     for campo in ("instagram", "facebook"):
         dados[campo] = dados[campo].strip().lstrip("@")
     await db.site_imobiliaria.update_one({"id": DOC_ID}, {"$set": dados}, upsert=True)
@@ -576,6 +577,144 @@ async def importar_servicos(principal: Principal = Depends(_acesso_site)):
         novos += 1
     limpar_cache()
     return {"importados": novos}
+
+
+# --------------------------------------------------------------------------- domínio próprio
+
+
+class DominioIn(BaseModel):
+    dominio: str = Field(min_length=4, max_length=200)
+
+
+async def _situacao_dominio(config: SiteConfig) -> dict:
+    from lib import dominios
+
+    if not config.dominio:
+        return {"dominio": None, "status": "sem_dominio"}
+    principal, raiz = dominios.hosts(config.dominio)
+    cfg = await dominios.config()
+    if dominios.ativo_vercel(cfg):
+        sit = await dominios.situacao_vercel(config.dominio, cfg)
+    else:
+        sit = {"status": "aguardando_ativacao", "registros": [{"tipo": "CNAME", "nome": "www", "valor": dominios.CNAME_PADRAO},
+                                                              {"tipo": "A", "nome": "@", "valor": dominios.IP_PADRAO}]}
+    await controle[dominios.COLECAO].update_many({"base": config.dominio}, {"$set": {"status": sit["status"], "checado_em": now_utc()}})
+    return {"dominio": config.dominio, "principal": principal, "raiz": raiz, **sit}
+
+
+@router.get("/dominio")
+async def ver_dominio(principal: Principal = Depends(_acesso_site)):
+    config, _ = await carregar_config()
+    return await _situacao_dominio(config)
+
+
+@router.put("/dominio")
+async def salvar_dominio(input: DominioIn, principal: Principal = Depends(_acesso_site)):
+    from lib import dominios
+
+    _exigir_editor(principal)
+    await exigir_recurso("site")
+    config, configurado = await carregar_config()
+    if not configurado or not config.slug:
+        raise HTTPException(409, "Salve o site primeiro (endereço e WhatsApp) e depois ligue o domínio.")
+    base = dominios.normalizar(input.dominio)
+    banco = empresa_atual_db()
+    for h in dominios.hosts(base):
+        dono = await controle[dominios.COLECAO].find_one({"_id": h})
+        if dono and dono.get("db_name") != banco:
+            raise HTTPException(409, "Este domínio já está ligado ao site de outra empresa.")
+    cfg = await dominios.config()
+    if dominios.ativo_vercel(cfg):
+        erro = await dominios.cadastrar_no_vercel(base, cfg)
+        if erro:
+            raise HTTPException(409, erro)
+    if config.dominio and config.dominio != base:  # trocou de domínio: libera o antigo
+        await dominios.desindexar(config.dominio)
+        if dominios.ativo_vercel(cfg):
+            await dominios.remover_do_vercel(config.dominio, cfg)
+    empresa = await controle.empresas.find_one({"db_name": banco}, {"id": 1})
+    await dominios.indexar(base, banco, (empresa or {}).get("id"))
+    await db.site_imobiliaria.update_one({"id": DOC_ID}, {"$set": {"dominio": base, "atualizado_em": now_utc(), "atualizado_por": principal.nome}})
+    limpar_cache()
+    config.dominio = base
+    return await _situacao_dominio(config)
+
+
+@router.delete("/dominio")
+async def remover_dominio(principal: Principal = Depends(_acesso_site)):
+    from lib import dominios
+
+    _exigir_editor(principal)
+    config, _ = await carregar_config()
+    if config.dominio:
+        cfg = await dominios.config()
+        if dominios.ativo_vercel(cfg):
+            await dominios.remover_do_vercel(config.dominio, cfg)
+        await dominios.desindexar(config.dominio)
+        await db.site_imobiliaria.update_one({"id": DOC_ID}, {"$set": {"dominio": None}})
+        limpar_cache()
+    return {"dominio": None, "status": "sem_dominio"}
+
+
+@publico_router.get("/dominio/{host}")
+async def site_do_dominio(host: str):
+    """O navegador abriu o app num domínio próprio: diz de qual site ele é."""
+    from lib import dominios
+
+    indice = await dominios.resolver(host)
+    if not indice:
+        raise HTTPException(404, "Domínio sem site")
+    definir_empresa(indice["db_name"])
+    config, configurado = await carregar_config()
+    if not configurado or not config.ativo or not config.slug or not await recurso_liberado("site"):
+        raise HTTPException(404, "Site fora do ar")
+    return {"slug": config.slug, "principal": dominios.hosts(indice["base"])[0]}
+
+
+# --------------------------------------------------------------------------- domínios: configuração do plano de controle
+
+
+class VercelIn(BaseModel):
+    token: str | None = Field(default=None, max_length=200)
+    projeto: str = Field(min_length=1, max_length=100)
+    time: str = Field(default="", max_length=100)
+
+
+admin_router = APIRouter(prefix="/plataforma/dominios", tags=["plataforma"])
+
+
+@admin_router.get("")
+async def painel_dominios(principal: Principal = Depends(require("empresa:manage"))):
+    from lib import dominios
+
+    cfg = await dominios.config()
+    lista = await controle[dominios.COLECAO].find({}).to_list(500)
+    empresas = {e["id"]: e.get("nome") for e in await controle.empresas.find({}, {"id": 1, "nome": 1}).to_list(None)}
+    itens = {}
+    for d in lista:
+        if d["_id"].startswith("www."):
+            itens[d["base"]] = {"dominio": d["_id"], "empresa": empresas.get(d.get("empresa_id"), "?"), "status": d.get("status") or "aguardando"}
+    token = cfg.get("token") or ""
+    return {"configurado": dominios.ativo_vercel(cfg), "por_env": cfg["por_env"], "projeto": cfg["projeto"], "time": cfg["time"],
+            "token_mascarado": (token[:4] + "..." + token[-4:]) if len(token) > 10 else None, "dominios": sorted(itens.values(), key=lambda x: x["dominio"])}
+
+
+@admin_router.put("")
+async def salvar_vercel(input: VercelIn, principal: Principal = Depends(require("empresa:manage"))):
+    from lib import dominios
+
+    dados = {"projeto": input.projeto.strip(), "time": input.time.strip()}
+    if input.token and input.token.strip():
+        dados["token"] = input.token.strip()
+    cfg = {**(await dominios.config()), **dados}
+    if cfg.get("token"):
+        st, _ = await dominios._vercel("GET", f"/v9/projects/{cfg['projeto']}", cfg)
+        if st == 401 or st == 403:
+            raise HTTPException(422, "O Vercel recusou o token. Gere um token novo e cole de novo.")
+        if st == 404:
+            raise HTTPException(422, "Projeto não encontrado no Vercel. Confira o nome do projeto e o time.")
+    await controle.plataforma.update_one({"_id": dominios.DOC}, {"$set": {**dados, "atualizado_em": now_utc(), "atualizado_por": principal.email}}, upsert=True)
+    return await painel_dominios(principal)
 
 
 # --------------------------------------------------------------------------- página pública

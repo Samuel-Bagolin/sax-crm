@@ -207,6 +207,7 @@ api_router.include_router(assinatura_plataforma.router)
 api_router.include_router(termo.router)
 api_router.include_router(site_imobiliaria.router)
 api_router.include_router(site_imobiliaria.publico_router)
+api_router.include_router(site_imobiliaria.admin_router)
 
 # Include the router in the main app
 app.include_router(api_router)

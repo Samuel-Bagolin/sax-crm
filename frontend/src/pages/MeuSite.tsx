@@ -23,6 +23,7 @@ import { usePlano } from "@/lib/diferenciais";
 import type { FonteSite, ImovelNoSite, ItemSite, PainelSite, SiteConfig, SiteStatus } from "@/lib/types";
 import { useSegmento } from "@/lib/segmento";
 import { CatalogoSite, precoItem } from "@/components/site/CatalogoSite";
+import { DominioSite } from "@/components/site/DominioSite";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -372,7 +373,7 @@ export default function MeuSite() {
           </div>
         </TabsContent>
 
-        <TabsContent value="endereco" className="mt-4">
+        <TabsContent value="endereco" className="mt-4 grid gap-5">
           <Bloco titulo="Endereço do site" descricao="É o link que você manda para os clientes e coloca no Instagram.">
             <Campo rotulo="Endereço" id="s-slug" ajuda="Letras minúsculas, números e hífen. Se mudar, o link antigo para de funcionar.">
               <div className="flex max-w-xl items-center overflow-hidden rounded-lg border focus-within:ring-3 focus-within:ring-ring/50">
@@ -395,6 +396,7 @@ export default function MeuSite() {
               </span>
             </label>
           </Bloco>
+          <DominioSite pode={pode} temSite={p.configurado && !!p.config.slug} />
         </TabsContent>
       </Tabs>
 

@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCatalogoPlanos } from "@/lib/diferenciais";
 import { CatalogoComercial, ComercialDialog } from "@/components/empresas/Comercial";
-import { ConfigPagamentos, DadosContratada, PainelSegmentos } from "@/components/empresas/Plataforma";
+import { ConfigPagamentos, DadosContratada, DominiosClientes, PainelSegmentos } from "@/components/empresas/Plataforma";
 import { cn } from "@/lib/utils";
 
 function Uso({ rotulo, uso, limite }: { rotulo: string; uso: number; limite: number | null }) {
@@ -224,7 +224,7 @@ export default function Empresas() {
       {aba === "painel" ? (
         <PainelSegmentos onFiltrar={(sg) => { setFiltroSeg(sg); setAba("empresas"); }} />
       ) : aba === "pagamentos" ? (
-        <div className="grid gap-6"><ConfigPagamentos /><DadosContratada /></div>
+        <div className="grid gap-6"><ConfigPagamentos /><DadosContratada /><DominiosClientes /></div>
       ) : aba === "planos" ? (
         <CatalogoComercial />
       ) : (

@@ -102,7 +102,7 @@ export default function ContratoVeiculoModal({ open, onClose, leadInicial, onCri
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-x-hidden overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Novo contrato de venda</DialogTitle>
           <DialogDescription>O veículo sai do estoque como vendido e a venda entra no Financeiro. Depois é só enviar para assinar.</DialogDescription>

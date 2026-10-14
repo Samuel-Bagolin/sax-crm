@@ -62,6 +62,10 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    todos têm o catálogo `site_itens` (serviço, tratamento, produto; foto em `site_item_midia`). Textos de
    partida por segmento em `TEXTOS_SEGMENTO`. Contato do site só vira lead onde há caixa de leads
    (`COM_FORMULARIO`); nos outros o site manda para o WhatsApp e a agenda online.
+   Domínio próprio (`lib/dominios.py`): `controle.dominios_index` liga host (www e raiz) ao banco da
+   empresa; com token do Vercel (Empresas > Pagamentos ou `VERCEL_API_TOKEN`) o domínio entra sozinho
+   no projeto. No navegador, `DominioProprio` (App.tsx) pergunta `/publico/site/dominio/{host}` e, se for
+   site de cliente, mostra o site na raiz; links do site usam `raiz()` em `SitePublico.tsx`.
 4. **Banco.** O código usa a API do Motor/MongoDB. Em produção ela roda sobre o Firestore por um
    adaptador (`lib/firestore_mongo.py`): documento até 1 MiB (campos grandes são divididos sozinhos),
    cada documento lido é cobrado, então evite varrer coleções inteiras em rotas chamadas a toda hora.

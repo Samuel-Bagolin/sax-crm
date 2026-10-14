@@ -383,6 +383,7 @@ export function ComercialDialog({ empresa, onClose }: { empresa: EmpresaResumo |
   const { data: catalogo } = useCatalogoCompleto();
   const invalidar = useInvalidar();
   const [plano, setPlano] = useState("");
+  const [segFiltro, setSegFiltro] = useState("");
   const [c, setC] = useState<ComercialEmpresa>({ periodicidade: "mensal", adicionais: [], desconto_tipo: null, desconto_valor: 0, desconto_motivo: null, taxa_instalacao: null, taxa_instalacao_parcelas: 1, observacoes: null });
   const [descontoTxt, setDescontoTxt] = useState("");
   const [taxaTxt, setTaxaTxt] = useState("");
@@ -391,6 +392,7 @@ export function ComercialDialog({ empresa, onClose }: { empresa: EmpresaResumo |
     if (!empresa) return;
     const atual = empresa.comercial;
     setPlano(empresa.plano_aplicado ? empresa.plano : "");
+    setSegFiltro(empresa.segmento ?? "imobiliaria");
     setC({
       periodicidade: atual?.periodicidade ?? "mensal", adicionais: atual?.adicionais ?? [], desconto_tipo: atual?.desconto_tipo ?? null, desconto_valor: atual?.desconto_valor ?? 0,
       desconto_motivo: atual?.desconto_motivo ?? null, taxa_instalacao: atual?.taxa_instalacao ?? null, taxa_instalacao_parcelas: atual?.taxa_instalacao_parcelas ?? 1, observacoes: atual?.observacoes ?? null,
@@ -450,13 +452,17 @@ export function ComercialDialog({ empresa, onClose }: { empresa: EmpresaResumo |
           <div className="grid content-start gap-5">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-1.5">
-                <Label htmlFor="co-plano">Plano</Label>
+                <Label htmlFor="co-plano">Plano de {catalogo?.segmentos?.find((x) => x.chave === segFiltro)?.nome ?? "do segmento"}</Label>
                 <select id="co-plano" value={plano} onChange={(e) => setPlano(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm" data-testid="comercial-plano">
                   {!empresa?.plano_aplicado && <option value="">Legado (sem limites)</option>}
-                  {catalogo?.planos.filter((p) => p.ativo !== false || p.chave === empresa?.plano).map((p) => (
-                    <option key={p.chave} value={p.chave}>{p.nome}</option>
-                  ))}
+                  {plano && planoSel && (planoSel.segmento ?? "imobiliaria") !== segFiltro && <option value={plano}>{planoSel.nome} (atual)</option>}
+                  {catalogo?.planos
+                    .filter((p) => (p.ativo !== false || p.chave === empresa?.plano) && (p.segmento ?? "imobiliaria") === segFiltro)
+                    .map((p) => (
+                      <option key={p.chave} value={p.chave}>{p.nome}{p.preco_mensal != null ? `, R$ ${p.preco_mensal.toLocaleString("pt-BR")}/mês` : ""}{p.ativo === false ? " (inativo)" : ""}</option>
+                    ))}
                 </select>
+                <p className="text-xs text-muted-foreground">Só aparecem os planos do segmento desta empresa.</p>
               </div>
               <div className="grid gap-1.5">
                 <Label>Cobrança</Label>

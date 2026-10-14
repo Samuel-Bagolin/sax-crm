@@ -74,6 +74,7 @@ function ConsultorDialog({ usuario, aberto, onClose, onFoto }: { usuario: Usuari
       qc.invalidateQueries({ queryKey: ["usuarios"] });
       qc.invalidateQueries({ queryKey: ["equipe"] });
       qc.invalidateQueries({ queryKey: ["pessoas"] });
+      qc.invalidateQueries({ queryKey: ["chat"] });
       toast.success(usuario ? "Cadastro atualizado" : `Conta de ${u.nome} criada`, {
         action: usuario ? undefined : { label: "Adicionar foto", onClick: () => onFoto(u) },
       });
@@ -200,6 +201,7 @@ export default function Usuarios() {
     qc.invalidateQueries({ queryKey: ["equipe"] });
     qc.invalidateQueries({ queryKey: ["auth", "me"] });
     qc.invalidateQueries({ queryKey: ["kanban"] });
+    qc.invalidateQueries({ queryKey: ["chat"] });
   };
 
   const enviarFoto = useMutation({

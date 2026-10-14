@@ -31,6 +31,7 @@ import { brl, primeiroNome } from "@/lib/format";
 import { linkWhatsapp } from "@/lib/crm";
 import type { ImovelSitePublico, ItemSitePublico, MarcaSite } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { dominioProprio } from "@/lib/dominio";
 
 /* Site público da imobiliária. Cores, fonte, logo e textos vêm do CRM (tela Meu site).
    Paleta neutra fixa para o resto, assim qualquer marca fica legível e o site não herda o tema
@@ -78,6 +79,9 @@ function vocab(marca: MarcaSite) {
   };
 }
 
+/** No domínio próprio do cliente o site fica na raiz (/ e /imovel/X); no SAX, em /s/slug. */
+const raiz = (m: MarcaSite) => (dominioProprio.ativo ? "" : `/s/${m.slug}`);
+
 /** O site mostra estoque (imóveis ou veículos) só na imobiliária e na loja; os outros mostram o catálogo. */
 const temEstoque = (m: MarcaSite) => !m.segmento || m.segmento === "imobiliaria" || m.segmento === "veiculos";
 const REGISTRO: Record<string, string> = { imobiliaria: "CRECI", odontologia: "CRO", estetica: "Registro", terapia: "Registro" };
@@ -108,7 +112,7 @@ function msgWhats(marca: MarcaSite, i?: ImovelSitePublico): string {
   return (marca.mensagem_whatsapp || `Olá! Vi o ${V.um} {codigo} no site e quero mais informações.`)
     .replaceAll("{codigo}", i.codigo)
     .replaceAll("{titulo}", i.titulo)
-    .concat(`\n${window.location.origin}/s/${marca.slug}/imovel/${i.codigo}`);
+    .concat(`\n${window.location.origin}${raiz(marca)}/imovel/${i.codigo}`);
 }
 
 function registrar(slug: string, tipo: "visualizacao" | "whatsapp", imovel_id?: string) {
@@ -257,7 +261,7 @@ function Card({ i, marca }: { i: ImovelSitePublico; marca: MarcaSite }) {
   const p = preco(i);
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-2xl bg-white" style={{ boxShadow: `0 0 0 1px ${LINHA}` }}>
-      <Link to={`/s/${marca.slug}/imovel/${i.codigo}`} className="absolute inset-0 z-10 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--p)]" aria-label={`Ver ${i.titulo}`} />
+      <Link to={`${raiz(marca)}/imovel/${i.codigo}`} className="absolute inset-0 z-10 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--p)]" aria-label={`Ver ${i.titulo}`} />
       <div className="relative aspect-[4/3] overflow-hidden">
         <Foto src={i.foto_url} alt={i.titulo} className="h-full w-full transition-transform duration-500 group-hover:scale-[1.03]" />
         <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold" style={{ color: TINTA }}>
@@ -293,14 +297,14 @@ function Topo({ marca, sobre, catalogo }: { marca: MarcaSite; sobre?: boolean; c
   return (
     <header className="sticky top-0 z-40 border-b backdrop-blur" style={{ borderColor: "rgba(0,0,0,.08)", background: `color-mix(in srgb, var(--h) 94%, transparent)`, color: "var(--h-txt)" }} data-testid="site-topo">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:h-[72px] sm:px-6">
-        <Link to={`/s/${marca.slug}`} className="flex items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--p)]">
+        <Link to={raiz(marca) || "/"} className="flex items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--p)]">
           <Logo marca={marca} />
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
-          {temEstoque(marca) && <a href={`/s/${marca.slug}#imoveis`} className={cn(link, "sm:block")}>{vocab(marca).Uns}</a>}
-          {catalogo && <a href={`/s/${marca.slug}#catalogo`} className={cn(link, "sm:block")}>{marca.titulo_catalogo || "Serviços"}</a>}
-          {sobre && <a href={`/s/${marca.slug}#sobre`} className={cn(link, "md:block")}>Quem somos</a>}
-          <a href={`/s/${marca.slug}#contato`} className={cn(link, "lg:block")}>Contato</a>
+          {temEstoque(marca) && <a href={`${raiz(marca) || "/"}#imoveis`} className={cn(link, "sm:block")}>{vocab(marca).Uns}</a>}
+          {catalogo && <a href={`${raiz(marca) || "/"}#catalogo`} className={cn(link, "sm:block")}>{marca.titulo_catalogo || "Serviços"}</a>}
+          {sobre && <a href={`${raiz(marca) || "/"}#sobre`} className={cn(link, "md:block")}>Quem somos</a>}
+          <a href={`${raiz(marca) || "/"}#contato`} className={cn(link, "lg:block")}>Contato</a>
           <BotaoWhats marca={marca} className="ml-1">
             <span className="hidden sm:inline">Chamar no WhatsApp</span>
             <span className="sm:hidden">WhatsApp</span>
@@ -452,8 +456,10 @@ function Estado({ carregando, erro }: { carregando: boolean; erro?: unknown }) {
 
 type Finalidade = "todos" | "venda" | "locacao";
 
-export default function SitePublico() {
-  const { slug = "", codigo } = useParams();
+export default function SitePublico({ slugFixo }: { slugFixo?: string } = {}) {
+  const params = useParams();
+  const slug = slugFixo ?? params.slug ?? "";
+  const codigo = params.codigo;
   if (codigo) return <PaginaImovel slug={slug} codigo={codigo} />;
   return <PaginaInicial slug={slug} />;
 }
@@ -906,7 +912,7 @@ function PaginaImovel({ slug, codigo }: { slug: string; codigo: string }) {
 
       <main className="mx-auto max-w-6xl px-4 pb-16 pt-5 sm:px-6">
         <div className="flex items-center justify-between gap-3">
-          <Link to={`/s/${slug}`} className="inline-flex items-center gap-1.5 rounded-full py-1.5 pr-3 text-sm font-medium hover:underline" style={{ color: CINZA }}>
+          <Link to={dominioProprio.ativo ? "/" : `/s/${slug}`} className="inline-flex items-center gap-1.5 rounded-full py-1.5 pr-3 text-sm font-medium hover:underline" style={{ color: CINZA }}>
             <ArrowLeft className="h-4 w-4" /> Todos os {vocab(marca).uns}
           </Link>
           <button type="button" onClick={compartilhar} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium hover:bg-[#f3f5f8]" style={{ borderColor: LINHA }}>

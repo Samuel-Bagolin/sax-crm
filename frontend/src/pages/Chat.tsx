@@ -158,7 +158,10 @@ export default function Chat() {
   const { data: equipe = [] } = useQuery({
     queryKey: ["chat", "pessoas"],
     queryFn: () => apiGet<Participante[]>("/chat/pessoas"),
-    staleTime: 300_000,
+    // Pessoa nova da equipe aparece sem recarregar a página (também para quem já está com o chat aberto).
+    staleTime: 20_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
   const [params, setParams] = useSearchParams();
   const [ativaId, setAtivaId] = useState<string>(params.get("c") ?? "geral");

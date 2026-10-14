@@ -38,11 +38,13 @@ import Assinatura from "@/pages/Assinatura";
 import Unidades from "@/pages/Unidades";
 import SitePublico from "@/pages/SitePublico";
 import { Toaster } from "@/components/ui/sonner";
+import { DominioProprio } from "@/components/site/DominioProprio";
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
 export default function App() {
   return (
     <>
+    <DominioProprio>
       <Routes>
         <Route path="/ativar-acesso" element={<AtivarAcesso />} />
         <Route path="/login" element={<Login />} />
@@ -97,6 +99,7 @@ export default function App() {
           </Route>
         </Route>
       </Routes>
+    </DominioProprio>
       <Toaster />
     </>
   );

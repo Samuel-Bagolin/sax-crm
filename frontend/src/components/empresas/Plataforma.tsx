@@ -380,3 +380,59 @@ export function DadosContratada() {
     </section>
   );
 }
+
+interface PainelDominios {
+  configurado: boolean; por_env: boolean; projeto: string; time: string; token_mascarado: string | null;
+  dominios: { dominio: string; empresa: string; status: string }[];
+}
+const STATUS_DOM: Record<string, string> = { ativo: "Funcionando", aguardando_dns: "Esperando DNS do cliente", aguardando_ativacao: "Falta ativar no Vercel", nao_cadastrado: "Falta ativar no Vercel", erro: "Erro ao verificar", aguardando: "Aguardando" };
+
+/** Token do Vercel para ativar sozinho o domínio próprio dos clientes, e a lista de domínios. */
+export function DominiosClientes() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["dominios-plataforma"], queryFn: () => apiGet<PainelDominios>("/plataforma/dominios") });
+  const [f, setF] = useState<{ token: string; projeto: string; time: string } | null>(null);
+  const v = f ?? { token: "", projeto: q.data?.projeto || "sax-crm", time: q.data?.time ?? "" };
+  const salvar = useMutation({
+    mutationFn: () => apiPut<PainelDominios>("/plataforma/dominios", { token: v.token || null, projeto: v.projeto, time: v.time }),
+    onSuccess: (r) => { qc.setQueryData(["dominios-plataforma"], r); setF(null); toast.success("Vercel conectado. Os próximos domínios entram sozinhos."); },
+    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível salvar"),
+  });
+  const d = q.data;
+  return (
+    <section className="grid gap-4 rounded-xl border bg-card p-4 sm:p-5" data-testid="dominios-clientes">
+      <div>
+        <h2 className="font-semibold">Domínios dos clientes</h2>
+        <p className="text-sm text-muted-foreground">
+          Com o token do Vercel, o domínio que o cliente liga em Meu site é cadastrado sozinho no projeto e ganha HTTPS. Sem o token, ele aparece aqui para você cadastrar à mão no Vercel (Settings, Domains).
+        </p>
+      </div>
+      {d && (d.configurado
+        ? <p className="flex items-center gap-1.5 text-sm text-emerald-700"><ShieldCheck className="h-4 w-4" /> Vercel conectado{d.token_mascarado ? ` (token ${d.token_mascarado})` : ""}, projeto {d.projeto}.</p>
+        : <p className="flex items-center gap-1.5 text-sm text-amber-700"><AlertTriangle className="h-4 w-4" /> Ativação automática desligada.</p>)}
+      {!d?.por_env && (
+        <form className="grid gap-3 sm:grid-cols-3" onSubmit={(e) => { e.preventDefault(); salvar.mutate(); }}>
+          <div className="grid gap-1.5"><Label htmlFor="vc-token">Token do Vercel</Label>
+            <Input id="vc-token" type="password" autoComplete="off" value={v.token} placeholder={d?.token_mascarado ? "Manter o atual" : "Cole o token"} onChange={(e) => setF({ ...v, token: e.target.value })} /></div>
+          <div className="grid gap-1.5"><Label htmlFor="vc-proj">Projeto do CRM no Vercel</Label>
+            <Input id="vc-proj" value={v.projeto} onChange={(e) => setF({ ...v, projeto: e.target.value })} /></div>
+          <div className="grid gap-1.5"><Label htmlFor="vc-time">ID do time (se houver)</Label>
+            <Input id="vc-time" value={v.time} placeholder="team_..." onChange={(e) => setF({ ...v, time: e.target.value })} /></div>
+          <div className="sm:col-span-3"><Button type="submit" disabled={salvar.isPending || !f}>{salvar.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Salvar e testar</Button></div>
+        </form>
+      )}
+      <div className="overflow-hidden rounded-lg border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-left text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Domínio</th><th className="px-3 py-2 font-medium">Empresa</th><th className="px-3 py-2 font-medium">Situação</th></tr></thead>
+          <tbody className="divide-y">
+            {(d?.dominios ?? []).length === 0 && <tr><td colSpan={3} className="px-3 py-4 text-center text-muted-foreground">Nenhum cliente ligou domínio ainda.</td></tr>}
+            {(d?.dominios ?? []).map((x) => (
+              <tr key={x.dominio}><td className="px-3 py-2 font-mono text-xs">{x.dominio}</td><td className="px-3 py-2">{x.empresa}</td>
+                <td className={cn("px-3 py-2 text-xs font-medium", x.status === "ativo" ? "text-emerald-700" : "text-amber-700")}>{STATUS_DOM[x.status] ?? x.status}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
