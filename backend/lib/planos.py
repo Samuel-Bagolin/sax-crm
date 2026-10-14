@@ -30,6 +30,7 @@ RECURSOS = {
     "assinatura": "Assinatura eletrônica de contratos",
     "chat": "Chat da equipe",
     "site": "Site próprio com catálogo e WhatsApp",
+    "whatsapp": "WhatsApp no CRM: conectar números e atender pela equipe",
     "agenda_online": "Link de agendamento online por profissional",
     "prontuario": "Prontuário, anamnese e evolução",
     "odontograma": "Odontograma 3D e plano de tratamento",
@@ -37,12 +38,12 @@ RECURSOS = {
 }
 # Recursos que fazem sentido em cada segmento (o resto não aparece na tela da empresa).
 RECURSOS_SEGMENTO = {
-    "imobiliaria": ["match", "automacoes", "propostas", "portais", "proprietario", "google", "assinatura", "chat", "site"],
-    "veiculos": ["automacoes", "propostas", "google", "assinatura", "chat", "site"],
-    "odontologia": ["agenda_online", "prontuario", "odontograma", "automacoes", "google", "assinatura", "chat", "site"],
-    "terapia": ["agenda_online", "prontuario", "automacoes", "google", "assinatura", "chat", "site"],
-    "barbearia": ["agenda_online", "automacoes", "google", "chat", "site"],
-    "estetica": ["agenda_online", "prontuario", "mapa_facial", "automacoes", "google", "assinatura", "chat", "site"],
+    "imobiliaria": ["match", "automacoes", "propostas", "portais", "proprietario", "google", "assinatura", "chat", "site", "whatsapp"],
+    "veiculos": ["automacoes", "propostas", "google", "assinatura", "chat", "site", "whatsapp"],
+    "odontologia": ["agenda_online", "prontuario", "odontograma", "automacoes", "google", "assinatura", "chat", "site", "whatsapp"],
+    "terapia": ["agenda_online", "prontuario", "automacoes", "google", "assinatura", "chat", "site", "whatsapp"],
+    "barbearia": ["agenda_online", "automacoes", "google", "chat", "site", "whatsapp"],
+    "estetica": ["agenda_online", "prontuario", "mapa_facial", "automacoes", "google", "assinatura", "chat", "site", "whatsapp"],
 }
 _ROTULO_SEGMENTO = {
     ("site", "imobiliaria"): "Site com os seus imóveis e WhatsApp",
@@ -66,6 +67,8 @@ def recursos_do_segmento(segmento: str | None) -> dict[str, str]:
 _MIGRACOES_RECURSO = [
     ("site", "site", lambda d: d.get("chave") in ("profissional", "business", "enterprise")),
     ("site_todos", "site", lambda d: True),  # site próprio para todos os planos de todos os segmentos (out/2026)
+    # WhatsApp no CRM nos dois planos de cima de cada segmento (out/2026). Nos outros, vende como adicional.
+    ("whatsapp_v1", "whatsapp", lambda d: (d.get("chave") or "").split("_")[-1] in ("business", "enterprise")),
 ]
 
 TIPOS_ADICIONAL = {

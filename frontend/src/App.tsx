@@ -37,6 +37,7 @@ import Veiculos from "@/pages/Veiculos";
 import Assinatura from "@/pages/Assinatura";
 import Unidades from "@/pages/Unidades";
 import SitePublico from "@/pages/SitePublico";
+import WhatsApp from "@/pages/WhatsApp";
 import { Toaster } from "@/components/ui/sonner";
 import { DominioProprio } from "@/components/site/DominioProprio";
 
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="/proprietarios" element={<Proprietarios />} />
             <Route path="/proprietarios/:id" element={<ProprietarioDetalhe />} />
             <Route path="/meu-site" element={<MeuSite />} />
+            <Route path="/whatsapp" element={<WhatsApp />} />
             <Route path="/atendimentos" element={<Atendimentos />} />
             <Route path="/agenda-online" element={<AgendaOnline />} />
             <Route path="/pacientes" element={<Pacientes />} />

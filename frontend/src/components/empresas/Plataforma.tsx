@@ -436,3 +436,41 @@ export function DominiosClientes() {
     </section>
   );
 }
+
+interface ServidorWa { configurado: boolean; por_env: boolean; url: string; chave_mascarada: string | null; numeros: number }
+
+/** Servidor da Evolution API que segura as conexões de WhatsApp de todos os clientes. */
+export function ServidorWhatsApp() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["wa-servidor"], queryFn: () => apiGet<ServidorWa>("/plataforma/whatsapp") });
+  const [f, setF] = useState<{ url: string; apikey: string } | null>(null);
+  const v = f ?? { url: q.data?.url ?? "", apikey: "" };
+  const salvar = useMutation({
+    mutationFn: () => apiPut<ServidorWa>("/plataforma/whatsapp", { url: v.url.trim(), apikey: v.apikey.trim() || null }),
+    onSuccess: (r) => { qc.setQueryData(["wa-servidor"], r); setF(null); toast.success("Servidor do WhatsApp conectado."); },
+    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível salvar"),
+  });
+  const d = q.data;
+  return (
+    <section className="grid gap-4 rounded-xl border bg-card p-4 sm:p-5" data-testid="servidor-whatsapp">
+      <div>
+        <h2 className="font-semibold">Servidor do WhatsApp</h2>
+        <p className="text-sm text-muted-foreground">
+          Endereço e chave da Evolution API, que mantém conectados os números de WhatsApp dos clientes. O CRM testa a conexão ao salvar.
+        </p>
+      </div>
+      {d && (d.configurado
+        ? <p className="flex items-center gap-1.5 text-sm text-emerald-700"><ShieldCheck className="h-4 w-4" /> Conectado em {d.url}{d.chave_mascarada ? ` (chave ${d.chave_mascarada})` : ""}. {d.numeros} número(s) de clientes.</p>
+        : <p className="flex items-center gap-1.5 text-sm text-amber-700"><AlertTriangle className="h-4 w-4" /> Sem servidor: os clientes veem o WhatsApp como em preparação.</p>)}
+      {!d?.por_env && (
+        <form className="grid gap-3 sm:grid-cols-[1.4fr_1fr_auto] sm:items-end" onSubmit={(e) => { e.preventDefault(); salvar.mutate(); }}>
+          <div className="grid gap-1.5"><Label htmlFor="evo-url">Endereço do servidor</Label>
+            <Input id="evo-url" value={v.url} placeholder="https://whatsapp.seudominio.com.br" onChange={(e) => setF({ ...v, url: e.target.value })} /></div>
+          <div className="grid gap-1.5"><Label htmlFor="evo-key">Chave (apikey)</Label>
+            <Input id="evo-key" type="password" autoComplete="off" value={v.apikey} placeholder={d?.chave_mascarada ? "Manter a atual" : "AUTHENTICATION_API_KEY"} onChange={(e) => setF({ ...v, apikey: e.target.value })} /></div>
+          <Button type="submit" disabled={salvar.isPending || !f || v.url.length < 8}>{salvar.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Salvar e testar</Button>
+        </form>
+      )}
+    </section>
+  );
+}

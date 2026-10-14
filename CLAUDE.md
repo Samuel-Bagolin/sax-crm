@@ -109,7 +109,14 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    e não é alterado. Mudou uma vírgula do texto, suba `VERSAO`: todos aceitam de novo. Os dados da
    contratada ficam em Empresas > Pagamentos; sem eles o termo não é exigido. Comprovante em PDF na
    tela Assinatura (cliente) e no card da empresa (administrador).
-10. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
+10. **WhatsApp no CRM** (`lib/whatsapp.py`, `routers/whatsapp.py`, recurso `whatsapp`). Conexão não oficial
+   por QR via Evolution API num servidor à parte (o Vercel não segura a sessão). Servidor e chave em
+   Empresas > Pagamentos ou `EVOLUTION_URL`/`EVOLUTION_API_KEY`. `controle.whatsapp_instancias` liga a
+   instância ao banco e guarda o token do webhook (`/api/webhooks/whatsapp/{token}`). Mensagem e conversa
+   têm `_id` fixo (instância|id, instância|jid): webhook repetido não duplica. A tela consulta só
+   `wa_estado.versao` a cada 4 s. Gestor vê tudo; corretor vê as dele e as sem responsável. Contato novo
+   vira lead (origem WhatsApp) nos segmentos com Leads. Teste local: `tests/fake_evolution.py` na porta 8098.
+11. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
    `FIREBASE_SERVICE_ACCOUNT`; o resto é gerado e guardado no banco (`lib/autoconfig.py`).
 
 ## Texto da interface

@@ -177,17 +177,17 @@ PRECOS_SEGMENTO: dict[str, dict] = {
 
 _RECURSOS_TIER: dict[str, tuple[list[str], ...]] = {
     "veiculos": (["chat", "site"], ["chat", "site", "automacoes", "propostas"],
-                 ["chat", "site", "automacoes", "propostas", "assinatura", "google"], None),
+                 ["chat", "site", "automacoes", "propostas", "assinatura", "google", "whatsapp"], None),
     "odontologia": (["chat", "site", "agenda_online", "prontuario", "odontograma"],
                     ["chat", "site", "agenda_online", "prontuario", "odontograma", "automacoes"],
-                    ["chat", "site", "agenda_online", "prontuario", "odontograma", "automacoes", "assinatura", "google"], None),
+                    ["chat", "site", "agenda_online", "prontuario", "odontograma", "automacoes", "assinatura", "google", "whatsapp"], None),
     "terapia": (["chat", "site", "agenda_online", "prontuario"], ["chat", "site", "agenda_online", "prontuario", "automacoes"],
-                ["chat", "site", "agenda_online", "prontuario", "automacoes", "assinatura", "google"], None),
+                ["chat", "site", "agenda_online", "prontuario", "automacoes", "assinatura", "google", "whatsapp"], None),
     "barbearia": (["chat", "site", "agenda_online"], ["chat", "site", "agenda_online", "automacoes"],
-                  ["chat", "site", "agenda_online", "automacoes", "google"], None),
+                  ["chat", "site", "agenda_online", "automacoes", "google", "whatsapp"], None),
     "estetica": (["chat", "site", "agenda_online", "prontuario", "mapa_facial"],
                  ["chat", "site", "agenda_online", "prontuario", "mapa_facial", "automacoes"],
-                 ["chat", "site", "agenda_online", "prontuario", "mapa_facial", "automacoes", "assinatura", "google"], None),
+                 ["chat", "site", "agenda_online", "prontuario", "mapa_facial", "automacoes", "assinatura", "google", "whatsapp"], None),
 }
 
 _RESUMO_TIER = {

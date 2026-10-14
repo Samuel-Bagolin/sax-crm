@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { primeiroNome } from "@/lib/format";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { TermoGate } from "@/components/termo/TermoGate";
+import { usePlano, type Recurso } from "@/lib/diferenciais";
 import { useQuery } from "@tanstack/react-query";
 import {
+  MessageSquareText,
   Building,
   Building2,
   CalendarDays,
@@ -68,6 +70,8 @@ interface ItemNav {
   contador?: "leads" | "atividades" | "chat";
   /** Só aparece nestes segmentos. Vazio = todos. */
   segmentos?: SegmentoChave[];
+  /** Só aparece se o plano tiver este recurso. */
+  recurso?: Recurso;
 }
 
 const VENDAS: SegmentoChave[] = ["imobiliaria", "veiculos"];
@@ -89,6 +93,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
     titulo: "Comercial",
     itens: [
       { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: VENDAS },
+      { to: "/whatsapp", modulo: "crm", icon: MessageSquareText, rotulo: "WhatsApp", curto: "WhatsApp", nivel: "todos", segmentos: VENDAS, recurso: "whatsapp" },
       { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Negócios", nivel: "todos", segmentos: VENDAS },
       { to: "/agenda", modulo: "agenda", icon: CalendarDays, nivel: "todos", contador: "atividades", segmentos: VENDAS },
       { to: "/imoveis", modulo: "imoveis", icon: Building2, nivel: "todos", segmentos: ["imobiliaria"] },
@@ -103,6 +108,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
     titulo: "Atendimento",
     itens: [
       { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: COM_ORCAMENTO },
+      { to: "/whatsapp", modulo: "pacientes", icon: MessageSquareText, rotulo: "WhatsApp", curto: "WhatsApp", nivel: "todos", segmentos: SERVICOS, recurso: "whatsapp" },
       { to: "/pacientes", modulo: "pacientes", icon: Contact, rotulo: "{clientes}", nivel: "todos", segmentos: SERVICOS },
       { to: "/atendimentos", modulo: "atendimentos", icon: CalendarDays, rotulo: "Agenda", nivel: "todos", segmentos: SERVICOS },
       { to: "/clube", modulo: "atendimentos", icon: Crown, rotulo: "Assinantes", curto: "Clube", nivel: "todos", segmentos: ["barbearia"] },
@@ -142,6 +148,7 @@ const TITULOS: Record<string, string> = {
   "/chat": "Chat da equipe",
   "/proprietarios": "Proprietários",
   "/meu-site": "Meu site",
+  "/whatsapp": "WhatsApp",
   "/atendimentos": "Agenda",
   "/agenda-online": "Serviços",
   "/orcamentos": "Orçamentos",
@@ -158,7 +165,7 @@ const MODULO_POR_ROTA: Record<string, string> = {
   "/usuarios": "usuarios",
 };
 // Telas que usam a largura toda (quadro do funil, agenda da equipe, detalhe do negócio).
-const LARGURA_TOTAL = ["/crm", "/agenda", "/negocios/", "/relatorios", "/chat"];
+const LARGURA_TOTAL = ["/whatsapp", "/crm", "/agenda", "/negocios/", "/relatorios", "/chat"];
 
 function Marca({ nome, logoUrl, compacto }: { nome: string; logoUrl: string | null; compacto: boolean }) {
   return (
@@ -189,8 +196,10 @@ function Navegacao({
   const { isAdmin, isSysadmin, noControle, principal } = useAuth();
   const { moduloAtivo, titulo } = useConfig();
   const seg = useSegmento();
+  const { tem } = usePlano();
   const visivel = (item: ItemNav) => {
     if (noControle) return item.modulo === "empresas";
+    if (item.recurso && !tem(item.recurso)) return false;
     if (item.segmentos && !item.segmentos.includes(seg.chave)) return false;
     if (item.to === "/unidades" && seg.imobiliaria) return false;
     // Dentro de uma empresa (suporte) a gestão das empresas fica só na aba do plano de controle.

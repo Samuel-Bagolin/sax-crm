@@ -123,7 +123,7 @@ _PERMS_CRM_GESTOR = {
     "unidade:read", "unidade:manage", "servico:read", "servico:write", "agendamento:read", "agendamento:write",
     "paciente:read", "paciente:write", "paciente:delete", "prontuario:read", "prontuario:write",
     "tratamento:read", "tratamento:write", "veiculo:read", "veiculo:create", "veiculo:update", "veiculo:delete",
-    "assinatura_plataforma:manage",
+    "assinatura_plataforma:manage", "whatsapp:atender", "whatsapp:gerir",
 }
 _PERMS_CRM_CORRETOR = {
     "funil:read", "atividade:read", "atividade:write", "entrada:read", "entrada:write",
@@ -131,6 +131,7 @@ _PERMS_CRM_CORRETOR = {
     "unidade:read", "servico:read", "agendamento:read", "agendamento:write",
     "paciente:read", "paciente:write", "prontuario:read", "prontuario:write",
     "tratamento:read", "tratamento:write", "veiculo:read", "veiculo:create", "veiculo:update",
+    "whatsapp:atender",
 }
 
 _PERMS_ADMIN = _PERMS_CRM_GESTOR | {
