@@ -187,6 +187,30 @@ async def foto_perfil(instancia: str, jid: str) -> str | None:
     return url if isinstance(url, str) and url.startswith(("https://", "http://")) else None
 
 
+def tipo_envio(mime: str) -> str:
+    mime = (mime or "").lower()
+    return "image" if mime.startswith("image/") else "video" if mime.startswith("video/") else "document"
+
+
+async def enviar_midia(instancia: str, jid: str, *, audio: bool, base64: str, mime: str, nome: str | None = None,
+                       legenda: str | None = None) -> tuple[str | None, dict]:
+    """Áudio vai como mensagem de voz (a Evolution converte para o formato do WhatsApp); o resto como arquivo."""
+    if audio:
+        try:
+            r = await chamar("POST", f"/message/sendWhatsAppAudio/{instancia}", {"number": destino(jid), "audio": base64, "encoding": True}, timeout=55)
+        except ErroWhatsApp:
+            # Servidor sem conversor: manda o arquivo de áudio como está.
+            r = await chamar("POST", f"/message/sendMedia/{instancia}", {"number": destino(jid), "mediatype": "audio", "mimetype": mime,
+                                                                          "media": base64, "fileName": nome or "audio"}, timeout=55)
+    else:
+        corpo = {"number": destino(jid), "mediatype": tipo_envio(mime), "mimetype": mime, "media": base64, "fileName": nome or "arquivo"}
+        if legenda:
+            corpo["caption"] = legenda
+        r = await chamar("POST", f"/message/sendMedia/{instancia}", corpo, timeout=55)
+    msg_id = ((r.get("key") or {}).get("id")) if isinstance(r.get("key"), dict) else None
+    return msg_id, (r.get("message") if isinstance(r.get("message"), dict) else {})
+
+
 # ------------------------------------------------------------------ leitura do webhook
 
 

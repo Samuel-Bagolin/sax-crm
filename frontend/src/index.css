@@ -114,51 +114,53 @@
 }
 
 .dark {
-    --background: #120b22;
-    --foreground: #ece8f6;
-    --card: #1b1230;
-    --card-foreground: #ece8f6;
-    --popover: #1b1230;
-    --popover-foreground: #ece8f6;
-    --primary: #9d7bff;
-    --primary-foreground: #140b28;
-    --secondary: #261a42;
-    --secondary-foreground: #ece8f6;
-    --muted: #221739;
-    --muted-foreground: #a99fc2;
-    --accent: #2c1e50;
-    --accent-foreground: #e4dbff;
+    /* Escuro neutro e quente (grafite), como o modo escuro do Claude: superfícies sem roxo,
+       laranja SAX só nos destaques. */
+    --background: #262624;
+    --foreground: #f5f4ef;
+    --card: #30302e;
+    --card-foreground: #f5f4ef;
+    --popover: #30302e;
+    --popover-foreground: #f5f4ef;
+    --primary: #ff8a2a;
+    --primary-foreground: #1f1e1d;
+    --secondary: #3a3936;
+    --secondary-foreground: #f5f4ef;
+    --muted: #34332f;
+    --muted-foreground: #b0aea5;
+    --accent: #3d3c38;
+    --accent-foreground: #f5f4ef;
     --destructive: #f07272;
-    --border: rgba(180, 160, 230, 0.16);
-    --input: rgba(180, 160, 230, 0.24);
-    --ring: #9d7bff;
-    --chart-1: #8b6beb;
-    --chart-2: #e06a26;
-    --chart-3: #1f9c8c;
-    --chart-4: #4f86e0;
-    --chart-5: #d05a9c;
-    --chart-6: #8e9330;
+    --border: rgba(222, 220, 209, 0.14);
+    --input: rgba(222, 220, 209, 0.22);
+    --ring: #ff8a2a;
+    --chart-1: #9b84f0;
+    --chart-2: #e98a4a;
+    --chart-3: #3fb3a1;
+    --chart-4: #5f95e6;
+    --chart-5: #d773ad;
+    --chart-6: #a4a94a;
     --radius: 0.5rem;
-    --sidebar: #2a0164;
-    --sidebar-foreground: #ece6fb;
+    --sidebar: #1f1e1d;
+    --sidebar-foreground: #e9e7df;
     --sidebar-primary: #ff7a00;
-    --sidebar-primary-foreground: #1a0040;
-    --sidebar-accent: #3a0a85;
+    --sidebar-primary-foreground: #1f1e1d;
+    --sidebar-accent: #2f2e2b;
     --sidebar-accent-foreground: #ffffff;
-    --sidebar-border: #3a0a85;
+    --sidebar-border: #34332f;
     --sidebar-ring: #ff7a00;
     --atrasada: #f07272;
     --hoje: #4cc282;
     --sem-atividade: #f0bb45;
     --latao: #ff8a33;
     --sax-laranja: #ff7a00;
-    --funil-1: #3a2a66;
-    --funil-2: #4c3687;
-    --funil-3: #6043aa;
-    --funil-4: #7552cc;
-    --funil-5: #8b6beb;
-    --funil-6: #a78cf3;
-    --funil-7: #c3b0f8;
+    --funil-1: #3a3936;
+    --funil-2: #4a4843;
+    --funil-3: #5d5a53;
+    --funil-4: #7a6a55;
+    --funil-5: #a8784a;
+    --funil-6: #d6823a;
+    --funil-7: #ff8a2a;
 }
 
 @layer base {

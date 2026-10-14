@@ -82,6 +82,28 @@ async def enviar(nome: str, req: Request, apikey: str | None = Header(None)):
     return {"key": {"remoteJid": jid, "fromMe": True, "id": mid}, "message": {"conversation": b["text"]}, "messageTimestamp": int(time.time()), "status": "PENDING"}
 
 
+@app.post("/message/sendWhatsAppAudio/{nome}")
+@app.post("/message/sendMedia/{nome}")
+async def enviar_midia(nome: str, req: Request, apikey: str | None = Header(None)):
+    _auth(apikey)
+    i = INST.get(nome)
+    if not i or i["state"] != "open":
+        raise HTTPException(400, {"status": 400, "error": "Bad Request", "response": {"message": ["Connection Closed"]}})
+    b = await req.json()
+    mid = "3EB0" + uuid.uuid4().hex[:16].upper()
+    audio = req.url.path.startswith("/message/sendWhatsAppAudio")
+    ENVIADAS.append({"instancia": nome, **{k: v for k, v in b.items() if k not in ("audio", "media")}, "id": mid,
+                     "tipo": "audio" if audio else b.get("mediatype"), "bytes": len(b.get("audio") or b.get("media") or "")})
+    chave = "audioMessage" if audio else {"image": "imageMessage", "video": "videoMessage"}.get(b.get("mediatype"), "documentMessage")
+    corpo = {"url": "https://mmg.whatsapp.net/z", "mimetype": "audio/ogg; codecs=opus" if audio else b.get("mimetype"), "mediaKey": "k="}
+    if b.get("fileName") and chave == "documentMessage":
+        corpo["fileName"] = b["fileName"]
+    if b.get("caption"):
+        corpo["caption"] = b["caption"]
+    jid = b["number"] if "@" in b["number"] else f"{b['number']}@s.whatsapp.net"
+    return {"key": {"remoteJid": jid, "fromMe": True, "id": mid}, "message": {chave: corpo}, "messageTimestamp": int(time.time()), "status": "PENDING"}
+
+
 async def _disparar(nome: str, evento: str, data: dict):
     w = INST[nome]["webhook"]
     async with httpx.AsyncClient(timeout=20) as c:

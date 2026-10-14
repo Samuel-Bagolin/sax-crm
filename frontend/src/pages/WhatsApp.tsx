@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Check, CheckCheck, FileText, Inbox, Loader2, MessageSquareText, Phone, Search, Send, Smartphone, UserPlus, WifiOff } from "lucide-react";
+import { ArrowLeft, Bot, Check, CheckCheck, FileText, Inbox, Mic, Paperclip, Square, Trash2, Loader2, MessageSquareText, Phone, Search, Send, Smartphone, UserPlus, WifiOff } from "lucide-react";
 import { apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { urlApi } from "@/lib/suporte";
@@ -11,12 +11,13 @@ import { useSegmento } from "@/lib/segmento";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumerosWhatsApp, type Conexao, type Setor } from "@/components/whatsapp/NumerosWhatsApp";
+import { FluxosWhatsApp } from "@/components/whatsapp/FluxosWhatsApp";
 import { cn } from "@/lib/utils";
 
 interface Situacao { servidor_ok: boolean; liberado: boolean; pode_gerir: boolean; versao: number; conexoes: Conexao[]; setores?: Setor[] }
 interface Conversa {
   id: string; nome: string; telefone: string | null; conexao_id: string; responsavel_id: string | null; entrada_id: string | null;
-  ultima_msg: string | null; ultima_de_mim: boolean; ultima_em: string | null; nao_lidas: number;
+  ultima_msg: string | null; ultima_de_mim: boolean; ultima_em: string | null; nao_lidas: number; setor_id?: string | null; robo?: boolean;
 }
 interface Midia { tipo: "imagem" | "audio" | "video" | "documento"; mime: string | null; nome: string | null; segundos: number | null }
 interface Mensagem { id: string; texto: string; tipo: string; de_mim: boolean; em: string | null; autor: string | null; status: string | null; midia?: Midia | null }
@@ -101,7 +102,7 @@ export default function WhatsApp() {
   // Uma leitura leve a cada 8 s, só com a aba visível; a lista só recarrega quando algo mudou.
   const ver = useQuery({ queryKey: ["wa", "versao"], queryFn: () => apiGet<{ versao: number }>("/whatsapp/versao"), enabled: ok, refetchInterval: 8000, refetchIntervalInBackground: false });
   const versao = ver.data?.versao ?? 0;
-  const [aba, setAba] = useState<"conversas" | "numeros">("conversas");
+  const [aba, setAba] = useState<"conversas" | "numeros" | "fluxos">("conversas");
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [busca, setBusca] = useState("");
   const [ativa, setAtiva] = useState<string | null>(null);
@@ -152,6 +153,9 @@ export default function WhatsApp() {
           <button type="button" role="tab" aria-selected={aba === "numeros"} onClick={() => setAba("numeros")} className={cn("rounded-md px-3 py-1.5 text-sm font-medium", aba === "numeros" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} data-testid="wa-aba-numeros">
             Números <span className="ml-1 text-xs opacity-80">({conexoes.filter((c) => c.status === "conectado").length}/{conexoes.length})</span>
           </button>
+          {sit.data.pode_gerir && (
+            <button type="button" role="tab" aria-selected={aba === "fluxos"} onClick={() => setAba("fluxos")} className={cn("rounded-md px-3 py-1.5 text-sm font-medium", aba === "fluxos" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} data-testid="wa-aba-fluxos">Fluxos</button>
+          )}
         </div>
         {conexoes.some((c) => c.status !== "conectado") && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
@@ -160,7 +164,9 @@ export default function WhatsApp() {
         )}
       </div>
 
-      {aba === "numeros" ? (
+      {aba === "fluxos" ? (
+        <FluxosWhatsApp conexoes={conexoes} setores={setores} />
+      ) : aba === "numeros" ? (
         <NumerosWhatsApp conexoes={conexoes} setores={setores} podeGerir={!!sit.data.pode_gerir} />
       ) : semNumero ? (
         <Aviso icone={Smartphone} titulo="Nenhum número conectado" texto={isAdmin ? "Conecte o WhatsApp da empresa lendo um QR code com o celular. As conversas aparecem aqui na hora." : "Peça ao gestor para conectar o WhatsApp da empresa em Números."}
@@ -207,7 +213,9 @@ export default function WhatsApp() {
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                         {conexoes.length > 1 || setores.length > 0 ? <span className="font-medium text-foreground/70">{rotuloNumero(c.conexao_id)} · </span> : null}
-                        {c.responsavel_id ? nomePessoa[c.responsavel_id] ?? "Responsável" : "Sem responsável"}
+                        {c.robo ? <span className="inline-flex items-center gap-1 font-medium text-primary"><Bot className="h-3 w-3" /> Robô atendendo</span>
+                          : c.responsavel_id ? nomePessoa[c.responsavel_id] ?? "Responsável"
+                          : c.setor_id && nomeSetor[c.setor_id] ? `Setor ${nomeSetor[c.setor_id]}` : "Sem responsável"}
                       </span>
                     </span>
                   </button>
@@ -331,16 +339,122 @@ function Conversa({ c, versao, voltar, equipe, isAdmin, minhaPessoa, temLeads, c
         {desconectado ? (
           <p className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300"><WifiOff className="h-4 w-4" /> O número desta conversa está desconectado. {isAdmin ? "Leia o QR code de novo em Números." : "Avise o gestor."}</p>
         ) : (
-          <div className="flex items-end gap-2">
-            <textarea value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={tecla} rows={1} maxLength={4096} placeholder="Escreva uma mensagem. Enter envia, Shift+Enter pula linha."
-              className="max-h-40 min-h-10 flex-1 resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40" aria-label="Mensagem" data-testid="wa-texto" />
-            <Button onClick={mandar} disabled={!texto.trim() || enviar.isPending} aria-label="Enviar" className="h-10 w-10 shrink-0 p-0" data-testid="wa-enviar">
-              {enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
-          </div>
+          <Compositor c={c} texto={texto} setTexto={setTexto} tecla={tecla} mandar={mandar} enviando={enviar.isPending} />
         )}
       </footer>
     </>
+  );
+}
+
+const LIMITE_ARQUIVO = 3 * 1024 * 1024;
+
+function lerBase64(arquivo: Blob): Promise<string> {
+  return new Promise((ok, erro) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).split(",")[1] ?? "");
+    r.onerror = () => erro(r.error);
+    r.readAsDataURL(arquivo);
+  });
+}
+
+function mmss(s: number) {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** Caixa de envio: texto, arquivo (o texto vira legenda) e áudio gravado no navegador. */
+function Compositor({ c, texto, setTexto, tecla, mandar, enviando }: {
+  c: Conversa; texto: string; setTexto: (t: string) => void; tecla: (e: KeyboardEvent<HTMLTextAreaElement>) => void; mandar: () => void; enviando: boolean;
+}) {
+  const qc = useQueryClient();
+  const arquivoRef = useRef<HTMLInputElement>(null);
+  const gravador = useRef<MediaRecorder | null>(null);
+  const pedacos = useRef<Blob[]>([]);
+  const descartar = useRef(false);
+  const [gravando, setGravando] = useState(false);
+  const [segundos, setSegundos] = useState(0);
+
+  const midia = useMutation({
+    mutationFn: (corpo: { audio?: boolean; base64: string; mime: string; nome?: string; legenda?: string; segundos?: number }) =>
+      apiPost<Mensagem>(`/whatsapp/conversas/${encodeURIComponent(c.id)}/midia`, corpo),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["wa"] }),
+    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível enviar o arquivo."),
+  });
+
+  useEffect(() => {
+    if (!gravando) return;
+    const t = window.setInterval(() => setSegundos((s) => s + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [gravando]);
+  useEffect(() => () => gravador.current?.stream.getTracks().forEach((t) => t.stop()), []);
+
+  const escolherArquivo = async (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > LIMITE_ARQUIVO) { toast.error("O arquivo passa de 3 MB. Envie um menor ou mande pelo celular."); return; }
+    const legenda = texto.trim();
+    midia.mutate({ base64: await lerBase64(f), mime: f.type || "application/octet-stream", nome: f.name, legenda: legenda || undefined },
+      { onSuccess: () => legenda && setTexto("") });
+  };
+
+  const iniciar = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      toast.error("Este navegador não grava áudio. Use o Chrome ou o Safari atualizados."); return;
+    }
+    let stream: MediaStream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { toast.error("Libere o microfone para o site nas permissões do navegador."); return; }
+    const tipo = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((t) => MediaRecorder.isTypeSupported(t));
+    const rec = new MediaRecorder(stream, tipo ? { mimeType: tipo } : undefined);
+    pedacos.current = [];
+    descartar.current = false;
+    rec.ondataavailable = (e) => e.data.size && pedacos.current.push(e.data);
+    rec.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      setGravando(false);
+      if (descartar.current) return;
+      const blob = new Blob(pedacos.current, { type: rec.mimeType || "audio/webm" });
+      if (blob.size > LIMITE_ARQUIVO) { toast.error("Áudio longo demais. Grave até uns 3 minutos."); return; }
+      midia.mutate({ audio: true, base64: await lerBase64(blob), mime: (blob.type || "audio/webm").split(";")[0], segundos: segundosRef.current });
+    };
+    gravador.current = rec;
+    setSegundos(0);
+    rec.start();
+    setGravando(true);
+  };
+  const segundosRef = useRef(0);
+  segundosRef.current = segundos;
+  const parar = (enviar: boolean) => { descartar.current = !enviar; gravador.current?.stop(); };
+
+  if (gravando) {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border bg-background px-3 py-2" data-testid="wa-gravando">
+        <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+        <span className="text-sm font-medium tabular-nums">Gravando {mmss(segundos)}</span>
+        <span className="flex-1" />
+        <Button variant="ghost" size="sm" onClick={() => parar(false)}><Trash2 className="h-4 w-4" /> Descartar</Button>
+        <Button size="sm" onClick={() => parar(true)} data-testid="wa-audio-enviar"><Square className="h-3.5 w-3.5" /> Parar e enviar</Button>
+      </div>
+    );
+  }
+  const ocupado = enviando || midia.isPending;
+  return (
+    <div className="flex items-end gap-2">
+      <input ref={arquivoRef} type="file" className="hidden" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+        onChange={(e) => { escolherArquivo(e.target.files?.[0]); e.target.value = ""; }} data-testid="wa-arquivo" />
+      <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={() => arquivoRef.current?.click()} disabled={ocupado} aria-label="Enviar arquivo" title="Enviar foto, vídeo ou documento (o texto vira legenda)">
+        <Paperclip className="h-5 w-5" />
+      </Button>
+      <textarea value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={tecla} rows={1} maxLength={4096} placeholder="Escreva uma mensagem. Enter envia, Shift+Enter pula linha."
+        className="max-h-40 min-h-10 flex-1 resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40" aria-label="Mensagem" data-testid="wa-texto" />
+      {texto.trim() ? (
+        <Button onClick={mandar} disabled={ocupado} aria-label="Enviar" className="h-10 w-10 shrink-0 p-0" data-testid="wa-enviar">
+          {ocupado ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      ) : (
+        <Button onClick={iniciar} disabled={ocupado} aria-label="Gravar áudio" title="Gravar áudio" className="h-10 w-10 shrink-0 p-0" data-testid="wa-gravar">
+          {ocupado ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
+        </Button>
+      )}
+    </div>
   );
 }
 

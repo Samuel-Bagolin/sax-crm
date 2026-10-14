@@ -17,6 +17,7 @@ fica, com update condicional).
 """
 
 import hmac
+from typing import Literal
 import logging
 from datetime import datetime, timezone
 
@@ -94,11 +95,15 @@ async def _acesso(principal: Principal) -> tuple[list[dict], set[str], set[str]]
             abertos.add(c["id"])
         elif principal.pessoa_id and principal.pessoa_id in _equipe_do_numero(c, setores):
             meus.add(c["id"])
+    # Setores da pessoa ("setor:<id>"): conversa que o fluxo passou para um setor aparece para os membros.
+    meus |= {f"setor:{sid}" for sid, st in setores.items() if principal.pessoa_id and principal.pessoa_id in (st.get("membros") or [])}
     return conexoes, meus, abertos
 
 
 def _pode_ver(conv: dict, principal: Principal, meus: set[str], abertos: set[str]) -> bool:
     if principal.is_admin or (principal.pessoa_id and conv.get("responsavel_id") == principal.pessoa_id):
+        return True
+    if conv.get("setor_id") and f"setor:{conv['setor_id']}" in meus and conv.get("responsavel_id") is None:
         return True
     cid = conv.get("conexao_id")
     return cid in meus or (cid in abertos and conv.get("responsavel_id") is None)
@@ -119,7 +124,7 @@ def _saida_conversa(c: dict) -> dict:
     return {"id": c["_id"], "nome": c.get("nome") or c.get("telefone") or "Contato", "telefone": c.get("telefone"),
             "conexao_id": c.get("conexao_id"), "responsavel_id": c.get("responsavel_id"), "entrada_id": c.get("entrada_id"),
             "ultima_msg": c.get("ultima_msg"), "ultima_de_mim": bool(c.get("ultima_de_mim")), "ultima_em": _iso(c.get("ultima_em")),
-            "nao_lidas": int(c.get("nao_lidas") or 0)}
+            "nao_lidas": int(c.get("nao_lidas") or 0), "setor_id": c.get("setor_id"), "robo": bool(c.get("fluxo"))}
 
 
 def _saida_conexao(c: dict) -> dict:
@@ -298,6 +303,111 @@ async def remover_setor(setor_id: str, principal: Principal = Depends(_gerir)):
     await _mudou()
 
 
+# ------------------------------------------------------------------ fluxos de resposta automática
+
+
+class OpcaoIn(BaseModel):
+    rotulo: str = Field(min_length=1, max_length=60)
+    proximo: str | None = Field(default=None, max_length=40)
+
+
+class PassoIn(BaseModel):
+    id: str = Field(min_length=1, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")
+    tipo: Literal["mensagem", "menu", "transferir", "encerrar"]
+    texto: str = Field(default="", max_length=1500)
+    opcoes: list[OpcaoIn] = Field(default_factory=list, max_length=10)
+    proximo: str | None = Field(default=None, max_length=40)
+    destino_tipo: Literal["pessoa", "setor", "fila"] | None = None
+    destino_id: str | None = Field(default=None, max_length=64)
+
+
+class FluxoIn(BaseModel):
+    nome: str = Field(min_length=2, max_length=60)
+    ativo: bool = True
+    gatilho: Literal["nova_conversa", "palavra_chave"] = "nova_conversa"
+    palavras: list[str] = Field(default_factory=list, max_length=20)
+    conexoes: list[str] = Field(default_factory=list, max_length=LIMITE_NUMEROS + 5)
+    passos: list[PassoIn] = Field(min_length=1, max_length=40)
+
+
+async def _validar_fluxo(f: FluxoIn, ignorar: str | None = None) -> dict:
+    ids = [p.id for p in f.passos]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(422, "Há dois passos com o mesmo código.")
+    existe = set(ids)
+    setores = await _setores_dict()
+    for i, p in enumerate(f.passos, 1):
+        if p.tipo == "menu":
+            if len(p.opcoes) < 2:
+                raise HTTPException(422, f"O passo {i} é um menu: coloque pelo menos 2 opções.")
+            if any(o.proximo and o.proximo not in existe for o in p.opcoes):
+                raise HTTPException(422, f"Uma opção do passo {i} aponta para um passo que não existe.")
+        if p.tipo in ("mensagem", "menu") and not p.texto.strip():
+            raise HTTPException(422, f"Escreva a mensagem do passo {i}.")
+        if p.proximo and p.proximo not in existe:
+            raise HTTPException(422, f"O passo {i} segue para um passo que não existe.")
+        if p.tipo == "transferir":
+            if p.destino_tipo == "pessoa":
+                await _validar_equipe([p.destino_id or ""])
+            elif p.destino_tipo == "setor" and p.destino_id not in setores:
+                raise HTTPException(422, f"Escolha o setor do passo {i}.")
+    palavras = [w.strip()[:40] for w in f.palavras if w.strip()]
+    if f.gatilho == "palavra_chave" and not palavras:
+        raise HTTPException(422, "Informe ao menos uma palavra-chave.")
+    conexoes_validas = {c["id"] for c in await db.wa_conexoes.find({}).to_list(LIMITE_NUMEROS + 5)}
+    if any(c not in conexoes_validas for c in f.conexoes):
+        raise HTTPException(422, "Número não encontrado.")
+    if f.ativo and f.gatilho == "nova_conversa":
+        # Um número tem um fluxo de boas-vindas só (senão o cliente receberia dois).
+        for o in await db.wa_fluxos.find({"gatilho": "nova_conversa"}).to_list(50):
+            if o["id"] == ignorar or not o.get("ativo"):
+                continue
+            mesmos = not o.get("conexoes") or not f.conexoes or set(o["conexoes"]) & set(f.conexoes)
+            if mesmos:
+                raise HTTPException(409, f"O fluxo \"{o.get('nome')}\" já responde as conversas novas destes números. Desative um deles.")
+    dados = f.model_dump()
+    dados["palavras"] = palavras
+    return dados
+
+
+def _saida_fluxo(d: dict) -> dict:
+    return {k: d.get(k) for k in ("id", "nome", "ativo", "gatilho", "palavras", "conexoes", "passos")} | {"atualizado_em": _iso(d.get("atualizado_em"))}
+
+
+@router.get("/fluxos")
+async def listar_fluxos(principal: Principal = Depends(_gerir)):
+    docs = await db.wa_fluxos.find({}).to_list(50)
+    return sorted((_saida_fluxo(d) for d in docs), key=lambda x: (x["nome"] or "").lower())
+
+
+@router.post("/fluxos", status_code=201)
+async def criar_fluxo(input: FluxoIn, principal: Principal = Depends(_gerir)):
+    if await db.wa_fluxos.count_documents({}) >= 20:
+        raise HTTPException(409, "Limite de 20 fluxos.")
+    doc = {"id": new_id(), **await _validar_fluxo(input), "atualizado_em": now_utc(), "criado_por": principal.nome}
+    await db.wa_fluxos.insert_one(doc)
+    return _saida_fluxo(doc)
+
+
+@router.put("/fluxos/{fluxo_id}")
+async def editar_fluxo(fluxo_id: str, input: FluxoIn, principal: Principal = Depends(_gerir)):
+    if not await db.wa_fluxos.find_one({"id": fluxo_id}):
+        raise HTTPException(404, "Fluxo não encontrado")
+    dados = {**await _validar_fluxo(input, fluxo_id), "atualizado_em": now_utc()}
+    await db.wa_fluxos.update_one({"id": fluxo_id}, {"$set": dados})
+    return _saida_fluxo({"id": fluxo_id, **dados})
+
+
+@router.delete("/fluxos/{fluxo_id}", status_code=204)
+async def remover_fluxo(fluxo_id: str, principal: Principal = Depends(_gerir)):
+    if not await db.wa_fluxos.find_one({"id": fluxo_id}):
+        raise HTTPException(404, "Fluxo não encontrado")
+    await db.wa_fluxos.delete_one({"id": fluxo_id})
+    # Conversas paradas num menu deste fluxo seguem sem robô.
+    for c in [c for c in await db.wa_conversas.find({}).to_list(3000) if (c.get("fluxo") or {}).get("id") == fluxo_id]:
+        await db.wa_conversas.update_one({"_id": c["_id"]}, {"$set": {"fluxo": None}})
+
+
 # ------------------------------------------------------------------ conversas
 
 
@@ -317,6 +427,9 @@ async def conversas(filtro: str = Query("todas", pattern="^(todas|minhas|sem_res
             docs += await db.wa_conversas.find({"responsavel_id": principal.pessoa_id}).to_list(500)
         if abertos:
             docs += [d for d in await db.wa_conversas.find({"conexao_id": {"$in": sorted(abertos)}}).to_list(500) if d.get("responsavel_id") is None]
+        setores_meus = sorted(m.split(":", 1)[1] for m in meus if m.startswith("setor:"))
+        if setores_meus:
+            docs += await db.wa_conversas.find({"setor_id": {"$in": setores_meus}}).to_list(500)
         unicos = {d["_id"]: d for d in docs}
         docs = [d for d in unicos.values() if _pode_ver(d, principal, meus, abertos)]
     if filtro == "minhas":
@@ -417,8 +530,7 @@ class EnvioIn(BaseModel):
     texto: str = Field(min_length=1, max_length=4096)
 
 
-@router.post("/conversas/{conversa_id}/mensagens", status_code=201)
-async def enviar(conversa_id: str, input: EnvioIn, principal: Principal = Depends(_atender)):
+async def _preparar_envio(conversa_id: str, principal: Principal) -> tuple[dict, dict]:
     conv = await _conversa(conversa_id, principal)
     conexao = await db.wa_conexoes.find_one({"id": conv.get("conexao_id")})
     if not conexao:
@@ -430,22 +542,77 @@ async def enviar(conversa_id: str, input: EnvioIn, principal: Principal = Depend
         r = await db.wa_conversas.update_one({"_id": conversa_id, "responsavel_id": None}, {"$set": {"responsavel_id": principal.pessoa_id}})
         if r.modified_count != 1:
             raise HTTPException(409, "Outra pessoa da equipe acabou de assumir esta conversa.")
-    texto = input.texto.strip()
-    try:
-        msg_id = await wa.enviar_texto(conexao["instancia"], conv["jid"], texto)
-    except wa.ErroWhatsApp as e:
-        raise wa.http(e)
+    if conv.get("fluxo"):
+        from lib.wa_fluxos import parar
+
+        await parar(conversa_id)  # alguém da equipe assumiu: o robô para
+    return conv, conexao
+
+
+async def _gravar_enviada(conversa_id: str, conexao: dict, msg_id: str | None, texto: str, tipo: str, principal: Principal,
+                          midia: dict | None = None) -> dict:
     agora = now_utc()
     em = agora.replace(microsecond=0)  # mesma precisão do WhatsApp (segundos); a ordem fina vem de recebido_em
-    doc = {"_id": f"{conexao['instancia']}|{msg_id or new_id()}", "conversa_id": conversa_id, "texto": texto, "tipo": "texto",
-           "de_mim": True, "em": em, "recebido_em": agora, "autor": principal.nome, "status": "enviada"}
+    doc = {"_id": f"{conexao['instancia']}|{msg_id or new_id()}", "conversa_id": conversa_id, "texto": texto, "tipo": tipo,
+           "de_mim": True, "em": em, "recebido_em": agora, "autor": principal.nome, "status": "enviada", "midia": midia}
     try:
         await db.wa_mensagens.insert_one(doc)
     except DuplicateKeyError:  # o webhook da própria mensagem chegou antes
         await db.wa_mensagens.update_one({"_id": doc["_id"]}, {"$set": {"autor": principal.nome}})
     await db.wa_conversas.update_one({"_id": conversa_id}, {"$set": {"ultima_msg": texto[:160], "ultima_de_mim": True, "ultima_em": agora, "nao_lidas": 0}})
     await _mudou()
-    return {"id": doc["_id"], "texto": texto, "tipo": "texto", "de_mim": True, "em": _iso(agora), "autor": principal.nome, "status": "enviada"}
+    return {"id": doc["_id"], "texto": texto, "tipo": tipo, "de_mim": True, "em": _iso(agora), "autor": principal.nome, "status": "enviada",
+            "midia": _saida_midia(doc)}
+
+
+@router.post("/conversas/{conversa_id}/mensagens", status_code=201)
+async def enviar(conversa_id: str, input: EnvioIn, principal: Principal = Depends(_atender)):
+    conv, conexao = await _preparar_envio(conversa_id, principal)
+    texto = input.texto.strip()
+    try:
+        msg_id = await wa.enviar_texto(conexao["instancia"], conv["jid"], texto)
+    except wa.ErroWhatsApp as e:
+        raise wa.http(e)
+    return await _gravar_enviada(conversa_id, conexao, msg_id, texto, "texto", principal)
+
+
+LIMITE_ARQUIVO = 3 * 1024 * 1024  # a função do Vercel recebe até ~4,5 MB e o arquivo vai em base64
+
+
+class MidiaIn(BaseModel):
+    audio: bool = False
+    base64: str = Field(min_length=8, max_length=4_300_000)
+    mime: str = Field(min_length=3, max_length=120)
+    nome: str | None = Field(default=None, max_length=180)
+    legenda: str | None = Field(default=None, max_length=1024)
+    segundos: int | None = Field(default=None, ge=0, le=3600)
+
+
+@router.post("/conversas/{conversa_id}/midia", status_code=201)
+async def enviar_midia(conversa_id: str, input: MidiaIn, principal: Principal = Depends(_atender)):
+    """Áudio gravado no navegador ou arquivo (foto, vídeo, documento) enviado pela equipe."""
+    import base64 as b64
+
+    b = input.base64.split(",", 1)[1] if input.base64.startswith("data:") else input.base64
+    try:
+        tamanho = len(b64.b64decode(b, validate=True))
+    except ValueError:
+        raise HTTPException(422, "Arquivo inválido")
+    if tamanho > LIMITE_ARQUIVO:
+        raise HTTPException(413, "O arquivo passa de 3 MB. Envie um menor ou mande pelo celular.")
+    conv, conexao = await _preparar_envio(conversa_id, principal)
+    nome = (input.nome or "").strip()[:180] or None
+    legenda = (input.legenda or "").strip() or None
+    try:
+        msg_id, mensagem = await wa.enviar_midia(conexao["instancia"], conv["jid"], audio=input.audio, base64=b, mime=input.mime,
+                                                 nome=nome, legenda=legenda)
+    except wa.ErroWhatsApp as e:
+        raise wa.http(e)
+    tipo_tela = "audio" if input.audio else {"image": "imagem", "video": "video"}.get(wa.tipo_envio(input.mime), "documento")
+    midia = wa.midia_da_mensagem(mensagem) or {"tipo": tipo_tela, "mime": input.mime, "nome": nome, "segundos": input.segundos, "crua": None}
+    rotulo = {"audio": "Áudio", "imagem": "Foto", "video": "Vídeo"}.get(tipo_tela, "Documento")
+    texto = f"[{rotulo}] {legenda or (nome if tipo_tela == 'documento' else '') or ''}".strip()
+    return await _gravar_enviada(conversa_id, conexao, msg_id, texto, rotulo, principal, midia)
 
 
 class ResponsavelIn(BaseModel):
@@ -556,7 +723,9 @@ async def _mensagem_recebida(instancia: str, item: dict) -> None:
         return  # reenvio do webhook ou mensagem que o próprio CRM mandou
     nome = None if de_mim else (item.get("pushName") or "").strip()[:80] or None
     conv = await db.wa_conversas.find_one({"_id": conversa_id})
+    nova = False
     if not conv:
+        nova = True
         # Número com uma pessoa só (responsável ou setor de um membro): a conversa já nasce dela.
         equipe = _equipe_do_numero(conexao, await _setores_dict()) if _restrito(conexao) else set()
         novo = {"_id": conversa_id, "id": conversa_id, "jid": jid, "telefone": wa.telefone(jid), "nome": nome or wa.telefone(jid) or "Contato",
@@ -577,6 +746,13 @@ async def _mensagem_recebida(instancia: str, item: dict) -> None:
     if not de_mim:
         atualizar["$inc"] = {"nao_lidas": 1}
     await db.wa_conversas.update_one({"_id": conversa_id}, atualizar)
+    if not de_mim:
+        from lib import wa_fluxos
+
+        try:
+            await wa_fluxos.ao_receber(await db.wa_conversas.find_one({"_id": conversa_id}) or conv, conexao, texto, nova)
+        except Exception:  # robô com problema nunca derruba o recebimento da mensagem
+            logger.exception("fluxo de resposta falhou")
     await _mudou()
 
 
@@ -598,7 +774,11 @@ async def _primeiro_contato(conv: dict, texto: str) -> None:
     from routers.crm import _proximo_rodizio
 
     conexao = await db.wa_conexoes.find_one({"id": conv.get("conexao_id")}) or {}
-    if _restrito(conexao):
+    from lib.wa_fluxos import fluxo_de_entrada
+
+    if await fluxo_de_entrada(conexao.get("id") or ""):
+        corretor_id = conv.get("responsavel_id")  # o fluxo de entrada decide para quem vai (passo Transferir)
+    elif _restrito(conexao):
         # Número de setor ou com responsáveis: o rodízio geral não vale. Uma pessoa só fica com a conversa;
         # mais de uma, a conversa espera na fila do número e quem responder primeiro fica.
         equipe = _equipe_do_numero(conexao, await _setores_dict())

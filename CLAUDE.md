@@ -122,7 +122,12 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    Leads. Mídia (áudio, foto, vídeo, documento) não fica guardada: guardamos a mensagem crua (`midia.crua`, sem
    miniatura) e `/whatsapp/mensagens/{id}/midia` pede o arquivo à Evolution na hora (áudio em MP4 para tocar no
    Safari; sem ffmpeg no servidor, vai o original; limite ~4 MB do Vercel). Foto do contato em
-   `/whatsapp/conversas/{id}/foto`, renovada uma vez por dia. Teste local: `tests/fake_evolution.py` na porta 8098.
+   `/whatsapp/conversas/{id}/foto`, renovada uma vez por dia. Envio de áudio (gravado no navegador, vai como mensagem
+   de voz) e arquivo (até 3 MB, o texto vira legenda) em `/whatsapp/conversas/{id}/midia`. Fluxos de resposta
+   (`lib/wa_fluxos.py`, coleção `wa_fluxos`): passos mensagem, menu, transferir (pessoa, setor ou fila) e encerrar;
+   gatilho conversa nova (um por número) ou palavra-chave. A conversa guarda `fluxo` enquanto espera o menu; quem da
+   equipe responde para o robô. Transferir para setor grava `setor_id` na conversa e os membros passam a vê-la.
+   Teste local: `tests/fake_evolution.py` na porta 8098.
 11. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
    `FIREBASE_SERVICE_ACCOUNT`; o resto é gerado e guardado no banco (`lib/autoconfig.py`).
 12. **Marca.** A tela de login é da plataforma: sempre a marca SAX, nunca a de um cliente (`/configuracoes/publica`
@@ -142,6 +147,7 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
 - Sem travessão (—) nos textos da tela e dos e-mails. Use vírgula, ponto ou dois-pontos.
 - Mensagem de erro diz o que aconteceu e o que fazer, sem pedir desculpas.
 - Identidade SAX: roxo `#4a03a2` e laranja `#ff7a00`, logo em `components/shared/MarcaSax.tsx`.
+- Modo escuro neutro (grafite quente, como o Claude), laranja nos destaques; as cores da empresa só valem no claro.
 
 ## Como trabalhar em dupla
 

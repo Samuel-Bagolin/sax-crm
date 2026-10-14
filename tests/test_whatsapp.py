@@ -254,3 +254,115 @@ def test_audio_foto_do_contato_e_imagem(servidor, cartao_demo):
     assert outro.get(f"/whatsapp/mensagens/{m_audio['id']}/midia").status_code == 404
     assert outro.get(f"/whatsapp/conversas/{conv['id']}/foto").status_code == 404
     c.delete(f"/whatsapp/conexoes/{con['id']}")
+
+
+def test_enviar_audio_e_arquivo(servidor, cartao_demo):
+    import base64
+
+    c, _ = _cadastrar("imobiliaria", cartao_demo)
+    con, inst = _conectar(c, "Comercial")
+    numero = _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": numero, "nome": "Cliente Mídia", "texto": "Oi"})
+    conv = next(x for x in c.get("/whatsapp/conversas").json() if x["telefone"] == numero)
+    audio = base64.b64encode(b"webm-fake-audio" * 20).decode()
+    r = c.post(f"/whatsapp/conversas/{conv['id']}/midia", json={"audio": True, "base64": audio, "mime": "audio/webm", "segundos": 4})
+    assert r.status_code == 201, r.text
+    assert r.json()["midia"]["tipo"] == "audio" and r.json()["texto"] == "[Áudio]"
+    pdf = base64.b64encode(b"%PDF-1.4 fake").decode()
+    r2 = c.post(f"/whatsapp/conversas/{conv['id']}/midia", json={"base64": pdf, "mime": "application/pdf", "nome": "proposta.pdf", "legenda": "Segue a proposta"})
+    assert r2.status_code == 201 and r2.json()["midia"]["tipo"] == "documento" and "Segue a proposta" in r2.json()["texto"]
+    img = base64.b64encode(b"\x89PNG fake").decode()
+    r3 = c.post(f"/whatsapp/conversas/{conv['id']}/midia", json={"base64": img, "mime": "image/png", "nome": "fachada.png"})
+    assert r3.json()["midia"]["tipo"] == "imagem"
+    enviadas = [x for x in httpx.get(f"{EVO}/_teste/enviadas").json() if x["number"] == numero]
+    assert [x["tipo"] for x in enviadas[-3:]] == ["audio", "document", "image"]
+    assert enviadas[-2]["fileName"] == "proposta.pdf" and enviadas[-2]["caption"] == "Segue a proposta"
+    # Arquivo grande demais e conteúdo inválido.
+    grande = base64.b64encode(b"x" * (3 * 1024 * 1024 + 10)).decode()
+    assert c.post(f"/whatsapp/conversas/{conv['id']}/midia", json={"base64": grande, "mime": "application/pdf"}).status_code == 413
+    assert c.post(f"/whatsapp/conversas/{conv['id']}/midia", json={"base64": "@@@@@@@@", "mime": "application/pdf"}).status_code == 422
+    # Aparece na conversa como mensagem da equipe, com arquivo.
+    msgs = c.get(f"/whatsapp/conversas/{conv['id']}/mensagens").json()["mensagens"]
+    assert [m["midia"]["tipo"] for m in msgs if m["de_mim"]] == ["audio", "documento", "imagem"]
+    c.delete(f"/whatsapp/conexoes/{con['id']}")
+
+
+def test_fluxo_de_resposta(servidor, cartao_demo):
+    c, _ = _cadastrar("imobiliaria", cartao_demo)
+    ana, ana_id = _membro(c, "Ana")
+    bia, bia_id = _membro(c, "Bia")
+    fin = c.post("/whatsapp/setores", json={"nome": "Financeiro", "membros": [bia_id]}).json()
+    con, inst = _conectar(c, "Comercial")
+
+    fluxo = {"nome": "Boas-vindas", "gatilho": "nova_conversa", "passos": [
+        {"id": "ola", "tipo": "mensagem", "texto": "Olá! Aqui é a Imobiliária Teste.", "proximo": "menu"},
+        {"id": "menu", "tipo": "menu", "texto": "Como podemos ajudar?", "opcoes": [
+            {"rotulo": "Comprar imóvel", "proximo": "vendas"}, {"rotulo": "Segunda via de boleto", "proximo": "fin"}, {"rotulo": "Horário", "proximo": "hora"}]},
+        {"id": "vendas", "tipo": "transferir", "texto": "Vou te passar para a Ana.", "destino_tipo": "pessoa", "destino_id": ana_id},
+        {"id": "fin", "tipo": "transferir", "texto": "Vou te passar para o financeiro.", "destino_tipo": "setor", "destino_id": fin["id"]},
+        {"id": "hora", "tipo": "encerrar", "texto": "Atendemos de segunda a sexta, das 9h às 18h."},
+    ]}
+    # Validações.
+    ruim = {**fluxo, "passos": [{"id": "a", "tipo": "menu", "texto": "x", "opcoes": [{"rotulo": "1", "proximo": "nao-existe"}, {"rotulo": "2"}]}]}
+    assert c.post("/whatsapp/fluxos", json=ruim).status_code == 422
+    assert ana.post("/whatsapp/fluxos", json=fluxo).status_code == 403
+    r = c.post("/whatsapp/fluxos", json=fluxo)
+    assert r.status_code == 201, r.text
+    # Dois fluxos de boas-vindas ativos no mesmo número: recusa.
+    assert c.post("/whatsapp/fluxos", json={**fluxo, "nome": "Outro"}).status_code == 409
+    chave = c.post("/whatsapp/fluxos", json={"nome": "Endereço", "gatilho": "palavra_chave", "palavras": ["endereço", "onde fica"],
+                                            "passos": [{"id": "end", "tipo": "encerrar", "texto": "Rua das Flores, 100."}]})
+    assert chave.status_code == 201, chave.text
+
+    def enviadas(num):
+        return [x["text"] for x in httpx.get(f"{EVO}/_teste/enviadas").json() if x["number"] == num and "text" in x]
+
+    # Cliente novo recebe as boas-vindas e o menu.
+    n1 = _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n1, "nome": "Cliente Um", "texto": "Boa tarde"})
+    textos = enviadas(n1)
+    assert textos[0].startswith("Olá!") and "1. Comprar imóvel" in textos[1] and "2. Segunda via de boleto" in textos[1]
+    conv1 = next(x for x in c.get("/whatsapp/conversas").json() if x["telefone"] == n1)
+    assert conv1["robo"] is True and conv1["responsavel_id"] is None
+    # Resposta fora do menu: pede de novo.
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n1, "nome": "Cliente Um", "texto": "hã?"})
+    assert enviadas(n1)[-1].startswith("Não entendi")
+    # Escolhe 1: vai para a Ana (e o lead também).
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n1, "nome": "Cliente Um", "texto": "1"})
+    assert enviadas(n1)[-1] == "Vou te passar para a Ana."
+    conv1 = next(x for x in c.get("/whatsapp/conversas").json() if x["telefone"] == n1)
+    assert conv1["responsavel_id"] == ana_id and conv1["robo"] is False
+    lead = next(e for e in c.get("/entradas").json() if e["id"] == conv1["entrada_id"])
+    assert lead["corretor_id"] == ana_id
+    msgs = c.get(f"/whatsapp/conversas/{conv1['id']}/mensagens").json()["mensagens"]
+    assert any(m["autor"] == "Atendimento automático" for m in msgs)
+
+    # Outro cliente escolhe o financeiro pelo texto: vai para o setor (a Bia vê, a Ana não).
+    n2 = _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n2, "nome": "Cliente Dois", "texto": "Oi"})
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n2, "nome": "Cliente Dois", "texto": "segunda via de boleto"})
+    conv2 = next(x for x in c.get("/whatsapp/conversas").json() if x["telefone"] == n2)
+    assert conv2["setor_id"] == fin["id"] and conv2["responsavel_id"] is None
+    assert any(x["telefone"] == n2 for x in bia.get("/whatsapp/conversas").json())
+
+    # Quando alguém da equipe responde, o robô para.
+    n3 = _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n3, "nome": "Cliente Três", "texto": "Oi"})
+    conv3 = next(x for x in c.get("/whatsapp/conversas").json() if x["telefone"] == n3)
+    assert conv3["robo"] is True
+    c.post(f"/whatsapp/conversas/{conv3['id']}/mensagens", json={"texto": "Oi! Eu mesma vou te atender."})
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n3, "nome": "Cliente Três", "texto": "3"})
+    assert enviadas(n3)[-1] == "Oi! Eu mesma vou te atender."
+
+    # Palavra-chave a qualquer momento (sem acento também).
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n3, "nome": "Cliente Três", "texto": "Qual o endereco de vocês?"})
+    assert enviadas(n3)[-1] == "Rua das Flores, 100."
+
+    # Fluxo desativado não responde.
+    f = r.json()
+    assert c.put(f"/whatsapp/fluxos/{f['id']}", json={**fluxo, "ativo": False}).status_code == 200
+    n4 = _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n4, "nome": "Cliente Quatro", "texto": "Oi"})
+    assert enviadas(n4) == []
+    assert c.delete(f"/whatsapp/fluxos/{f['id']}").status_code == 204
+    c.delete(f"/whatsapp/conexoes/{con['id']}")

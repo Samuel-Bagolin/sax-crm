@@ -327,24 +327,27 @@ export default function AppShell() {
     return () => window.removeEventListener("keydown", h);
   }, []);
 
-  // Identidade visual do configurador: só sobrescreve quando o gestor personalizou.
+  // Identidade visual do configurador: só sobrescreve quando o gestor personalizou. No modo escuro
+  // vale o tema neutro (as cores da empresa foram escolhidas para fundo claro).
+  const { resolvedTheme } = useTheme();
+  const escuro = resolvedTheme === "dark";
   useEffect(() => {
     const raiz = document.documentElement;
     const personalizado = config.cor_primaria && !["#0b6b5a", "#0284c7", "#5b2bd0", "#4a03a2"].includes(config.cor_primaria.toLowerCase());
-    if (personalizado) raiz.style.setProperty("--primary", config.cor_primaria);
+    if (personalizado && !escuro) raiz.style.setProperty("--primary", config.cor_primaria);
     else raiz.style.removeProperty("--primary");
     document.title = config.nome_software;
-  }, [config.cor_primaria, config.nome_software]);
+  }, [config.cor_primaria, config.nome_software, escuro]);
 
   // Cores do menu lateral (Sistema → Identidade visual). Padrão: as do tema (roxo SAX + laranja).
   useEffect(() => {
     const raiz = document.documentElement;
-    const vars = ehPadrao(config.cor_menu, config.cor_menu_destaque) ? null : variaveisMenu(config.cor_menu, config.cor_menu_destaque);
+    const vars = escuro || ehPadrao(config.cor_menu, config.cor_menu_destaque) ? null : variaveisMenu(config.cor_menu, config.cor_menu_destaque);
     const nomes = Object.keys(variaveisMenu("#000000", "#000000")!);
     nomes.forEach((n) => raiz.style.removeProperty(n));
     if (vars) Object.entries(vars).forEach(([n, v]) => raiz.style.setProperty(n, v));
     return () => nomes.forEach((n) => raiz.style.removeProperty(n));
-  }, [config.cor_menu, config.cor_menu_destaque]);
+  }, [config.cor_menu, config.cor_menu_destaque, escuro]);
 
   const caminho = location.pathname;
   const segTitulo = useSegmento();
