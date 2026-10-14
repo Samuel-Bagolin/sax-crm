@@ -3,7 +3,7 @@ import { LinhaAceite } from "@/components/termo/ComprovanteTermo";
 import { abrirEmpresaEmNovaAba } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BarChart3, Building, Download, FileSpreadsheet, LogIn, Mail, Pencil, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { BarChart3, Building, Download, FileSpreadsheet, Images, LogIn, Mail, Pencil, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
 import { brl } from "@/lib/format";
 import type { Ambiente, EmpresaResumo, UsoEmpresa } from "@/lib/types";
@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { useCatalogoPlanos } from "@/lib/diferenciais";
 import { CatalogoComercial, ComercialDialog } from "@/components/empresas/Comercial";
 import { Administradores } from "@/components/empresas/Administradores";
-import { ImportarRevendas } from "@/components/empresas/ImportarRevendas";
+import { ImportarPrints, ImportarRevendas } from "@/components/empresas/ImportarRevendas";
 import { ConfigPagamentos, DadosContratada, DominiosClientes, PainelSegmentos, ServidorWhatsApp } from "@/components/empresas/Plataforma";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +55,7 @@ export default function Empresas() {
   const [aba, setAba] = useState<"painel" | "empresas" | "planos" | "pagamentos" | "admins">("painel");
   const [filtroSeg, setFiltroSeg] = useState<string>("");
   const [importar, setImportar] = useState<EmpresaResumo | null>(null);
+  const [prints, setPrints] = useState<EmpresaResumo | null>(null);
   const [limpar, setLimpar] = useState<EmpresaResumo | null>(null);
   const [limparNome, setLimparNome] = useState("");
   const [limparConfirma, setLimparConfirma] = useState("");
@@ -414,6 +415,11 @@ export default function Empresas() {
                     <FileSpreadsheet className="h-4 w-4" /> Importar planilha
                   </Button>
                 )}
+                {e.segmento === "comercio" && !e.demo_apresentacao && (
+                  <Button variant="outline" size="sm" onClick={() => setPrints(e)} data-testid={`empresa-prints-${e.slug}`}>
+                    <Images className="h-4 w-4" /> Importar prints
+                  </Button>
+                )}
                 <label
                   className={buttonVariants({ variant: "outline", size: "sm" }) + " cursor-pointer"}
                   data-testid={`empresa-restaurar-${e.slug}`}
@@ -527,6 +533,7 @@ export default function Empresas() {
       <ComercialDialog empresa={comercial} onClose={() => setComercial(null)} />
 
       {importar && <ImportarRevendas empresa={importar} onClose={() => setImportar(null)} />}
+      {prints && <ImportarPrints empresa={prints} onClose={() => setPrints(null)} />}
 
       <Dialog open={!!limpar} onOpenChange={(o) => !o && setLimpar(null)}>
         <DialogContent className="sm:max-w-md">

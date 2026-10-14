@@ -174,7 +174,7 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
     definir_empresa(empresa["db_name"])
     agora = now_utc()
     cont = {k: 0 for k in ("lojas", "supervisoes", "usuarios", "clientes", "leads", "negocios", "atividades", "historico", "pedidos",
-                           "ja_importados", "atualizados", "links_novos")}
+                           "ja_importados", "atualizados", "links_novos", "prints_pendentes")}
     avisos: list[str] = []
     acessos: list[dict] = []
     atualizar: list = []  # update_one pendentes (rodam em paralelo no fim)
@@ -193,7 +193,10 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
     pessoas_db = await banco.pessoas.find({}, {"id": 1, "nome": 1, "telefone_digitos": 1, "planilha_id": 1, "papeis": 1}).to_list(50000)
     entradas_db = {d["planilha_id"]: d for d in await banco.entradas.find({"planilha_id": {"$ne": None}}).to_list(50000) if d.get("planilha_id")}
     leads_db = {d["planilha_id"]: d for d in await banco.leads.find({"planilha_id": {"$ne": None}}).to_list(50000) if d.get("planilha_id")}
-    ativ_db = {d["planilha_id"] for d in await banco.atividades.find({"planilha_id": {"$ne": None}}, {"planilha_id": 1}).to_list(50000) if d.get("planilha_id")}
+    ativ_db = {d["planilha_id"]: d for d in await banco.atividades.find({"planilha_id": {"$ne": None}}, {"id": 1, "planilha_id": 1, "assunto": 1, "negocio_id": 1, "corretor_id": 1}).to_list(50000) if d.get("planilha_id")}
+    # prints já trazidos ou à espera do arquivo (chave: ID do arquivo no Google Drive)
+    drive_ja = {d["drive_id"] for d in await banco.anexos.find({"drive_id": {"$ne": None}}, {"drive_id": 1}).to_list(50000) if d.get("drive_id")}
+    drive_ja |= {d["drive_id"] for d in await banco.anexos_pendentes.find({}, {"drive_id": 1}).to_list(50000) if d.get("drive_id")}
     hist_db = {d["planilha_id"] for d in await banco.historico.find({"planilha_id": {"$ne": None}}, {"planilha_id": 1}).to_list(100000) if d.get("planilha_id")}
     cfg = await banco.configuracoes.find_one({"id": "singleton"}) or {}
 
@@ -497,12 +500,26 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
 
     # ------------------------------------------------------------ atividades
     novas_ativ = []
+    nomes_drive = {(l.get("ID arquivo") or "").strip(): (l.get("Nome do arquivo") or "").strip() for l in _tabela(abas, "ANEXOS")}
+    pendentes: list[dict] = []
+
+    def prints_da(linha: dict, ativ: dict) -> None:
+        for fid in re.split(r"[,;\s]+", linha.get("Anexo (ID arquivo)") or ""):
+            if not fid or fid in drive_ja:
+                continue
+            drive_ja.add(fid)
+            cont["prints_pendentes"] += 1
+            pendentes.append({"id": new_id(), "drive_id": fid, "nome": nomes_drive.get(fid) or None, "atividade_id": ativ["id"],
+                              "atividade_assunto": ativ.get("assunto"), "negocio_id": ativ.get("negocio_id"),
+                              "autor_pessoa_id": ativ.get("corretor_id"), "autor_nome": linha.get("Feito por") or None, "created_at": agora})
+
     for a in _tabela(abas, "ATIVIDADES"):
         aid = a.get("ID Atividade") or ""
         if not aid:
             continue
         if aid in ativ_db:
             cont["ja_importados"] += 1
+            prints_da(a, ativ_db[aid])
             continue
         neg = negocio_id.get(a.get("ID Negócio") or "")
         dono_neg, cliente_neg = negocio_dono.get(neg, (None, None))
@@ -522,8 +539,11 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
             "planilha_id": aid, "created_at": _data(a.get("Criada em")) or agora, "updated_at": agora,
         })
         cont["atividades"] += 1
+        prints_da(a, novas_ativ[-1])
     if not simular and novas_ativ:
         await banco.atividades.insert_many(novas_ativ)
+    if not simular and pendentes:
+        await banco.anexos_pendentes.insert_many(pendentes)
 
     # ------------------------------------------------------------ histórico
     for i, h in enumerate(_tabela(abas, "HISTORICO")):
@@ -548,6 +568,9 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
         novas_origens = list(dict.fromkeys([*(crm.get("origens") or []), *sorted(origens)]))[:60]
         novas_etiquetas = list(dict.fromkeys([*(crm.get("etiquetas") or []), *sorted(etiquetas)]))[:80]
         await banco.configuracoes.update_one({"id": "singleton"}, {"$set": {"crm.origens": novas_origens, "crm.etiquetas": novas_etiquetas}})
+    if not simular and not leads_db and not entradas_db:
+        # no CRM da planilha, contato e reunião só contavam com o print anexado (só na 1ª importação: depois vale o que a empresa escolher)
+        await banco.configuracoes.update_one({"id": "singleton"}, {"$set": {"crm.print_obrigatorio": True}})
     if atualizar:
         await _em_paralelo(atualizar)
 
@@ -583,6 +606,9 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
         cont["pedidos"] = cont.get("pedidos", 0) + 1
     if novos_ped and not simular:
         await banco.pedidos.insert_many(novos_ped)
+    if cont["prints_pendentes"]:
+        avisos.append(f"{cont['prints_pendentes']} print(s) do Google Drive estão ligados às atividades. Baixe a pasta de anexos do Drive "
+                      "e envie os arquivos em Empresas, Importar prints.")
     if any(a["link"] for a in acessos):
         avisos.append("Os links de acesso valem por 24 horas e são de uso único. Mande para cada pessoa hoje.")
     return {"simulado": simular, "contagens": cont, "acessos": acessos, "avisos": avisos}

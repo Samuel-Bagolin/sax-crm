@@ -29,7 +29,8 @@ import {
 import { apiDelete, apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
 import { BlocoPedidos, BlocoRede, PedidoDialog, ResultadoDialog, pedeResultado } from "@/components/rede/NegocioRede";
 import { brl, dataBR, dataHoraBR, primeiroNome } from "@/lib/format";
-import { ATIVIDADE, dataCurta, diasDesde, isoLocal, linkWhatsapp, useEquipe } from "@/lib/crm";
+import { ATIVIDADE, dataCurta, diasDesde, isoLocal, linkWhatsapp, useCrmConfig, useEquipe } from "@/lib/crm";
+import { PrintsPainel, TIPOS_COM_PRINT } from "@/components/crm/Prints";
 import { useAuth } from "@/lib/useAuth";
 import type { Atividade, EventoHistorico, ImovelDetalhe, Lead, NegocioDetalhe as Detalhe, Pessoa, Visita } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -105,6 +106,7 @@ export default function NegocioDetalhe() {
   const [nota, setNota] = useState("");
   const [pedidoGanho, setPedidoGanho] = useState(false);
   const [resultado, setResultado] = useState<Atividade | null>(null);
+  const { data: cfgCrm } = useCrmConfig();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["negocio", id],
@@ -143,6 +145,7 @@ export default function NegocioDetalhe() {
     qc.invalidateQueries({ queryKey: ["historico", id] });
     qc.invalidateQueries({ queryKey: ["kanban"] });
     qc.invalidateQueries({ queryKey: ["atividades"] });
+    qc.invalidateQueries({ queryKey: ["anexos", id] });
   };
 
   const acao = useMutation({
@@ -503,7 +506,7 @@ export default function NegocioDetalhe() {
                     <button
                       type="button"
                       aria-label="Concluir atividade"
-                      onClick={() => (seg.comercio && pedeResultado(a) ? setResultado(a) : concluir.mutate(a))}
+                      onClick={() => ((seg.comercio && pedeResultado(a)) || (cfgCrm?.print_obrigatorio && TIPOS_COM_PRINT.includes(a.tipo)) ? setResultado(a) : concluir.mutate(a))}
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/40 hover:border-hoje hover:bg-hoje/10"
                     />
                     <meta.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -550,6 +553,8 @@ export default function NegocioDetalhe() {
           )}
 
           {tem("match") && seg.imobiliaria && <CompativeisPainel negocioId={n.id} clienteNome={cliente?.nome} clienteTelefone={cliente?.telefone} corretorNome={resumo.corretor_nome} />}
+
+          <PrintsPainel negocioId={n.id} />
 
           <DocumentosPainel negocioId={n.id} clienteEmail={cliente?.email} clienteTelefone={cliente?.telefone} clienteNome={cliente?.nome} />
 

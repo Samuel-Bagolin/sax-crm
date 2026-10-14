@@ -198,19 +198,19 @@ PRECOS_SEGMENTO: dict[str, dict] = {
 }
 
 _RECURSOS_TIER: dict[str, tuple[list[str], ...]] = {
-    "veiculos": (["chat", "site"], ["chat", "site", "automacoes", "propostas"],
+    "veiculos": (["chat", "site", "whatsapp"], ["chat", "site", "automacoes", "propostas", "whatsapp"],
                  ["chat", "site", "automacoes", "propostas", "assinatura", "google", "whatsapp"], None),
-    "odontologia": (["chat", "site", "agenda_online", "prontuario", "odontograma"],
-                    ["chat", "site", "agenda_online", "prontuario", "odontograma", "automacoes"],
+    "odontologia": (["chat", "site", "agenda_online", "prontuario", "odontograma", "whatsapp"],
+                    ["chat", "site", "agenda_online", "prontuario", "odontograma", "automacoes", "whatsapp"],
                     ["chat", "site", "agenda_online", "prontuario", "odontograma", "automacoes", "assinatura", "google", "whatsapp"], None),
-    "terapia": (["chat", "site", "agenda_online", "prontuario"], ["chat", "site", "agenda_online", "prontuario", "automacoes"],
+    "terapia": (["chat", "site", "agenda_online", "prontuario", "whatsapp"], ["chat", "site", "agenda_online", "prontuario", "automacoes", "whatsapp"],
                 ["chat", "site", "agenda_online", "prontuario", "automacoes", "assinatura", "google", "whatsapp"], None),
-    "barbearia": (["chat", "site", "agenda_online"], ["chat", "site", "agenda_online", "automacoes"],
+    "barbearia": (["chat", "site", "agenda_online", "whatsapp"], ["chat", "site", "agenda_online", "automacoes", "whatsapp"],
                   ["chat", "site", "agenda_online", "automacoes", "google", "whatsapp"], None),
-    "estetica": (["chat", "site", "agenda_online", "prontuario", "mapa_facial"],
-                 ["chat", "site", "agenda_online", "prontuario", "mapa_facial", "automacoes"],
+    "estetica": (["chat", "site", "agenda_online", "prontuario", "mapa_facial", "whatsapp"],
+                 ["chat", "site", "agenda_online", "prontuario", "mapa_facial", "automacoes", "whatsapp"],
                  ["chat", "site", "agenda_online", "prontuario", "mapa_facial", "automacoes", "assinatura", "google", "whatsapp"], None),
-    "comercio": (["chat", "site"], ["chat", "site", "automacoes"], ["chat", "site", "automacoes", "google", "whatsapp"], None),
+    "comercio": (["chat", "site", "whatsapp"], ["chat", "site", "automacoes", "whatsapp"], ["chat", "site", "automacoes", "google", "whatsapp"], None),
 }
 
 _RESUMO_TIER = {

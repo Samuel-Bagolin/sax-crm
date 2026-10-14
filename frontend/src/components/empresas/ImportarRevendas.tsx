@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Copy, FileSpreadsheet, Loader2 } from "lucide-react";
-import { apiPost, detalheErro } from "@/lib/api";
+import { Copy, FileSpreadsheet, Images, Loader2 } from "lucide-react";
+import { apiGet, apiPost, detalheErro } from "@/lib/api";
+import { prepararPrint } from "@/components/crm/Prints";
 import { linkWhatsapp } from "@/lib/crm";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,7 +13,7 @@ interface Resultado { simulado: boolean; contagens: Record<string, number>; aces
 
 const ROTULOS: [string, string][] = [
   ["supervisoes", "Supervisões"], ["lojas", "Lojas"], ["usuarios", "Acessos novos"], ["clientes", "Clientes"], ["leads", "Leads"],
-  ["negocios", "Negócios"], ["atividades", "Atividades"], ["historico", "Histórico"], ["pedidos", "Pedidos"], ["atualizados", "Completados"], ["ja_importados", "Já importados antes"],
+  ["negocios", "Negócios"], ["atividades", "Atividades"], ["historico", "Histórico"], ["pedidos", "Pedidos"], ["prints_pendentes", "Prints a enviar"], ["atualizados", "Completados"], ["ja_importados", "Já importados antes"],
 ];
 
 function base64(arquivo: File): Promise<string> {
@@ -125,6 +126,65 @@ export function ImportarRevendas({ empresa, onClose }: { empresa: { id: string; 
             </>
           )}
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Prints do Google Drive: depois de importar a planilha, envie os arquivos da pasta de anexos (baixada do Drive).
+ *  Cada arquivo casa pelo nome com a atividade que a planilha indicou e fica visível só para o autor e a gestão. */
+export function ImportarPrints({ empresa, onClose }: { empresa: { id: string; nome: string }; onClose: () => void }) {
+  const { data: situacao, refetch } = useQuery({
+    queryKey: ["prints-pendentes", empresa.id],
+    queryFn: () => apiGet<{ pendentes: number; trazidos: number }>(`/plataforma/empresas/${empresa.id}/prints-pendentes`),
+  });
+  const [progresso, setProgresso] = useState<{ feitos: number; total: number; ok: number; fora: string[] } | null>(null);
+  const enviar = async (files: File[]) => {
+    const fora: string[] = [];
+    let ok = 0;
+    setProgresso({ feitos: 0, total: files.length, ok: 0, fora: [] });
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      try {
+        const { base64 } = await prepararPrint(f);
+        const r = await apiPost<{ ok: boolean; motivo?: string }>(`/plataforma/empresas/${empresa.id}/importar-print`, { nome: f.name, base64 });
+        if (r.ok) ok++;
+        else fora.push(`${f.name}: ${r.motivo}`);
+      } catch (e) {
+        fora.push(`${f.name}: ${e instanceof Error && !("status" in e) ? e.message : detalheErro(e) ?? "erro ao enviar"}`);
+      }
+      setProgresso({ feitos: i + 1, total: files.length, ok, fora: [...fora] });
+    }
+    refetch();
+    toast.success(`${ok} print(s) importado(s)`);
+  };
+  const rodando = !!progresso && progresso.feitos < progresso.total;
+  return (
+    <Dialog open onOpenChange={(o) => !o && !rodando && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Importar prints: {empresa.nome}</DialogTitle>
+          <DialogDescription>
+            No Google Drive, baixe a pasta de anexos do CRM (ela vem em .zip), descompacte e escolha todos os arquivos aqui.
+            Cada print vai para a atividade e o negócio indicados na planilha. Só quem fez a atividade e a gestão veem.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-lg border p-2.5"><p className="text-xs text-muted-foreground">Esperando arquivo</p><p className="text-lg font-bold" data-testid="prints-pendentes">{situacao?.pendentes ?? "…"}</p></div>
+          <div className="rounded-lg border p-2.5"><p className="text-xs text-muted-foreground">Já no sistema</p><p className="text-lg font-bold">{situacao?.trazidos ?? "…"}</p></div>
+        </div>
+        <label className={"inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted" + (rodando ? " pointer-events-none opacity-60" : "")}>
+          {rodando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Images className="h-4 w-4" />} Escolher os arquivos da pasta
+          <input type="file" accept="image/*" multiple hidden onChange={(e) => { const f = Array.from(e.target.files ?? []); e.target.value = ""; if (f.length) enviar(f); }} data-testid="prints-arquivos" />
+        </label>
+        {progresso && (
+          <div className="space-y-1 text-sm">
+            <p>{progresso.feitos} de {progresso.total} enviados, {progresso.ok} ligados a atividades.</p>
+            {progresso.fora.length > 0 && (
+              <ul className="max-h-40 list-disc overflow-y-auto pl-5 text-xs text-muted-foreground">{progresso.fora.map((f) => <li key={f}>{f}</li>)}</ul>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

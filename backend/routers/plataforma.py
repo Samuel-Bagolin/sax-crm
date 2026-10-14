@@ -327,6 +327,63 @@ async def importar_revendas(empresa_id: str, input: ImportarPlanilhaIn, principa
     return r
 
 
+class PrintIn(BaseModel):
+    nome: str = Field(min_length=1, max_length=300)
+    base64: str = Field(min_length=10, max_length=1_400_000)
+
+
+def _nome_print(nome: str) -> str:
+    import unicodedata
+
+    return unicodedata.normalize("NFC", nome.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]).strip().lower()
+
+
+@router.get("/empresas/{empresa_id}/prints-pendentes")
+async def prints_pendentes(empresa_id: str, principal: Principal = Depends(require("empresa:manage"))):
+    from lib.db import client
+
+    e = await controle.empresas.find_one({"id": empresa_id})
+    if not e:
+        raise HTTPException(404, "Empresa não encontrada")
+    banco = client[e["db_name"]]
+    return {"pendentes": await banco.anexos_pendentes.count_documents({}),
+            "trazidos": await banco.anexos.count_documents({"drive_id": {"$ne": None}})}
+
+
+@router.post("/empresas/{empresa_id}/importar-print")
+async def importar_print(empresa_id: str, input: PrintIn, principal: Principal = Depends(require("empresa:manage"))):
+    """Um arquivo da pasta de anexos do Google Drive por vez: casa pelo nome (ou pelo ID do arquivo) com o print
+    que a planilha ligou a uma atividade e guarda como anexo daquele negócio, com o mesmo autor."""
+    from lib.db import client, definir_empresa
+    from routers.anexos import gravar
+
+    e = await controle.empresas.find_one({"id": empresa_id})
+    if not e:
+        raise HTTPException(404, "Empresa não encontrada")
+    banco = client[e["db_name"]]
+    alvo = _nome_print(input.nome)
+    base = alvo.rsplit(".", 1)[0]
+    pend = None
+    async for p in banco.anexos_pendentes.find({}):
+        if (p.get("nome") and _nome_print(p["nome"]) == alvo) or (p.get("drive_id") or "").lower() in (alvo, base):
+            pend = p
+            break
+    if not pend:
+        ja = await banco.anexos.find_one({"nome_original": input.nome.strip()}, {"id": 1})
+        return {"ok": False, "motivo": "já estava no sistema" if ja else "não está ligado a nenhuma atividade da planilha"}
+    definir_empresa(e["db_name"])
+    try:
+        atividade = await banco.atividades.find_one({"id": pend.get("atividade_id")}, {"id": 1, "assunto": 1}) or \
+            {"id": pend.get("atividade_id"), "assunto": pend.get("atividade_assunto")}
+        [aid] = await gravar([{"nome": pend.get("nome") or input.nome, "base64": input.base64}], negocio_id=pend.get("negocio_id"),
+                             atividade=atividade, autor_pessoa_id=pend.get("autor_pessoa_id"), autor_nome=pend.get("autor_nome"),
+                             extra={"drive_id": pend.get("drive_id"), "nome_original": input.nome.strip()})
+        await banco.anexos_pendentes.delete_one({"id": pend["id"]})
+    finally:
+        definir_empresa(None)
+    return {"ok": True, "anexo_id": aid, "restantes": await banco.anexos_pendentes.count_documents({})}
+
+
 class LimparDemoIn(BaseModel):
     confirmar: str = Field(min_length=1, max_length=80)  # o identificador (slug) da empresa
     nome: str = Field(min_length=2, max_length=80)

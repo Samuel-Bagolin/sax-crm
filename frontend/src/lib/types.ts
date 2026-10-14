@@ -590,6 +590,7 @@ export interface CrmConfig {
   etiquetas: string[];
   distribuicao: "manual" | "rodizio";
   exige_motivo_perda: boolean;
+  print_obrigatorio?: boolean;
   sla_primeiro_contato_min: number | null;
   automacoes: Automacao[];
   repescagem_horas?: number | null;

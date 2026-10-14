@@ -13,6 +13,7 @@ import pytest
 from test_segmentos import API, _cadastrar, cartao_demo, sysadmin  # noqa: F401
 
 openpyxl = pytest.importorskip("openpyxl")
+JPG = base64.b64encode(b"\xff\xd8\xff\xe0" + b"print-ficticio" * 20).decode()
 
 
 def _planilha(s: str) -> str:
@@ -106,15 +107,36 @@ def test_etapa_com_cadeado_e_avanco_pela_atividade(rede):
     assert r.status_code == 409 and "Primeiro contato" in r.json()["detail"]
     hoje = date.today().isoformat()
     # contato sem sucesso não destrava
-    c["lb"].post("/atividades", json={"tipo": "ligacao", "assunto": "Liguei", "data": hoje, "negocio_id": neg["id"], "concluida": True, "resultado": "negativo"})
+    sem_print = c["lb"].post("/atividades", json={"tipo": "ligacao", "assunto": "Liguei", "data": hoje, "negocio_id": neg["id"], "concluida": True, "resultado": "negativo"})
+    assert sem_print.status_code == 422 and "print" in sem_print.json()["detail"]  # a planilha exigia o print
+    assert c["lb"].post("/atividades", json={"tipo": "ligacao", "assunto": "Liguei", "data": hoje, "negocio_id": neg["id"], "concluida": True,
+                                             "resultado": "negativo", "anexos": [{"nome": "ligacao.jpg", "base64": JPG}]}).status_code == 201
     assert c["lb"].post(f"/leads/{neg['id']}/mover", json={"etapa_id": e2["id"]}).status_code == 409
     a = c["lb"].post("/atividades", json={"tipo": "whatsapp", "assunto": "Falei no WhatsApp", "data": hoje, "negocio_id": neg["id"]}).json()
+    assert c["lb"].patch(f"/atividades/{a['id']}", json={"concluida": True, "resultado": "positivo"}).status_code == 422
+    assert c["lb"].post(f"/atividades/{a['id']}/anexos", json={"nome": "conversa.png", "base64": base64.b64encode(b"nao e imagem").decode()}).status_code == 415
+    assert c["lb"].post(f"/atividades/{a['id']}/anexos", json={"nome": "conversa.jpg", "base64": JPG}).status_code == 201
     assert c["lb"].patch(f"/atividades/{a['id']}", json={"concluida": True, "resultado": "positivo"}).status_code == 200
     assert c["lb"].get(f"/leads/{neg['id']}").json()["negocio"]["etapa_id"] == e2["id"]  # avançou sozinho
     # pular a reunião não pode
     assert c["lb"].post(f"/leads/{neg['id']}/mover", json={"etapa_id": funil["etapas"][3]["id"]}).status_code == 409
     # voltar sempre pode
     assert c["lb"].post(f"/leads/{neg['id']}/mover", json={"etapa_id": funil["etapas"][0]["id"]}).status_code == 200
+
+
+def test_print_so_quem_anexou_e_a_gestao_veem(rede):
+    gestor, c, _, _ = rede
+    neg = next(n for n in c["lb"].get("/leads").json() if n["nome"] == "Café Norte")
+    meus = c["lb"].get(f"/leads/{neg['id']}/anexos").json()
+    assert len(meus) == 2 and {m["nome"] for m in meus} == {"ligacao.jpg", "conversa.jpg"}
+    assert len(gestor.get(f"/leads/{neg['id']}/anexos").json()) == 2
+    img = gestor.get(meus[0]["url"].removeprefix("/api"))
+    assert img.status_code == 200 and img.content.startswith(b"\xff\xd8\xff")
+    # o supervisor enxerga o negócio, mas não os prints de outra pessoa
+    assert c["supn"].get(f"/leads/{neg['id']}").status_code == 200
+    assert c["supn"].get(f"/leads/{neg['id']}/anexos").json() == []
+    assert c["supn"].get(meus[0]["url"].removeprefix("/api")).status_code == 404
+    assert c["supn"].delete(meus[0]["url"].removeprefix("/api")).status_code == 404
 
 
 def test_lead_novo_do_meta_cai_na_supervisao_pelo_pixel(rede):
@@ -151,3 +173,19 @@ def test_comissao_dois_primeiros_pedidos_e_aprovacao(rede):
     assert gestor.post("/pedidos/pagar", json={"ids": ids}).json()["ok"] == 2
     # cancelar o 1º não mexe em comissão já paga; o 3º continua sem comissão (paga fica congelada)
     assert gestor.post(f"/pedidos/{ids[0]}/cancelar").status_code == 409
+
+
+def test_edicao_em_massa_respeita_area_e_cadeado(rede):
+    gestor, c, _, _ = rede
+    negs = {n["nome"]: n for n in gestor.get("/leads").json()}
+    ids = [negs["Lanche Sem Sup"]["id"], negs["Bar Sul"]["id"]]
+    funil = next(f for f in gestor.get("/funis").json() if f["id"] == negs["Lanche Sem Sup"]["funil_id"])
+    # etapa com cadeado: sem contato registrado, ninguém pula
+    r = gestor.post("/leads/massa", json={"ids": ids, "acao": "etapa", "etapa_id": funil["etapas"][2]["id"]}).json()
+    assert r["ok"] == 0 and len(r["falhas"]) == 2
+    r = gestor.post("/leads/massa", json={"ids": ids, "acao": "etiqueta", "etiqueta": "Campanha"}).json()
+    assert r["ok"] == 2
+    # o líder não exclui em massa no segmento de rede; sem digitar EXCLUIR nem o gestor
+    assert gestor.post("/leads/massa", json={"ids": ids, "acao": "excluir"}).status_code == 422
+    r = c["lb"].post("/leads/massa", json={"ids": [negs["Café Norte"]["id"]], "acao": "excluir", "confirmacao": "EXCLUIR"})
+    assert r.status_code in (403, 200) and (r.status_code == 403 or r.json()["ok"] == 0)

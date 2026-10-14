@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { CheckCheck, Settings2, Wallet } from "lucide-react";
+import { CheckCheck, Plus, Search, Settings2, Wallet } from "lucide-react";
+import { PedidoDialog } from "@/components/rede/NegocioRede";
+import type { NegocioResumo } from "@/lib/types";
 import { apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
 import { brl } from "@/lib/format";
 import { dataCurta } from "@/lib/crm";
@@ -51,6 +53,8 @@ export default function Comissoes() {
   const [mes, setMes] = useState(opcoes[0].v);
   const [sel, setSel] = useState<string[]>([]);
   const [config, setConfig] = useState(false);
+  const [escolher, setEscolher] = useState(false);
+  const [negocio, setNegocio] = useState<NegocioResumo | null>(null);
   const q = useQuery({ queryKey: ["pedidos", "mes", mes], queryFn: () => apiGet<Resposta>(`/pedidos?mes=${mes}`) });
   const acao = useMutation({
     mutationFn: ({ rota, ids }: { rota: "aprovar" | "pagar"; ids: string[] }) => apiPost<{ ok: number; falhas?: { motivo: string }[] }>(`/pedidos/${rota}`, { ids }),
@@ -84,6 +88,7 @@ export default function Comissoes() {
           <select value={mes} onChange={(e) => { setMes(e.target.value); setSel([]); }} className="h-9 rounded-md border bg-card px-2 text-sm capitalize" aria-label="Mês">
             {opcoes.map((o) => <option key={o.v} value={o.v}>{o.r}</option>)}
           </select>
+          <Button size="sm" onClick={() => setEscolher(true)} data-testid="registrar-pedido"><Plus className="h-4 w-4" /> Registrar pedido</Button>
           {isAdmin && <Button variant="outline" size="sm" onClick={() => setConfig(true)}><Settings2 className="h-4 w-4" /> Regra</Button>}
         </div>
       </div>
@@ -157,6 +162,11 @@ export default function Comissoes() {
         )}
       </div>
       {config && d && <RegraDialog inicial={d.config} onClose={() => setConfig(false)} />}
+      {escolher && <EscolherGanho onClose={() => setEscolher(false)} onEscolher={(n) => { setEscolher(false); setNegocio(n); }} />}
+      {negocio && (
+        <PedidoDialog negocio={negocio} aberto onClose={() => setNegocio(null)}
+          onSalvo={() => { setNegocio(null); qc.invalidateQueries({ queryKey: ["pedidos"] }); }} />
+      )}
     </div>
   );
 }
@@ -183,6 +193,37 @@ function RegraDialog({ inicial, onClose }: { inicial: Config; onClose: () => voi
           </div>
         </div>
         <DialogFooter><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={() => salvar.mutate()} disabled={salvar.isPending}>Salvar</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Pedido avulso só para cliente que já está ganho: a lista mostra apenas negócios ganhos. */
+function EscolherGanho({ onClose, onEscolher }: { onClose: () => void; onEscolher: (n: NegocioResumo) => void }) {
+  const [busca, setBusca] = useState("");
+  const q = useQuery({ queryKey: ["kanban", "ganhos-pedido"], queryFn: () => apiGet<NegocioResumo[]>("/leads/kanban?status=ganho") });
+  const lista = (q.data ?? []).filter((n) => !busca.trim() || `${n.nome} ${n.cliente_nome ?? ""} ${n.cliente_telefone ?? ""}`.toLowerCase().includes(busca.trim().toLowerCase()));
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Registrar pedido</DialogTitle>
+          <DialogDescription>Escolha o cliente. Só aparecem negócios ganhos; para o primeiro pedido, marque o negócio como ganho na tela dele.</DialogDescription>
+        </DialogHeader>
+        <div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input className="pl-9" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente" aria-label="Buscar cliente" /></div>
+        <ul className="max-h-80 divide-y overflow-y-auto rounded-lg border" data-testid="lista-ganhos">
+          {q.isLoading && <li className="p-3 text-sm text-muted-foreground">Carregando...</li>}
+          {!q.isLoading && !lista.length && <li className="p-3 text-sm text-muted-foreground">Nenhum negócio ganho{busca ? " com essa busca" : ""}.</li>}
+          {lista.map((n) => (
+            <li key={n.id}>
+              <button type="button" className="flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => onEscolher(n)}>
+                <span className="font-medium">{n.nome}</span>
+                <span className="text-xs text-muted-foreground">{[n.cliente_nome !== n.nome ? n.cliente_nome : null, n.corretor_nome].filter(Boolean).join(" · ")}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       </DialogContent>
     </Dialog>
   );

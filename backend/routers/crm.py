@@ -443,6 +443,8 @@ async def _validar_atividade(data: dict, principal: Principal) -> None:
 @router.post("/atividades", response_model=Atividade, status_code=201)
 async def criar_atividade(input: AtividadeCreate, background: BackgroundTasks, principal: Principal = Depends(require("atividade:write"))):
     data = input.model_dump()
+    anexos_novos = input.anexos or []
+    data.pop("anexos", None)
     if not principal.is_admin:
         data["corretor_id"] = principal.pessoa_id
     if not data.get("corretor_id") and not data.get("negocio_id"):
@@ -450,10 +452,17 @@ async def criar_atividade(input: AtividadeCreate, background: BackgroundTasks, p
     await _validar_atividade(data, principal)
     if not principal.is_admin:
         data["corretor_id"] = principal.pessoa_id
+    from routers.anexos import decodificar, exigir_print, gravar
+
     if data.get("concluida"):
         data["concluida_em"] = now_utc()
+        await exigir_print(data, len(anexos_novos))
+    for a in anexos_novos:
+        decodificar(a)  # imagem ruim recusa antes de criar a atividade
     atividade = Atividade(**data, created_by=principal.usuario_id)
     await db.atividades.insert_one(atividade.model_dump())
+    if anexos_novos:
+        await gravar(anexos_novos, negocio_id=atividade.negocio_id, atividade=atividade.model_dump(), principal=principal)
     if atividade.negocio_id:
         await registrar(atividade.negocio_id, "atividade",
                         f"{TIPO_LABEL[atividade.tipo]} {'registrada' if atividade.concluida else 'agendada'}: {atividade.assunto} ({atividade.data[8:10]}/{atividade.data[5:7]}{' ' + atividade.hora if atividade.hora else ''})",
@@ -473,10 +482,18 @@ async def editar_atividade(atividade_id: str, input: AtividadeUpdate, background
     if not doc:
         raise HTTPException(404, "Atividade não encontrada")
     authorize(principal, "atividade:write", doc)
+    anexos_novos = input.anexos or []
     data = patch_data(input, ("tipo", "assunto", "data", "duracao_min", "concluida"))
+    data.pop("anexos", None)
     if not principal.is_admin:
         data.pop("corretor_id", None)
     await _validar_atividade({**data}, principal)
+    from routers.anexos import exigir_print, gravar
+
+    if data.get("concluida") and not doc.get("concluida"):
+        await exigir_print({**doc, **data}, len(anexos_novos))
+    if anexos_novos:
+        await gravar(anexos_novos, negocio_id=doc.get("negocio_id"), atividade=doc, principal=principal)
     if "concluida" in data and data["concluida"] != doc.get("concluida"):
         data["concluida_em"] = now_utc() if data["concluida"] else None
         if data["concluida"] and doc.get("negocio_id"):

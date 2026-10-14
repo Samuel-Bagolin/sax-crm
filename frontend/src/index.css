@@ -114,54 +114,53 @@
 }
 
 .dark {
-    /* Escuro neutro e quente (grafite), como o modo escuro do Claude: superfícies sem roxo,
-       laranja SAX só nos destaques. */
-    --background: #262624;
-    --foreground: #f5f4ef;
-    --card: #30302e;
-    --card-foreground: #f5f4ef;
-    --popover: #30302e;
-    --popover-foreground: #f5f4ef;
-    --primary: #ff8a2a;
-    --primary-foreground: #1f1e1d;
-    --secondary: #3a3936;
-    --secondary-foreground: #f5f4ef;
-    --muted: #34332f;
-    --muted-foreground: #b0aea5;
-    --accent: #3d3c38;
-    --accent-foreground: #f5f4ef;
+    /* Modo escuro preto com o laranja da logo SAX nos destaques, inclusive na barra lateral
+       (vale para todas as empresas: a cor de menu personalizada é só do modo claro). */
+    --background: #000000;
+    --foreground: #f5f5f5;
+    --card: #0f0f0f;
+    --card-foreground: #f5f5f5;
+    --popover: #141414;
+    --popover-foreground: #f5f5f5;
+    --primary: #ff7a00;
+    --primary-foreground: #0a0a0a;
+    --secondary: #1a1a1a;
+    --secondary-foreground: #f5f5f5;
+    --muted: #161616;
+    --muted-foreground: #a3a3a3;
+    --accent: #1f1408;
+    --accent-foreground: #ffb066;
     --destructive: #f07272;
-    --border: rgba(222, 220, 209, 0.14);
-    --input: rgba(222, 220, 209, 0.22);
-    --ring: #ff8a2a;
-    --chart-1: #9b84f0;
-    --chart-2: #e98a4a;
+    --border: rgba(255, 255, 255, 0.12);
+    --input: rgba(255, 255, 255, 0.2);
+    --ring: #ff7a00;
+    --chart-1: #ff7a00;
+    --chart-2: #9b84f0;
     --chart-3: #3fb3a1;
     --chart-4: #5f95e6;
     --chart-5: #d773ad;
     --chart-6: #a4a94a;
     --radius: 0.5rem;
-    /* A barra lateral não muda no escuro: mesma cor do claro (roxo SAX ou a da empresa). */
-    --sidebar: #4a03a2;
-    --sidebar-foreground: #ece6fb;
+    --sidebar: #000000;
+    --sidebar-foreground: #e8e8e8;
     --sidebar-primary: #ff7a00;
-    --sidebar-primary-foreground: #2a0164;
-    --sidebar-accent: #3a0285;
-    --sidebar-accent-foreground: #ffffff;
-    --sidebar-border: #5d1bb5;
+    --sidebar-primary-foreground: #0a0a0a;
+    --sidebar-accent: #1f1408;
+    --sidebar-accent-foreground: #ff9a3d;
+    --sidebar-border: rgba(255, 122, 0, 0.28);
     --sidebar-ring: #ff7a00;
     --atrasada: #f07272;
     --hoje: #4cc282;
     --sem-atividade: #f0bb45;
     --latao: #ff8a33;
     --sax-laranja: #ff7a00;
-    --funil-1: #3a3936;
-    --funil-2: #4a4843;
-    --funil-3: #5d5a53;
-    --funil-4: #7a6a55;
-    --funil-5: #a8784a;
-    --funil-6: #d6823a;
-    --funil-7: #ff8a2a;
+    --funil-1: #2a1a0a;
+    --funil-2: #4a2a0a;
+    --funil-3: #6e3b08;
+    --funil-4: #944c05;
+    --funil-5: #bd5d03;
+    --funil-6: #e06c01;
+    --funil-7: #ff7a00;
 }
 
 @layer base {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Bot, GitBranch, Loader2, MessageSquare, Plus, Send, Square, Trash2, UserRound } from "lucide-react";
+import { ArrowDown, ArrowUp, Bot, List, Loader2, Plus, Send, Trash2, Workflow } from "lucide-react";
 import { apiDelete, apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,25 +10,8 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useSegmento } from "@/lib/segmento";
 import { usePessoasEquipe, type Conexao, type Setor } from "@/components/whatsapp/NumerosWhatsApp";
-
-type TipoPasso = "mensagem" | "menu" | "transferir" | "encerrar";
-interface Opcao { rotulo: string; proximo: string | null }
-interface Passo { id: string; tipo: TipoPasso; texto: string; opcoes: Opcao[]; proximo: string | null; destino_tipo: "pessoa" | "setor" | "fila" | null; destino_id: string | null }
-interface Fluxo { id?: string; nome: string; ativo: boolean; gatilho: "nova_conversa" | "palavra_chave"; palavras: string[]; conexoes: string[]; passos: Passo[] }
-
-const TIPOS: Record<TipoPasso, { rotulo: string; icone: typeof Bot; ajuda: string }> = {
-  mensagem: { rotulo: "Mensagem", icone: MessageSquare, ajuda: "Manda o texto e segue para o próximo passo." },
-  menu: { rotulo: "Menu de opções", icone: GitBranch, ajuda: "Manda as opções numeradas e espera o cliente responder." },
-  transferir: { rotulo: "Passar para a equipe", icone: UserRound, ajuda: "Passa a conversa para uma pessoa, um setor ou a fila." },
-  encerrar: { rotulo: "Encerrar", icone: Square, ajuda: "Manda o texto (se houver) e termina o fluxo." },
-};
-
-let seq = 0;
-const novoId = () => `p${Date.now().toString(36)}${(seq++).toString(36)}`;
-const passoVazio = (tipo: TipoPasso): Passo => ({
-  id: novoId(), tipo, texto: "", proximo: null, destino_tipo: tipo === "transferir" ? "fila" : null, destino_id: null,
-  opcoes: tipo === "menu" ? [{ rotulo: "", proximo: null }, { rotulo: "", proximo: null }] : [],
-});
+import { PassoCampos, TIPOS, passoVazio, semPasso, type Fluxo, type Passo, type TipoPasso } from "@/components/whatsapp/fluxo";
+import { FluxoCanvas, organizar } from "@/components/whatsapp/FluxoCanvas";
 
 type OpcaoExemplo = [rotulo: string, tipo: "transferir" | "encerrar", resposta: string];
 const EXEMPLOS: Record<string, { saudacao: string; pergunta: string; opcoes: OpcaoExemplo[] }> = {
@@ -139,7 +122,9 @@ function EditorFluxo({ inicial, conexoes, setores, onClose }: { inicial: Fluxo; 
   const [palavras, setPalavras] = useState(inicial.palavras.join(", "));
   const salvar = useMutation({
     mutationFn: () => {
-      const corpo = { ...f, palavras: palavras.split(",").map((p) => p.trim()).filter(Boolean) };
+      // passos ainda sem posição ficam onde o desenho os organizou
+      const auto = organizar(f);
+      const corpo = { ...f, passos: f.passos.map((p) => ({ ...p, pos: p.pos ?? auto[p.id] })), palavras: palavras.split(",").map((p) => p.trim()).filter(Boolean) };
       return f.id ? apiPut(`/whatsapp/fluxos/${f.id}`, corpo) : apiPost("/whatsapp/fluxos", corpo);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa", "fluxos"] }); toast.success("Fluxo salvo."); onClose(); },
@@ -152,24 +137,25 @@ function EditorFluxo({ inicial, conexoes, setores, onClose }: { inicial: Fluxo; 
     [ps[i], ps[j]] = [ps[j], ps[i]];
     return { ...x, passos: ps };
   });
-  const tirar = (i: number) => setF((x) => {
-    const id = x.passos[i].id;
-    const limpa = (v: string | null) => (v === id ? null : v);
-    return { ...x, passos: x.passos.filter((_, k) => k !== i).map((p) => ({ ...p, proximo: limpa(p.proximo), opcoes: p.opcoes.map((o) => ({ ...o, proximo: limpa(o.proximo) })) })) };
-  });
-  const titulo = (id: string | null) => {
-    const k = f.passos.findIndex((p) => p.id === id);
-    return k < 0 ? "" : `${k + 1}. ${TIPOS[f.passos[k].tipo].rotulo}${f.passos[k].texto ? `: ${f.passos[k].texto.slice(0, 30)}` : ""}`;
-  };
-  const destinos = (atual: string) => f.passos.filter((p) => p.id !== atual);
+  const tirar = (i: number) => setF((x) => semPasso(x, x.passos[i].id));
+  const [modo, setModo] = useState<"desenho" | "lista">(() => (typeof window !== "undefined" && window.innerWidth < 768 ? "lista" : "desenho"));
+  const [selecionado, setSelecionado] = useState<string | null>(null);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className={cn("max-h-[94vh] overflow-y-auto", modo === "desenho" ? "sm:max-w-[min(96vw,1400px)]" : "sm:max-w-3xl")}>
         <DialogHeader>
           <DialogTitle>{f.id ? "Editar fluxo" : "Novo fluxo"}</DialogTitle>
-          <DialogDescription>O fluxo começa no passo 1. Use o menu para o cliente escolher e “Passar para a equipe” para terminar com uma pessoa.</DialogDescription>
+          <DialogDescription>O fluxo começa no passo marcado como início. Use o menu para o cliente escolher e “Passar para a equipe” para terminar com uma pessoa.</DialogDescription>
         </DialogHeader>
+        <div className="inline-flex w-fit rounded-lg border p-0.5 text-sm" role="tablist">
+          {([["desenho", Workflow, "Desenhar"], ["lista", List, "Lista"]] as const).map(([v, Icone, rot]) => (
+            <button key={v} type="button" role="tab" aria-selected={modo === v} onClick={() => setModo(v)} data-testid={`fluxo-modo-${v}`}
+              className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-medium", modo === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+              <Icone className="h-4 w-4" /> {rot}
+            </button>
+          ))}
+        </div>
         <div className="grid gap-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5"><Label htmlFor="fx-nome">Nome do fluxo</Label>
@@ -199,6 +185,9 @@ function EditorFluxo({ inicial, conexoes, setores, onClose }: { inicial: Fluxo; 
             </div>
           )}
 
+          {modo === "desenho" ? (
+            <FluxoCanvas f={f} setF={setF} selecionado={selecionado} setSelecionado={setSelecionado} setores={setores} pessoas={pessoas} />
+          ) : (<>
           <ol className="grid gap-3" data-testid="fluxo-passos">
             {f.passos.map((p, i) => {
               const T = TIPOS[p.tipo];
@@ -218,58 +207,7 @@ function EditorFluxo({ inicial, conexoes, setores, onClose }: { inicial: Fluxo; 
                     <Button size="icon-sm" variant="ghost" className="text-destructive" onClick={() => tirar(i)} disabled={f.passos.length === 1} aria-label="Remover passo"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                   <p className="text-xs text-muted-foreground">{T.ajuda}</p>
-                  <textarea value={p.texto} onChange={(e) => mudarPasso(i, { texto: e.target.value })} rows={2} maxLength={1500}
-                    placeholder={p.tipo === "menu" ? "Como podemos ajudar? Responda com o número:" : p.tipo === "mensagem" ? "Olá! Obrigado por falar com a gente." : "Texto opcional"}
-                    className="w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm" aria-label={`Texto do passo ${i + 1}`} />
-
-                  {p.tipo === "menu" && (
-                    <div className="grid gap-2 rounded-lg bg-muted/50 p-2">
-                      {p.opcoes.map((o, k) => (
-                        <div key={k} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                          <span className="w-6 text-sm font-semibold text-muted-foreground">{k + 1}.</span>
-                          <Input value={o.rotulo} onChange={(e) => mudarPasso(i, { opcoes: p.opcoes.map((x, z) => (z === k ? { ...x, rotulo: e.target.value } : x)) })}
-                            maxLength={60} placeholder="Texto da opção" className="sm:flex-1" aria-label={`Opção ${k + 1}`} />
-                          <select value={o.proximo ?? ""} onChange={(e) => mudarPasso(i, { opcoes: p.opcoes.map((x, z) => (z === k ? { ...x, proximo: e.target.value || null } : x)) })}
-                            className="h-9 rounded-md border bg-background px-2 text-sm sm:w-64" aria-label={`Destino da opção ${k + 1}`}>
-                            <option value="">Vai para…</option>
-                            {destinos(p.id).map((d) => <option key={d.id} value={d.id}>{titulo(d.id)}</option>)}
-                          </select>
-                          <Button size="icon-sm" variant="ghost" onClick={() => mudarPasso(i, { opcoes: p.opcoes.filter((_, z) => z !== k) })} disabled={p.opcoes.length <= 2} aria-label="Tirar opção"><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                      ))}
-                      {p.opcoes.length < 10 && (
-                        <Button size="sm" variant="ghost" className="w-fit" onClick={() => mudarPasso(i, { opcoes: [...p.opcoes, { rotulo: "", proximo: null }] })}><Plus className="h-4 w-4" /> Opção</Button>
-                      )}
-                    </div>
-                  )}
-                  {p.tipo === "mensagem" && (
-                    <select value={p.proximo ?? ""} onChange={(e) => mudarPasso(i, { proximo: e.target.value || null })} className="h-9 rounded-md border bg-background px-2 text-sm" aria-label="Depois">
-                      <option value="">Depois: termina aqui</option>
-                      {destinos(p.id).map((d) => <option key={d.id} value={d.id}>Depois: {titulo(d.id)}</option>)}
-                    </select>
-                  )}
-                  {p.tipo === "transferir" && (
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <select value={p.destino_tipo ?? "fila"} onChange={(e) => mudarPasso(i, { destino_tipo: e.target.value as Passo["destino_tipo"], destino_id: null })}
-                        className="h-9 rounded-md border bg-background px-2 text-sm" aria-label="Passar para">
-                        <option value="fila">Fila da equipe (quem responder primeiro)</option>
-                        <option value="setor">Um setor</option>
-                        <option value="pessoa">Uma pessoa</option>
-                      </select>
-                      {p.destino_tipo === "setor" && (
-                        <select value={p.destino_id ?? ""} onChange={(e) => mudarPasso(i, { destino_id: e.target.value || null })} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Setor">
-                          <option value="">Escolha o setor</option>
-                          {setores.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
-                        </select>
-                      )}
-                      {p.destino_tipo === "pessoa" && (
-                        <select value={p.destino_id ?? ""} onChange={(e) => mudarPasso(i, { destino_id: e.target.value || null })} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Pessoa">
-                          <option value="">Escolha a pessoa</option>
-                          {pessoas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
-                        </select>
-                      )}
-                    </div>
-                  )}
+                  <PassoCampos f={f} p={p} i={i} mudar={(x) => mudarPasso(i, x)} setores={setores} pessoas={pessoas} />
                 </li>
               );
             })}
@@ -279,6 +217,7 @@ function EditorFluxo({ inicial, conexoes, setores, onClose }: { inicial: Fluxo; 
               <Button key={t} size="sm" variant="outline" onClick={() => setF({ ...f, passos: [...f.passos, passoVazio(t)] })}><Plus className="h-4 w-4" /> {TIPOS[t].rotulo}</Button>
             ))}
           </div>
+          </>)}
           <div className="flex flex-col-reverse gap-2 border-t pt-3 sm:flex-row sm:items-center">
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-[var(--primary)]" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} /> Ligado</label>
             <span className="flex-1" />

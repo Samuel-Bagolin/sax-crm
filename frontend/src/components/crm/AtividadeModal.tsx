@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
-import { TIPOS_ATIVIDADE, isoLocal, useEquipe } from "@/lib/crm";
+import { TIPOS_ATIVIDADE, isoLocal, useCrmConfig, useEquipe } from "@/lib/crm";
+import { EscolherPrints, TIPOS_COM_PRINT } from "@/components/crm/Prints";
 import { useAuth } from "@/lib/useAuth";
 import type { Atividade, NegocioResumo, TipoAtividade } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,8 @@ export default function AtividadeModal({
   const [corretorId, setCorretorId] = useState<string | null>(null);
   const [notas, setNotas] = useState("");
   const [concluida, setConcluida] = useState(false);
+  const [prints, setPrints] = useState<{ nome: string; base64: string }[]>([]);
+  const { data: cfgCrm } = useCrmConfig();
 
   const estavaAberto = useRef(false);
   useEffect(() => {
@@ -78,6 +81,7 @@ export default function AtividadeModal({
       setCorretorId(atividade.corretor_id);
       setNotas(atividade.notas ?? "");
       setConcluida(atividade.concluida);
+      setPrints([]);
     } else {
       setTipo(padrao?.tipo ?? "ligacao");
       setAssunto(padrao?.assunto ?? "");
@@ -89,6 +93,7 @@ export default function AtividadeModal({
       setCorretorId(padrao?.corretor_id ?? principal?.pessoa_id ?? null);
       setNotas("");
       setConcluida(false);
+      setPrints([]);
     }
   }, [open, atividade, padrao, principal?.pessoa_id]);
 
@@ -106,6 +111,7 @@ export default function AtividadeModal({
     qc.invalidateQueries({ queryKey: ["negocio"] });
     qc.invalidateQueries({ queryKey: ["historico"] });
     qc.invalidateQueries({ queryKey: ["equipe"] });
+    qc.invalidateQueries({ queryKey: ["anexos"] });
   };
 
   const salvar = useMutation({
@@ -120,6 +126,7 @@ export default function AtividadeModal({
         corretor_id: isAdmin ? corretorId : undefined,
         notas: notas.trim() || null,
         concluida,
+        anexos: prints.length ? prints : undefined,
       };
       return atividade ? apiPatch<Atividade>(`/atividades/${atividade.id}`, corpo) : apiPost<Atividade>("/atividades", corpo);
     },
@@ -278,6 +285,9 @@ export default function AtividadeModal({
             <Checkbox checked={concluida} onCheckedChange={(v) => setConcluida(!!v)} />
             Marcar como concluída
           </label>
+          {negocioId && concluida && !atividade?.concluida && (
+            <EscolherPrints valor={prints} onChange={setPrints} obrigatorio={!!cfgCrm?.print_obrigatorio && TIPOS_COM_PRINT.includes(tipo)} />
+          )}
 
           <DialogFooter className="items-center">
             {atividade && (
@@ -294,7 +304,7 @@ export default function AtividadeModal({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={salvar.isPending || !data} data-testid="atividade-salvar">
+            <Button type="submit" disabled={salvar.isPending || !data || (!!negocioId && concluida && !atividade?.concluida && !!cfgCrm?.print_obrigatorio && TIPOS_COM_PRINT.includes(tipo) && !prints.length)} data-testid="atividade-salvar">
               {salvar.isPending ? "Salvando…" : atividade ? "Salvar" : "Agendar"}
             </Button>
           </DialogFooter>

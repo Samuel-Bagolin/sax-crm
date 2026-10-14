@@ -20,6 +20,9 @@ import PerderDialog from "@/components/crm/PerderDialog";
 import IndicadorAtividade from "@/components/crm/IndicadorAtividade";
 import { cn } from "@/lib/utils";
 import { useRede } from "@/lib/rede";
+import { useSegmento } from "@/lib/segmento";
+import { EdicaoMassa } from "@/components/crm/EdicaoMassa";
+import { PedidoDialog } from "@/components/rede/NegocioRede";
 
 type Visao = "quadro" | "lista";
 type StatusFiltro = "aberto" | "ganho" | "perdido" | "todos";
@@ -112,6 +115,9 @@ export default function Negocios() {
   const { isAdmin } = useAuth();
   const { ativa: temRede, rede, nomeSup } = useRede();
   const supervisiona = !!rede && (rede.eu.supervisoes.length > 0 || rede.eu.pracas.length > 0);
+  const segN = useSegmento();
+  const [sel, setSel] = useState<string[]>([]);
+  const [pedidoPara, setPedidoPara] = useState<NegocioResumo | null>(null);
   const [praca, setPraca] = useState("");
   const [supervisao, setSupervisao] = useState("");
   const { data: funis = [] } = useFunis();
@@ -239,7 +245,10 @@ export default function Negocios() {
     setArrastado(null);
     setAlvo(null);
     if (!n) return;
-    if (destino === "__ganho") ganhar.mutate(n.id);
+    if (destino === "__ganho") {
+      if (segN.comercio) setPedidoPara(n); // na rede de lojas o ganho vem com o pedido (valor total vendido)
+      else ganhar.mutate(n.id);
+    }
     else if (destino === "__perdido") setPerder(n);
     else if (destino === "__funil") {
       setDestinoFunil(funis.find((f) => f.id !== n.funil_id)?.id ?? "");
@@ -292,6 +301,11 @@ export default function Negocios() {
             </button>
           ))}
         </div>
+        {visao === "quadro" && (
+          <button type="button" onClick={() => setVisao("lista")} className="hidden h-8 rounded-md border bg-card px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground md:block" data-testid="btn-editar-massa">
+            Editar em massa
+          </button>
+        )}
         <p className="num ml-1 hidden text-sm text-muted-foreground lg:block">
           <span className="font-semibold text-foreground">{brl(valorTotal)}</span>, {filtrados.length} {filtrados.length === 1 ? "negócio" : "negócios"}
         </p>
@@ -517,10 +531,26 @@ export default function Negocios() {
           </div>
         </div>
       ) : (
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
+        <EdicaoMassa
+          ids={sel.filter((id) => filtrados.some((n) => n.id === id))}
+          funis={funis}
+          funilAtual={funil}
+          equipe={rede && !isAdmin ? rede.equipe.filter((m) => rede.eu.equipe.includes(m.pessoa_id)) : corretores.map((m) => ({ pessoa_id: m.pessoa_id, nome: m.nome }))}
+          supervisoes={temRede && rede ? rede.supervisoes.filter((s) => s.ativa && (isAdmin || rede.eu.supervisoes.includes(s.id))) : undefined}
+          podeExcluir={segN.comercio ? isAdmin : true}
+          onLimpar={() => setSel([])}
+          onFeito={() => { setSel([]); invalidar(); }}
+        />
         <div className="min-h-0 flex-1 overflow-auto rounded-lg border bg-card scroll-fino">
           <table className="w-full min-w-[860px] text-sm">
             <thead className="sticky top-0 z-10 bg-card text-left text-xs text-muted-foreground">
               <tr className="border-b">
+                <th className="w-9 px-3 py-2">
+                  <input type="checkbox" aria-label="Selecionar todos" data-testid="massa-todos"
+                    checked={filtrados.length > 0 && filtrados.every((n) => sel.includes(n.id))}
+                    onChange={(e) => setSel(e.target.checked ? filtrados.map((n) => n.id) : [])} />
+                </th>
                 <th className="px-3 py-2 font-medium">Negócio</th>
                 <th className="px-3 py-2 font-medium">Cliente</th>
                 <th className="px-3 py-2 text-right font-medium">Valor</th>
@@ -534,7 +564,11 @@ export default function Negocios() {
               {filtrados.map((n) => {
                 const etapa = funil?.etapas.find((e) => e.id === n.etapa_id);
                 return (
-                  <tr key={n.id} className="border-b last:border-0 hover:bg-muted/40">
+                  <tr key={n.id} className={cn("border-b last:border-0 hover:bg-muted/40", sel.includes(n.id) && "bg-primary/5")}>
+                    <td className="px-3 py-2">
+                      <input type="checkbox" aria-label={`Selecionar ${n.nome}`} checked={sel.includes(n.id)}
+                        onChange={(e) => setSel(e.target.checked ? [...sel, n.id] : sel.filter((x) => x !== n.id))} />
+                    </td>
                     <td className="px-3 py-2">
                       <Link to={`/negocios/${n.id}`} className="font-medium hover:text-primary hover:underline">
                         {n.nome}
@@ -578,7 +612,7 @@ export default function Negocios() {
               })}
               {!filtrados.length && !isLoading && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-16 text-center">
+                  <td colSpan={8} className="px-3 py-16 text-center">
                     <Handshake className="mx-auto mb-2 h-8 w-8 text-muted-foreground/60" />
                     <p className="text-sm text-muted-foreground">Nenhum negócio com esses filtros.</p>
                   </td>
@@ -587,8 +621,13 @@ export default function Negocios() {
             </tbody>
           </table>
         </div>
+        </div>
       )}
 
+      {pedidoPara && (
+        <PedidoDialog negocio={{ ...pedidoPara, corretor_id: pedidoPara.corretor_id }} aberto onClose={() => setPedidoPara(null)}
+          onSalvo={() => { setPedidoPara(null); invalidar(); }} />
+      )}
       <NegocioModal
         open={novoAberto}
         onClose={fecharNovo}

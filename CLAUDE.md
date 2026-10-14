@@ -147,7 +147,7 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
 - Sem travessão (—) nos textos da tela e dos e-mails. Use vírgula, ponto ou dois-pontos.
 - Mensagem de erro diz o que aconteceu e o que fazer, sem pedir desculpas.
 - Identidade SAX: roxo `#4a03a2` e laranja `#ff7a00`, logo em `components/shared/MarcaSax.tsx`.
-- Modo escuro neutro (grafite quente, como o Claude), laranja nos destaques; a cor primária da empresa só vale no claro. A barra lateral fica igual nos dois modos.
+- Modo escuro preto com o laranja da logo SAX (#ff7a00) nos destaques, inclusive na barra lateral (preta). Cor primária e cores de menu da empresa só valem no claro.
 - Segmento comércio (restaurante e doceria): cardápio no site (itens tipo produto), funis Revenda e Eventos e encomendas, lojas como unidades.
 - Demonstração: `POST /plataforma/demos/pudim` (sem botão na tela) cria "[DEMO] O Pudim Perfeito" com dados fictícios (`lib/demo_pudim.py`). Empresa com `demo_apresentacao` não pede o termo de adesão.
 - Afiliados e cashback (`lib/cashback.py`, tela /cashback): crédito por indicação e por compra, vale em todas as lojas, uso só em compras seguintes, FIFO por vencimento. Site: `?ref=CODIGO`, "Indique e ganhe" e balão de WhatsApp com um número por loja (conexões com `no_site`, senão o WhatsApp das Unidades).
@@ -155,6 +155,9 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
 - Rede de lojas (`lib/supervisoes.py`, `routers/supervisoes.py`): praça (cidade da loja) e supervisões com pixels. `usuarios.perfil` diretoria/gerentes = gestor; `supervisor` vê o dele, as supervisões dele, os líderes que acompanha e a praça sem supervisão (sem supervisão marcada, a praça toda) via `Principal.filtro_escopo`/`no_escopo`; `lider` só os cards dele. Negócio, lead e pedido guardam `praca`, `supervisao_id`, `unidade_id`. Lead do webhook com `pixel`/`localidade` é roteado por `rotear`.
 - Etapa com cadeado (`lib/requisitos.py`, `etapa.requisito` contato/reuniao): o card só entra com atividade concluída e resultado não negativo; resultado positivo avança o card. Voltar sempre pode.
 - Pedidos e comissões (`routers/pedidos.py`, tela /comissoes): pedido só em negócio ganho (registrar o pedido marca ganho), data não futura; % nos N primeiros pedidos do cliente; aprovada e paga ficam congeladas; ninguém aprova a própria (só diretoria); paga no dia X do mês seguinte.
+- Prints (`routers/anexos.py`, coleção `anexos`, imagem até 900 KB reduzida no navegador): só quem anexou e perfis admin veem (nem o supervisor). `crm.print_obrigatorio` (ligado na 1ª importação da planilha): contato/reunião de negócio só conclui com print (`anexos` no POST/PATCH da atividade). Prints do Drive: a planilha cria `anexos_pendentes` (aba ANEXOS: ID e nome do arquivo) e o arquivo entra por `/plataforma/empresas/{id}/importar-print` (casa pelo nome ou ID).
+- Edição em massa (`POST /leads/massa`, todos os segmentos): cada item é autorizado; o que fura área, cadeado ou regra volta em `falhas` sem travar os outros. Excluir pede "EXCLUIR"; no comércio só admin exclui.
+- Fluxo do WhatsApp tem desenho (React Flow, `components/whatsapp/FluxoCanvas.tsx`) e lista; `passo.pos` é só visual. WhatsApp está em todos os planos de todos os segmentos.
 
 ## Como trabalhar em dupla
 

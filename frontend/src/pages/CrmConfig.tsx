@@ -412,6 +412,10 @@ export default function CrmConfig() {
             <Checkbox checked={config.exige_motivo_perda} onCheckedChange={(v) => salvarConfig.mutate({ exige_motivo_perda: !!v })} />
             Exigir motivo ao marcar negócio como perdido
           </label>
+          <label className="flex items-center gap-2 rounded-lg border bg-card p-4 text-sm lg:col-span-3">
+            <Checkbox checked={!!config.print_obrigatorio} onCheckedChange={(v) => salvarConfig.mutate({ print_obrigatorio: !!v })} data-testid="cfg-print" />
+            Exigir print para concluir ligação, WhatsApp, e-mail, visita ou reunião de um negócio (só quem anexou e a gestão veem o print)
+          </label>
         </div>
       )}
 

@@ -78,6 +78,7 @@ class CrmConfig(BaseModel):
     etiquetas: List[str] = Field(default_factory=list)
     distribuicao: Literal["manual", "rodizio"] = "manual"
     exige_motivo_perda: bool = True
+    print_obrigatorio: bool = False  # contato e reunião de um negócio só concluem com print anexado
     sla_primeiro_contato_min: int | None = Field(default=30, ge=1, le=10080)  # None = sem SLA
     # Lead novo sem atendimento depois de X horas sai do vendedor e vai para a fila livre (None = desligado).
     repescagem_horas: int | None = Field(default=24, ge=1, le=720)
@@ -91,6 +92,7 @@ class CrmConfigUpdate(BaseModel):
     etiquetas: List[str] | None = None
     distribuicao: Literal["manual", "rodizio"] | None = None
     exige_motivo_perda: bool | None = None
+    print_obrigatorio: bool | None = None
     sla_primeiro_contato_min: int | None = Field(default=None, ge=1, le=10080)
     sem_sla: bool | None = None  # true = desliga o SLA (None no campo acima significa "não alterar")
     repescagem_horas: int | None = Field(default=None, ge=1, le=720)
@@ -180,6 +182,11 @@ class ConverterEntrada(BaseModel):
 # ------------------------------------------------------------------ atividades
 
 
+class AnexoIn(BaseModel):
+    nome: str = Field(min_length=1, max_length=200)
+    base64: str = Field(min_length=10, max_length=1_400_000)
+
+
 class Atividade(BaseModel):
     id: str = Field(default_factory=new_id)
     tipo: TipoAtividade = "tarefa"
@@ -215,6 +222,7 @@ class AtividadeCreate(BaseModel):
     notas: str | None = None
     concluida: bool = False
     resultado: Literal["positivo", "negativo"] | None = None
+    anexos: List[AnexoIn] | None = Field(default=None, max_length=3)  # prints {nome, base64} que entram junto
 
 
 class AtividadeUpdate(BaseModel):
@@ -230,6 +238,7 @@ class AtividadeUpdate(BaseModel):
     notas: str | None = None
     concluida: bool | None = None
     resultado: Literal["positivo", "negativo"] | None = None
+    anexos: List[AnexoIn] | None = Field(default=None, max_length=3)
 
 
 # ------------------------------------------------------------------ histórico / notas

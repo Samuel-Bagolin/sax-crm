@@ -94,11 +94,9 @@ def test_conectar_receber_responder(servidor, cartao_demo):
 
 def test_webhook_com_token_errado_e_sem_recurso(servidor, cartao_demo):
     assert httpx.post(f"{API}/webhooks/whatsapp/token-falso", json={"event": "messages.upsert", "instance": "sax-x", "data": {}}).status_code == 404
-    # Plano de entrada não tem WhatsApp: a tela explica, as rotas recusam.
+    # Desde out/2026 o WhatsApp vem em todos os planos, inclusive o de entrada.
     c, _ = _cadastrar("barbearia", cartao_demo, plano="barbearia_essencial")
-    s = c.get("/whatsapp/situacao").json()
-    assert s["liberado"] is False
-    assert c.post("/whatsapp/conexoes", json={"nome": "Recepção"}).status_code == 402  # recurso fora do plano
+    assert c.get("/whatsapp/situacao").json()["liberado"] is True
 
 
 def test_corretor_ve_as_dele_e_as_sem_responsavel(servidor):

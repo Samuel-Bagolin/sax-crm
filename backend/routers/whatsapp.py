@@ -319,8 +319,14 @@ class OpcaoIn(BaseModel):
     proximo: str | None = Field(default=None, max_length=40)
 
 
+class PosIn(BaseModel):
+    x: float = Field(ge=-100000, le=100000)
+    y: float = Field(ge=-100000, le=100000)
+
+
 class PassoIn(BaseModel):
     id: str = Field(min_length=1, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")
+    pos: PosIn | None = None  # posição no desenho do fluxo (só visual)
     tipo: Literal["mensagem", "menu", "transferir", "encerrar"]
     texto: str = Field(default="", max_length=1500)
     opcoes: list[OpcaoIn] = Field(default_factory=list, max_length=10)

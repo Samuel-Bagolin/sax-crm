@@ -71,6 +71,7 @@ _MIGRACOES_RECURSO = [
     ("site_todos", "site", lambda d: True),  # site próprio para todos os planos de todos os segmentos (out/2026)
     # WhatsApp no CRM nos dois planos de cima de cada segmento (out/2026). Nos outros, vende como adicional.
     ("whatsapp_v1", "whatsapp", lambda d: (d.get("chave") or "").split("_")[-1] in ("business", "enterprise")),
+    ("whatsapp_todos", "whatsapp", lambda d: True),  # WhatsApp no CRM em todos os planos de todos os segmentos (out/2026)
 ]
 
 TIPOS_ADICIONAL = {

@@ -345,14 +345,15 @@ export default function AppShell() {
   }, [config.cor_primaria, config.nome_software, escuro]);
 
   // Cores do menu lateral (Sistema → Identidade visual). Padrão: as do tema (roxo SAX + laranja).
+  // No modo escuro o menu fica preto com o laranja SAX, como o resto da tela.
   useEffect(() => {
     const raiz = document.documentElement;
-    const vars = ehPadrao(config.cor_menu, config.cor_menu_destaque) ? null : variaveisMenu(config.cor_menu, config.cor_menu_destaque);
+    const vars = escuro || ehPadrao(config.cor_menu, config.cor_menu_destaque) ? null : variaveisMenu(config.cor_menu, config.cor_menu_destaque);
     const nomes = Object.keys(variaveisMenu("#000000", "#000000")!);
     nomes.forEach((n) => raiz.style.removeProperty(n));
     if (vars) Object.entries(vars).forEach(([n, v]) => raiz.style.setProperty(n, v));
     return () => nomes.forEach((n) => raiz.style.removeProperty(n));
-  }, [config.cor_menu, config.cor_menu_destaque]);
+  }, [config.cor_menu, config.cor_menu_destaque, escuro]);
 
   const caminho = location.pathname;
   const segTitulo = useSegmento();

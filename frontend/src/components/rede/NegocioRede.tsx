@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { Ban, Loader2, Plus, ShoppingBag } from "lucide-react";
 import { apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
 import { brl } from "@/lib/format";
-import { dataCurta } from "@/lib/crm";
+import { dataCurta, useCrmConfig } from "@/lib/crm";
+import { EscolherPrints, TIPOS_COM_PRINT } from "@/components/crm/Prints";
 import { useAuth } from "@/lib/useAuth";
 import { useRede } from "@/lib/rede";
 import { Button } from "@/components/ui/button";
@@ -167,8 +168,11 @@ const REUNIAO = ["reuniao", "visita", "almoco"];
 
 /** Ao concluir contato ou reunião na rede de lojas, pergunta o resultado: só o positivo destrava a etapa com cadeado. */
 export function ResultadoDialog({ atividade, onClose, onFeito }: { atividade: Atividade | null; onClose: () => void; onFeito: () => void }) {
+  const { data: cfg } = useCrmConfig();
+  const [prints, setPrints] = useState<{ nome: string; base64: string }[]>([]);
+  const exige = !!cfg?.print_obrigatorio && !!atividade?.negocio_id && TIPOS_COM_PRINT.includes(atividade.tipo);
   const salvar = useMutation({
-    mutationFn: (resultado: "positivo" | "negativo") => apiPatch(`/atividades/${atividade!.id}`, { concluida: true, resultado }),
+    mutationFn: (resultado: "positivo" | "negativo") => apiPatch(`/atividades/${atividade!.id}`, { concluida: true, resultado, anexos: prints.length ? prints : undefined }),
     onSuccess: () => { onFeito(); onClose(); },
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível concluir"),
   });
@@ -181,9 +185,10 @@ export function ResultadoDialog({ atividade, onClose, onFeito }: { atividade: At
           <DialogTitle>{reuniao ? "A reunião aconteceu?" : "O contato teve sucesso?"}</DialogTitle>
           <DialogDescription>{atividade.assunto}. Com resultado positivo, o card avança para a etapa que exige esta evidência.</DialogDescription>
         </DialogHeader>
+        {atividade.negocio_id && <EscolherPrints valor={prints} onChange={setPrints} obrigatorio={exige} />}
         <div className="grid grid-cols-2 gap-2">
-          <Button onClick={() => salvar.mutate("positivo")} disabled={salvar.isPending} data-testid="resultado-positivo">{reuniao ? "Realizada" : "Com sucesso"}</Button>
-          <Button variant="outline" onClick={() => salvar.mutate("negativo")} disabled={salvar.isPending}>{reuniao ? "Não realizada" : "Sem sucesso"}</Button>
+          <Button onClick={() => salvar.mutate("positivo")} disabled={salvar.isPending || (exige && !prints.length)} data-testid="resultado-positivo">{reuniao ? "Realizada" : "Com sucesso"}</Button>
+          <Button variant="outline" onClick={() => salvar.mutate("negativo")} disabled={salvar.isPending || (exige && !prints.length)}>{reuniao ? "Não realizada" : "Sem sucesso"}</Button>
         </div>
       </DialogContent>
     </Dialog>

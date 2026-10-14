@@ -364,7 +364,8 @@ async def criar(por: str) -> dict:
 
 DOMINIOS_DEMO = ("@pudimdemo.exemplo.com", "@demo-pudim.sax")
 COLECOES_FICTICIAS = ("leads", "entradas", "atividades", "historico", "transacoes", "site_itens", "site_item_midia", "site_midia",
-                      "wa_fluxos", "wa_setores", "cb_movimentos", "cb_compras", "pedidos", "supervisoes", "unidades", "funis", "agendamentos")
+                      "wa_fluxos", "wa_setores", "cb_movimentos", "cb_compras", "pedidos", "supervisoes", "unidades", "funis", "agendamentos",
+                      "anexos", "anexos_pendentes")
 
 
 async def limpar(empresa: dict, nome_novo: str, por: str) -> dict:

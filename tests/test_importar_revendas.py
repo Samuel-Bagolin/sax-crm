@@ -38,7 +38,8 @@ def _xlsx(sufixo: str) -> str:
                       "Na etapa desde", "Ganho em", "Perdido em", "Atualizado em", "Atualizado por", "Supervisão"],
                      ["N-1", "L-1", "F-REVENDA", "E2", "aberto", "U-2", "Lider Teste", "O Pudim Perfeito - Batel", "CURITIBA", "0", "", "06/10/2026", "07/10/2026", "", "", "08/10/2026", "Lider Teste", "SUP-X", "Frio"]])
     aba("ATIVIDADES", [["ID Atividade", "ID Negócio", "Tipo", "Título", "Observação", "Prazo", "Status", "Anexo (ID arquivo)", "Feito por", "Criada em", "Concluída em", "Criada por"],
-                       ["A-1", "N-1", "Contato", "Primeiro contato", "Liguei e mandei WhatsApp", "07/10/2026", "Sucesso", "", "Lider Teste", "06/10/2026", "07/10/2026", "Sistema"]])
+                       ["A-1", "N-1", "Contato", "Primeiro contato", "Liguei e mandei WhatsApp", "07/10/2026", "Sucesso", "DRV-1, DRV-2", "Lider Teste", "06/10/2026", "07/10/2026", "Sistema"]])
+    aba("ANEXOS", [["ID arquivo", "Nome do arquivo"], ["DRV-1", "N-1_20261007_WhatsApp Image.jpg"]])
     aba("HISTORICO", [["Data", "ID Negócio", "Negócio", "Usuário", "Ação", "Detalhe"], ["07/10/2026", "N-1", "Restaurante Fictício", "Lider Teste", "Etapa alterada", "Novo lead → Primeiro contato"]])
     aba("PEDIDOS", [["ID", "ID Negócio"]])
     buf = io.BytesIO()
@@ -76,8 +77,21 @@ def test_importa_planilha_sem_senhas_e_sem_duplicar(sysadmin, cartao_demo):  # n
     # lead sem negócio fica sem dono, na praça dele: quem distribui é o supervisor (não vai para a fila livre)
     assert any(e["nome"] == "Bar Sem Negócio" and not e["corretor_id"] and e["praca"] == "Curitiba" for e in entradas)
 
+    # prints do Drive: a planilha liga cada arquivo à atividade; o arquivo entra depois, pelo nome ou pelo ID
+    assert r["contagens"]["prints_pendentes"] == 2
+    assert sysadmin.get(f"/plataforma/empresas/{empresa_id}/prints-pendentes").json()["pendentes"] == 2
+    jpg = base64.b64encode(b"\xff\xd8\xff\xe0" + b"x" * 300).decode()
+    um = sysadmin.post(f"/plataforma/empresas/{empresa_id}/importar-print", json={"nome": "N-1_20261007_WhatsApp Image.jpg", "base64": jpg}).json()
+    assert um["ok"] and um["restantes"] == 1
+    assert sysadmin.post(f"/plataforma/empresas/{empresa_id}/importar-print", json={"nome": "DRV-2.jpg", "base64": jpg}).json()["ok"]
+    assert not sysadmin.post(f"/plataforma/empresas/{empresa_id}/importar-print", json={"nome": "outro.jpg", "base64": jpg}).json()["ok"]
+    prints = c.get(f"/leads/{neg[0]['id']}/anexos").json()
+    assert len(prints) == 2 and prints[0]["autor_nome"] == "Lider Teste" and prints[0]["atividade_assunto"] == "Primeiro contato"
+    assert c.get("/crm/config").json()["print_obrigatorio"] is True
+
     # importar de novo não duplica
     de_novo = sysadmin.post(f"/plataforma/empresas/{empresa_id}/importar-revendas", json={"arquivo_base64": arquivo, "simular": False}).json()
+    assert de_novo["contagens"]["prints_pendentes"] == 0
     assert de_novo["contagens"]["negocios"] == 0 and de_novo["contagens"]["leads"] == 0 and de_novo["contagens"]["usuarios"] == 0
     assert len(c.get("/leads").json()) == 1
 

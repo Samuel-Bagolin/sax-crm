@@ -5,10 +5,10 @@ todos e pode filtrar por corretor.
 """
 
 from datetime import timedelta
-from typing import List
+from typing import List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from lib import automacoes
 from lib.auth import Principal, authorize, filtro_do_principal, require
@@ -364,7 +364,14 @@ async def mover(lead_id: str, input: MoverInput, principal: Principal = Depends(
 @router.post("/{lead_id}/ganhar", response_model=Lead)
 async def ganhar(lead_id: str, principal: Principal = Depends(require("lead:update"))):
     doc = await _carregar(lead_id, principal)
+    await _exigir_pedido(doc, principal)
     return to_lead(await _aplicar(doc, {"status": "ganho"}, principal))
+
+
+async def _exigir_pedido(doc: dict, principal: Principal) -> None:
+    """Rede de lojas (comércio): ganho só com pedido registrado (valor total vendido). O pedido marca o ganho."""
+    if principal.segmento == "comercio" and not await db.pedidos.find_one({"negocio_id": doc["id"], "status": {"$ne": "cancelado"}}, {"id": 1}):
+        raise HTTPException(409, "Para marcar ganho, registre o pedido com o valor total vendido.")
 
 
 @router.post("/{lead_id}/perder", response_model=Lead)
@@ -437,12 +444,117 @@ async def excluir_nota(lead_id: str, nota_id: str, principal: Principal = Depend
 @router.delete("/{lead_id}", status_code=204)
 async def delete_lead(lead_id: str, principal: Principal = Depends(require("lead:delete"))):
     doc = await _carregar(lead_id, principal, "lead:delete")
-    if await db.contratos.find_one({"lead_id": lead_id}) or await db.visitas.find_one({"lead_id": lead_id}):
-        raise HTTPException(409, "Negócio vinculado a contrato ou visita não pode ser excluído")
+    await _pode_excluir(doc, principal)
     await audit(principal, "lead.delete", lead_id)
     await db.leads.delete_one({"id": doc["id"]})
     await db.atividades.delete_many({"negocio_id": lead_id, "concluida": False})
     return None
+
+
+async def _pode_excluir(doc: dict, principal: Principal) -> None:
+    if principal.segmento == "comercio" and not principal.is_admin:
+        raise HTTPException(403, "Só a gestão exclui negócio. Marque como perdido para não distorcer a conversão.")
+    lead_id = doc["id"]
+    if await db.contratos.find_one({"lead_id": lead_id}) or await db.visitas.find_one({"lead_id": lead_id}):
+        raise HTTPException(409, "Negócio vinculado a contrato ou visita não pode ser excluído")
+    if await db.pedidos.find_one({"negocio_id": lead_id}, {"id": 1}):
+        raise HTTPException(409, "Negócio com pedido não pode ser excluído")
+
+
+# ------------------------------------------------------------------ alteração em massa
+
+
+class MassaIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=500)
+    acao: Literal["responsavel", "etapa", "supervisao", "perdido", "reabrir", "excluir", "etiqueta"]
+    corretor_id: str | None = None
+    funil_id: str | None = None
+    etapa_id: str | None = None
+    supervisao_id: str | None = None
+    praca: str | None = None
+    motivo: str | None = Field(default=None, max_length=300)
+    etiqueta: str | None = Field(default=None, max_length=40)
+    confirmacao: str | None = None  # "EXCLUIR" para excluir em massa
+
+
+@router.post("/massa")
+async def alterar_em_massa(input: MassaIn, principal: Principal = Depends(require("lead:update"))):
+    """Aplica a mesma ação em vários negócios. Item fora da regra não trava os outros: volta em `falhas`."""
+    if input.acao == "excluir":
+        if input.confirmacao != "EXCLUIR":
+            raise HTTPException(422, "Para excluir em massa, digite EXCLUIR")
+    if input.acao == "responsavel" and input.corretor_id:
+        await reference("pessoas", input.corretor_id, principal)
+    if input.acao == "perdido" and (await carregar_crm_config()).exige_motivo_perda and not (input.motivo or "").strip():
+        raise HTTPException(422, "Informe o motivo da perda")
+    from lib.requisitos import bloqueio
+
+    ok, iguais, falhas = 0, 0, []
+    funil_destino = await _funil(input.funil_id) if input.funil_id else None
+    for lid in dict.fromkeys(input.ids):
+        doc = await db.leads.find_one({"id": lid})
+        nome = (doc or {}).get("nome") or lid
+        try:
+            if not doc:
+                raise HTTPException(404, "Negócio não encontrado")
+            authorize(principal, "lead:delete" if input.acao == "excluir" else "lead:update", doc)
+            if input.acao == "excluir":
+                await _pode_excluir(doc, principal)
+                await audit(principal, "lead.delete", lid)
+                await db.leads.delete_one({"id": lid})
+                await db.atividades.delete_many({"negocio_id": lid, "concluida": False})
+                ok += 1
+                continue
+            data: dict = {}
+            if input.acao == "responsavel":
+                if not principal.is_admin and not (principal.supervisiona and input.corretor_id in [*principal.escopo_equipe, principal.pessoa_id]):
+                    raise HTTPException(403, "Você não pode passar para essa pessoa")
+                data["corretor_id"] = input.corretor_id
+            elif input.acao == "etapa":
+                if doc.get("status") != "aberto":
+                    raise HTTPException(409, "Negócio fechado: reabra antes de mudar a etapa")
+                funil = funil_destino or await _funil(doc.get("funil_id"))
+                if not funil or not _etapa(funil, input.etapa_id):
+                    raise HTTPException(422, "Etapa não pertence ao funil")
+                if funil["id"] == doc.get("funil_id"):
+                    motivo = await bloqueio(doc, funil, input.etapa_id)
+                    if motivo:
+                        raise HTTPException(409, motivo)
+                data.update(funil_id=funil["id"], etapa_id=input.etapa_id)
+            elif input.acao == "supervisao":
+                if not principal.is_admin and input.supervisao_id and input.supervisao_id not in principal.escopo_supervisoes:
+                    raise HTTPException(403, "Supervisão fora da sua área")
+                data["supervisao_id"] = input.supervisao_id or None
+                if input.praca:
+                    data["praca"] = input.praca
+            elif input.acao == "perdido":
+                if doc.get("status") == "perdido":
+                    iguais += 1
+                    continue
+                data.update(status="perdido", motivo_perda=(input.motivo or "").strip() or None)
+            elif input.acao == "reabrir":
+                if doc.get("status") == "aberto":
+                    iguais += 1
+                    continue
+                if await db.contratos.find_one({"lead_id": lid, "status": "ativo"}):
+                    raise HTTPException(409, "Negócio com contrato ativo não pode ser reaberto")
+                data["status"] = "aberto"
+            elif input.acao == "etiqueta":
+                tag = (input.etiqueta or "").strip()
+                if not tag:
+                    raise HTTPException(422, "Informe a etiqueta")
+                if tag in (doc.get("etiquetas") or []):
+                    iguais += 1
+                    continue
+                data["etiquetas"] = [*(doc.get("etiquetas") or []), tag]
+            if all(doc.get(k) == v for k, v in data.items()):
+                iguais += 1
+                continue
+            await _aplicar(doc, data, principal)
+            ok += 1
+        except HTTPException as e:
+            falhas.append({"id": lid, "nome": nome, "motivo": e.detail if e.status_code != 404 else "Negócio não encontrado"})
+    return {"ok": ok, "iguais": iguais, "falhas": falhas}
 
 
 async def _efeitos_ganho(lead: dict) -> None:
