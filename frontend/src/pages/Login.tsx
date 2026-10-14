@@ -72,7 +72,7 @@ export default function Login() {
 
         <div className="pointer-events-none absolute inset-0 opacity-[0.09] [background-image:radial-gradient(#fff_1.5px,transparent_1.5px)] [background-size:26px_26px]" />
 
-        <div className="relative my-10 lg:my-0">
+        <div className="relative my-10 lg:mb-0 lg:mt-14">
           <h1 className="font-heading text-3xl font-bold leading-tight tracking-tight lg:text-[40px]">
             O CRM feito para o
             <br />

@@ -152,7 +152,10 @@ async def situacao(principal: Principal = Depends(require("whatsapp:atender"))):
 
 
 @router.get("/versao")
-async def versao(principal: Principal = Depends(_atender)):
+async def versao(principal: Principal = Depends(require("whatsapp:atender"))):
+    # Chamada a cada poucos segundos: só o contador, sem conferir o plano (as outras rotas conferem).
+    if not principal.empresa_id:
+        raise HTTPException(403, "Entre em uma empresa")
     estado = await db.wa_estado.find_one({"id": "singleton"}) or {}
     return {"versao": int(estado.get("versao") or 0)}
 

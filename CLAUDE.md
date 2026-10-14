@@ -114,7 +114,7 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    Empresas > Pagamentos ou `EVOLUTION_URL`/`EVOLUTION_API_KEY`. `controle.whatsapp_instancias` liga a
    instância ao banco e guarda o token do webhook (`/api/webhooks/whatsapp/{token}`). Mensagem e conversa
    têm `_id` fixo (instância|id, instância|jid): webhook repetido não duplica. A tela consulta só
-   `wa_estado.versao` a cada 4 s. Setores (`wa_setores`, nome livre e membros) e responsáveis por número
+   `wa_estado.versao` a cada 8 s, só com a aba visível (cada leitura do Firestore conta na cota). Setores (`wa_setores`, nome livre e membros) e responsáveis por número
    (`responsaveis`, `setor_id` em `wa_conexoes`): número com setor ou responsáveis é restrito, só essas pessoas
    veem as conversas dele; número sem os dois é aberto (cada um vê as dele e as sem dono). Gestor vê tudo;
    conversa passada para alguém aparece para essa pessoa. Número de uma pessoa só: conversa nova já nasce dela

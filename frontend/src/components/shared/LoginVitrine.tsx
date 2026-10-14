@@ -66,54 +66,69 @@ function TelaVeiculo() {
   );
 }
 
-// Mesma leitura do odontograma 3D do sistema: arcada superior e inferior com gengiva e dentes coloridos
-// pela situação (cárie, restaurado, canal, coroa). Desenho leve em SVG, sem carregar o 3D no login.
-const COR_DENTE: Record<number, string> = { 16: "#ef4444", 11: "#c9a227", 24: "#ef4444", 26: "#3b82f6", 36: "#8b5cf6", 47: "#94a3b8" };
-const ORDEM_SUP = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
-const ORDEM_INF = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+// Sorriso de frente: lábios, dentes superiores e inferiores e dois dentes marcados no plano de tratamento.
+// Desenho leve em SVG, sem carregar o 3D no login.
+const SUPERIORES = [
+  { n: 15, w: 13 }, { n: 14, w: 14 }, { n: 13, w: 15 }, { n: 12, w: 16 }, { n: 11, w: 20 },
+  { n: 21, w: 20 }, { n: 22, w: 16 }, { n: 23, w: 15 }, { n: 24, w: 14 }, { n: 25, w: 13 },
+];
+const MARCADOS: Record<number, string> = { 12: "#f59e0b", 22: "#f59e0b" };
 
-function Arcada({ superior }: { superior: boolean }) {
-  const cx = 150, cy = superior ? 84 : 20, rx = superior ? 100 : 90, ry = superior ? 62 : 50;
-  const ordem = superior ? ORDEM_SUP : ORDEM_INF;
-  const ponto = (t: number) => {
-    // t de 0 a 1 percorre a meia elipse (de um lado ao outro, passando pela frente)
-    const a = Math.PI * (superior ? 1 + t : 1 - t);
-    return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), ang: (Math.atan2(ry * Math.cos(a), -rx * Math.sin(a)) * 180) / Math.PI };
-  };
-  const gengiva = Array.from({ length: 41 }, (_, i) => ponto(0.02 + (0.96 * i) / 40)).map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+function Sorriso() {
+  const total = SUPERIORES.reduce((t, d) => t + d.w, 0);
+  let x = 130 - total / 2;
+  const dentes = SUPERIORES.map((d) => {
+    const centro = Math.abs(x + d.w / 2 - 130);
+    const fundo = 88 - centro * 0.13; // dentes do fundo sobem acompanhando a curva do sorriso
+    const r = { ...d, x, fundo };
+    x += d.w;
+    return r;
+  });
+  const boca = "M50,74 C92,62 168,62 210,74 C188,110 72,110 50,74 Z";
   return (
-    <g>
-      <path d={gengiva} fill="none" stroke="#f3b9c3" strokeWidth="34" strokeLinecap="round" />
-      <path d={gengiva} fill="none" stroke="#e99aa9" strokeWidth="30" strokeLinecap="round" opacity=".25" transform={`translate(0 ${superior ? -3 : 3})`} />
-      {ordem.map((n, i) => {
-        const p = ponto(0.04 + (0.92 * i) / (ordem.length - 1));
-        const pos = Math.abs(i - 7.5); // 0 na frente, 7.5 no fundo
-        const w = pos > 4.5 ? 17 : pos > 2.5 ? 14 : 12;
-        const h = pos > 4.5 ? 17 : 19;
-        const cor = COR_DENTE[n] ?? "#f6f1e6";
-        return (
-          <g key={n} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${p.ang.toFixed(1)})`}>
-            <rect x={-w / 2} y={-h / 2} width={w} height={h} rx="4" fill={cor} stroke={cor === "#f6f1e6" ? "#ddd3c0" : "rgba(0,0,0,.18)"} strokeWidth="1" />
-            <rect x={-w / 2 + 2} y={-h / 2 + 2} width={w - 4} height="3" rx="1.5" fill="#fff" opacity=".55" />
-            {n === 16 && <rect x={-w / 2 - 4} y={-h / 2 - 4} width={w + 8} height={h + 8} rx="7" fill="none" stroke="#ff7a00" strokeWidth="2" />}
+    <svg viewBox="20 28 220 106" className="mx-auto block h-[112px] w-auto" aria-hidden="true">
+      <defs>
+        <linearGradient id="lab-sup" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#e88a98" /><stop offset="1" stopColor="#c95b6d" /></linearGradient>
+        <linearGradient id="lab-inf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#d8687a" /><stop offset="1" stopColor="#e79aa6" /></linearGradient>
+        <linearGradient id="dente" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ffffff" /><stop offset="1" stopColor="#eef0f5" /></linearGradient>
+        <radialGradient id="interior" cx=".5" cy=".3" r=".7"><stop offset="0" stopColor="#7a2a3a" /><stop offset="1" stopColor="#4a1522" /></radialGradient>
+        <clipPath id="clip-boca"><path d={boca} /></clipPath>
+      </defs>
+      <path d={boca} fill="url(#interior)" />
+      <g clipPath="url(#clip-boca)">
+        <ellipse cx="130" cy="104" rx="46" ry="14" fill="#c4505f" opacity=".85" />
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <rect key={i} x={84 + i * 11.5} y="91" width="11" height="22" rx="4" fill="#f3f3f6" stroke="#dcdfe6" strokeWidth=".8" />
+        ))}
+        {dentes.map((d) => (
+          <g key={d.n}>
+            <rect x={d.x + 0.6} y="56" width={d.w - 1.2} height={d.fundo - 56} rx="5" fill={MARCADOS[d.n] ? "#fff4db" : "url(#dente)"} stroke={MARCADOS[d.n] ?? "#dde1e8"} strokeWidth={MARCADOS[d.n] ? 1.6 : 0.9} />
+            <rect x={d.x + 3} y="70" width={Math.max(2, d.w - 9)} height="4" rx="2" fill="#fff" opacity=".8" />
           </g>
-        );
-      })}
-    </g>
+        ))}
+      </g>
+      <path d="M30,74 C56,48 96,42 119,52 C125,47 135,47 141,52 C164,42 204,48 230,74 L210,74 C168,62 92,62 50,74 Z" fill="url(#lab-sup)" />
+      <path d="M30,74 L50,74 C72,110 188,110 210,74 L230,74 C214,116 174,128 130,128 C86,128 46,116 30,74 Z" fill="url(#lab-inf)" />
+      <path d="M96,114 C112,120 148,120 164,114" stroke="#fff" strokeOpacity=".45" strokeWidth="3" fill="none" strokeLinecap="round" />
+      {dentes.filter((d) => MARCADOS[d.n]).map((d) => (
+        <g key={`tag-${d.n}`}>
+          <path d={`M${d.x + d.w / 2},62 L${d.x + d.w / 2},${d.n === 12 ? 40 : 40}`} stroke="#ff7a00" strokeWidth="1.2" strokeDasharray="2 2" />
+          <rect x={d.x + d.w / 2 - 11} y="31" width="22" height="13" rx="6.5" fill="#ff7a00" />
+          <text x={d.x + d.w / 2} y="40.5" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#fff">{d.n}</text>
+        </g>
+      ))}
+    </svg>
   );
 }
 
 function TelaOdonto() {
   return (
     <Moldura rotulo="Odontograma 3D">
-      <div className="rounded-xl bg-gradient-to-b from-[#f7f4fb] to-[#efe9f7]">
-        <svg viewBox="22 4 256 192" className="mx-auto block h-[132px] w-auto py-1" aria-hidden="true">
-          <Arcada superior />
-          <g transform="translate(0 102)"><Arcada superior={false} /></g>
-        </svg>
+      <div className="rounded-xl bg-gradient-to-b from-[#fdf3ef] to-[#f6e7e4] py-1">
+        <Sorriso />
       </div>
       <div className="mt-3 flex items-center justify-between text-sm">
-        <span>Restauração 16 e 24, canal 26</span>
+        <span>Restauração 12 e 22, clareamento</span>
         <b className="text-[#4a03a2]">R$ 1.400</b>
       </div>
     </Moldura>
@@ -162,18 +177,46 @@ function TelaBarbearia() {
   );
 }
 
+function Rosto() {
+  // Pontos de aplicação: testa, pés de galinha e bigode chinês.
+  const pontos: [number, number][] = [[64, 38], [32, 62], [88, 62], [43, 84], [77, 84]];
+  return (
+    <svg viewBox="0 0 120 140" className="h-36 w-[118px] shrink-0" aria-hidden="true">
+      <defs>
+        <linearGradient id="pele" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#f6d5c0" /><stop offset="1" stopColor="#ebb89c" /></linearGradient>
+        <linearGradient id="cabelo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#5b3a2e" /><stop offset="1" stopColor="#3a241c" /></linearGradient>
+        <radialGradient id="blush"><stop offset="0" stopColor="#f08f8f" stopOpacity=".55" /><stop offset="1" stopColor="#f08f8f" stopOpacity="0" /></radialGradient>
+      </defs>
+      <path d="M60 4C30 4 14 26 15 58c1 26 4 52 4 76h82c0-24 3-50 4-76C106 26 90 4 60 4z" fill="url(#cabelo)" />
+      <path d="M48 104h24v30H48z" fill="#e7b293" />
+      <path d="M36 140c2-16 12-22 24-22s22 6 24 22z" fill="#e7b293" />
+      <path d="M60 14c24 0 36 19 36 44 0 30-16 54-36 56-20-2-36-26-36-56 0-25 12-44 36-44z" fill="url(#pele)" />
+      <ellipse cx="21.5" cy="62" rx="4" ry="7" fill="#ebb89c" />
+      <ellipse cx="98.5" cy="62" rx="4" ry="7" fill="#ebb89c" />
+      <path d="M24 46C26 22 42 10 62 10c16 0 30 10 34 30-10-12-24-16-38-12-12 3-22 10-34 18z" fill="url(#cabelo)" />
+      <path d="M36 52q8-5 16-1M68 51q8-4 16 1" stroke="#6b4436" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <path d="M38 61q6 5 12 0M70 61q6 5 12 0" stroke="#5a3a30" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      <path d="M39 62l-2 2.5M43.5 63.5l-.6 3M48 62.5l1.4 2.7M71 62.5l-1.4 2.7M75.5 63.5l.6 3M80 62l2 2.5" stroke="#5a3a30" strokeWidth="1" strokeLinecap="round" />
+      <path d="M60 64c0 8-2 14-5 17 3 2 7 2 10 0" stroke="#cf9578" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      <ellipse cx="40" cy="78" rx="9" ry="6" fill="url(#blush)" />
+      <ellipse cx="80" cy="78" rx="9" ry="6" fill="url(#blush)" />
+      <path d="M50 92c4-3 7-3 10-1 3-2 6-2 10 1-3 5-7 7-10 7s-7-2-10-7z" fill="#d46f7c" />
+      <path d="M50 92c6 1.5 14 1.5 20 0" stroke="#b5525f" strokeWidth="1" fill="none" strokeLinecap="round" />
+      {pontos.map(([x, y], i) => (
+        <g key={i}>
+          <circle cx={x} cy={y} r="7" fill="#4a03a2" opacity=".18"><animate attributeName="r" values="4;8;4" dur="2.4s" begin={`${i * 0.3}s`} repeatCount="indefinite" /></circle>
+          <circle cx={x} cy={y} r="3.6" fill="#4a03a2" stroke="#fff" strokeWidth="1.4" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function TelaEstetica() {
-  const pontos = [[60, 30], [44, 46], [76, 46], [50, 82], [70, 82]];
   return (
     <Moldura rotulo="Mapa facial">
       <div className="flex items-center gap-4">
-        <svg viewBox="0 0 120 130" className="h-32 w-28 shrink-0">
-          <defs><linearGradient id="pele" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#f3c9ad" /><stop offset="1" stopColor="#e2ab8c" /></linearGradient></defs>
-          <path d="M60 6c26 0 40 22 38 50-2 30-18 64-38 66C40 120 24 86 22 56 20 28 34 6 60 6z" fill="url(#pele)" />
-          <path d="M40 50q8-6 16 0M64 50q8-6 16 0" stroke="#8a5a45" strokeWidth="2" fill="none" strokeLinecap="round" />
-          <path d="M48 92q12 8 24 0" stroke="#b5655a" strokeWidth="3" fill="none" strokeLinecap="round" />
-          {pontos.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="4.5" fill="#4a03a2" stroke="#fff" strokeWidth="1.5" />)}
-        </svg>
+        <div className="rounded-xl bg-gradient-to-b from-[#f7f1fb] to-[#efe7f7] px-2 pt-2"><Rosto /></div>
         <div className="grid gap-1.5 text-sm">
           <p><b>5 pontos</b> marcados</p>
           <p className="text-[#6b5f86]">Toxina botulínica, 24 U</p>

@@ -96,10 +96,10 @@ export default function WhatsApp() {
   const qc = useQueryClient();
   const { principal, isAdmin } = useAuth();
   const seg = useSegmento();
-  const sit = useQuery({ queryKey: ["wa", "situacao"], queryFn: () => apiGet<Situacao>("/whatsapp/situacao"), refetchInterval: 30_000 });
+  const sit = useQuery({ queryKey: ["wa", "situacao"], queryFn: () => apiGet<Situacao>("/whatsapp/situacao"), refetchInterval: 120_000 });
   const ok = !!sit.data?.liberado && !!sit.data?.servidor_ok;
-  // Uma leitura leve a cada 4 s; a lista só recarrega quando algo mudou.
-  const ver = useQuery({ queryKey: ["wa", "versao"], queryFn: () => apiGet<{ versao: number }>("/whatsapp/versao"), enabled: ok, refetchInterval: 4000 });
+  // Uma leitura leve a cada 8 s, só com a aba visível; a lista só recarrega quando algo mudou.
+  const ver = useQuery({ queryKey: ["wa", "versao"], queryFn: () => apiGet<{ versao: number }>("/whatsapp/versao"), enabled: ok, refetchInterval: 8000, refetchIntervalInBackground: false });
   const versao = ver.data?.versao ?? 0;
   const [aba, setAba] = useState<"conversas" | "numeros">("conversas");
   const [filtro, setFiltro] = useState<Filtro>("todas");
