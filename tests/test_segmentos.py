@@ -280,3 +280,26 @@ def test_demo_do_pudim_cria_empresa_de_comercio_com_dados():
     assert 0 < len(b.get("/leads").json()) < len(g.get("/leads").json())
     sem = httpx.Client(base_url=API).post("/plataforma/demos/pudim")
     assert sem.status_code in (401, 403)
+
+
+def test_demo_vira_empresa_real_sem_dados_ficticios():
+    root = httpx.Client(base_url=API, timeout=120)
+    root.post("/auth/login", json={"email": os.environ["CRM_SYSADMIN"], "senha": os.environ["CRM_SYSADMIN_SENHA"]})
+    antiga = next((e for e in root.get("/empresas").json() if e["slug"] == "demo-pudim-perfeito"), None)
+    if antiga:
+        root.delete(f"/empresas/{antiga['id']}", params={"confirmar": "demo-pudim-perfeito"})
+    d = root.post("/plataforma/demos/pudim").json()
+    eid = d["empresa_id"]
+    assert next(e for e in root.get("/empresas").json() if e["id"] == eid)["demo_apresentacao"] is True
+    assert root.post(f"/plataforma/empresas/{eid}/limpar-demonstracao", json={"confirmar": "errado", "nome": "O Pudim Perfeito"}).status_code == 422
+    r = root.post(f"/plataforma/empresas/{eid}/limpar-demonstracao", json={"confirmar": "demo-pudim-perfeito", "nome": "O Pudim Perfeito"})
+    assert r.status_code == 200, r.text
+    e = next(e for e in root.get("/empresas").json() if e["id"] == eid)
+    assert e["nome"] == "O Pudim Perfeito" and e["demo_apresentacao"] is False
+    # a equipe fictícia não entra mais; os dados sumiram
+    assert httpx.post(f"{API}/auth/login", json={"email": d["emails"][0], "senha": d["senha"]}).status_code in (401, 403, 404)
+    h = {"X-Sax-Empresa": eid}
+    assert root.get("/leads", headers=h).json() == [] and root.get("/entradas", headers=h).json() == []
+    assert len(root.get("/unidades", headers=h).json()) == 1 and len(root.get("/funis", headers=h).json()) >= 1
+    # empresa que não é de demonstração não pode ser limpa
+    assert root.post(f"/plataforma/empresas/{eid}/limpar-demonstracao", json={"confirmar": "demo-pudim-perfeito", "nome": "Outro nome"}).status_code == 409

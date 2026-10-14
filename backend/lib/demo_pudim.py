@@ -360,3 +360,46 @@ async def criar(por: str) -> dict:
         definir_empresa(None)
 
     return {"empresa_id": empresa.id, "nome": NOME, "emails": emails, "senha": senha, "site": SLUG_SITE}
+
+
+DOMINIOS_DEMO = ("@pudimdemo.exemplo.com", "@demo-pudim.sax")
+COLECOES_FICTICIAS = ("leads", "entradas", "atividades", "historico", "transacoes", "site_itens", "site_item_midia", "site_midia",
+                      "wa_fluxos", "wa_setores", "cb_movimentos", "cb_compras", "pedidos", "supervisoes", "unidades", "funis", "agendamentos")
+
+
+async def limpar(empresa: dict, nome_novo: str, por: str) -> dict:
+    """Apaga os dados fictícios da demonstração e deixa a empresa pronta para os dados reais (importar a planilha).
+
+    Mantém a empresa, o banco, o plano e a assinatura. Sai: negócios, leads, clientes, atividades, financeiro,
+    cardápio e site de exemplo, lojas e funis fictícios e os acessos da equipe de demonstração."""
+    from lib.crm import garantir_crm
+    from lib.db import client, controle
+    from lib.tenant import desindexar_usuario
+
+    banco = client[empresa["db_name"]]
+    apagados: dict[str, int] = {}
+    for nome in COLECOES_FICTICIAS:
+        r = await banco[nome].delete_many({})
+        apagados[nome] = getattr(r, "deleted_count", 0) or 0
+    # equipe fictícia sai; quem não é da demonstração fica
+    usuarios = await banco.usuarios.find({}).to_list(1000)
+    ficam = {u.get("pessoa_id") for u in usuarios if not (u.get("email") or "").endswith(DOMINIOS_DEMO)}
+    for u in usuarios:
+        if (u.get("email") or "").endswith(DOMINIOS_DEMO):
+            await banco.usuarios.delete_one({"id": u["id"]})
+            await desindexar_usuario(u["email"], empresa["id"])
+            apagados["usuarios"] = apagados.get("usuarios", 0) + 1
+    for p in await banco.pessoas.find({}, {"id": 1}).to_list(50000):
+        if p["id"] not in ficam:
+            await banco.pessoas.delete_one({"id": p["id"]})
+            apagados["pessoas"] = apagados.get("pessoas", 0) + 1
+    await banco.site_imobiliaria.delete_many({})
+    await controle.sites_index.delete_many({"db_name": empresa["db_name"]})
+    await banco.configuracoes.update_one({"id": "singleton"}, {"$set": {
+        "nome_software": nome_novo, "slogan": "", "cashback": None, "crm": None, "atualizado_em": now_utc(), "atualizado_por": por}})
+    await garantir_crm(banco, "comercio")  # funis e listas do segmento de novo; a planilha troca pelas dela
+    await banco.unidades.insert_one({"id": new_id(), "nome": nome_novo, "principal": True, "ativa": True, "endereco": None,
+                                     "cidade": None, "telefone": None, "whatsapp": None, "created_at": now_utc()})
+    await controle.empresas.update_one({"id": empresa["id"]}, {"$set": {
+        "nome": nome_novo, "demo_apresentacao": False, "observacoes": None, "updated_at": now_utc()}})
+    return {"ok": True, "apagados": {k: v for k, v in apagados.items() if v}}

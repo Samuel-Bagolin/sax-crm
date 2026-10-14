@@ -3,7 +3,7 @@ import { LinhaAceite } from "@/components/termo/ComprovanteTermo";
 import { abrirEmpresaEmNovaAba } from "@/lib/suporte";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BarChart3, Building, Download, FileSpreadsheet, LogIn, Mail, Pencil, Plus, ShieldCheck, Upload } from "lucide-react";
+import { BarChart3, Building, Download, FileSpreadsheet, LogIn, Mail, Pencil, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, detalheErro } from "@/lib/api";
 import { brl } from "@/lib/format";
 import type { Ambiente, EmpresaResumo, UsoEmpresa } from "@/lib/types";
@@ -55,6 +55,20 @@ export default function Empresas() {
   const [aba, setAba] = useState<"painel" | "empresas" | "planos" | "pagamentos" | "admins">("painel");
   const [filtroSeg, setFiltroSeg] = useState<string>("");
   const [importar, setImportar] = useState<EmpresaResumo | null>(null);
+  const [limpar, setLimpar] = useState<EmpresaResumo | null>(null);
+  const [limparNome, setLimparNome] = useState("");
+  const [limparConfirma, setLimparConfirma] = useState("");
+  const limparDemo = useMutation({
+    mutationFn: (e: EmpresaResumo) => apiPost<{ apagados: Record<string, number> }>(`/plataforma/empresas/${e.id}/limpar-demonstracao`, { confirmar: limparConfirma.trim(), nome: limparNome.trim() }),
+    onSuccess: (_r, e) => {
+      qc.invalidateQueries({ queryKey: ["empresas"] });
+      qc.invalidateQueries({ queryKey: ["uso-empresas"] });
+      toast.success("Dados fictícios apagados. Agora importe a planilha.");
+      setLimpar(null);
+      setImportar({ ...e, nome: limparNome.trim(), demo_apresentacao: false });
+    },
+    onError: (err) => toast.error(detalheErro(err) ?? "Não foi possível apagar"),
+  });
   const [linkAtivacao, setLinkAtivacao] = useState<{ empresa: string; email: string; link: string; enviado: boolean } | null>(null);
   const { data: catalogo } = useCatalogoPlanos();
   const [form, setForm] = useState({
@@ -390,7 +404,12 @@ export default function Empresas() {
                 >
                   <Download className="h-4 w-4" /> Backup
                 </Button>
-                {e.segmento === "comercio" && (
+                {e.demo_apresentacao && (
+                  <Button variant="outline" size="sm" onClick={() => { setLimpar(e); setLimparNome(e.nome.replace(/^\[DEMO\]\s*/i, "")); setLimparConfirma(""); }} data-testid={`empresa-limpar-demo-${e.slug}`}>
+                    <Trash2 className="h-4 w-4" /> Apagar dados fictícios
+                  </Button>
+                )}
+                {e.segmento === "comercio" && !e.demo_apresentacao && (
                   <Button variant="outline" size="sm" onClick={() => setImportar(e)} data-testid={`empresa-importar-${e.slug}`}>
                     <FileSpreadsheet className="h-4 w-4" /> Importar planilha
                   </Button>
@@ -508,6 +527,27 @@ export default function Empresas() {
       <ComercialDialog empresa={comercial} onClose={() => setComercial(null)} />
 
       {importar && <ImportarRevendas empresa={importar} onClose={() => setImportar(null)} />}
+
+      <Dialog open={!!limpar} onOpenChange={(o) => !o && setLimpar(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Transformar {limpar?.nome} em empresa real</DialogTitle>
+            <DialogDescription>
+              Apaga tudo o que é fictício da demonstração: negócios, leads, clientes, atividades, financeiro, cardápio, site de exemplo, lojas,
+              afiliados e a equipe de demonstração. A empresa, o plano e a assinatura ficam. Depois você importa a planilha com os dados reais.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5"><Label htmlFor="ld-nome">Nome da empresa</Label><Input id="ld-nome" value={limparNome} onChange={(ev) => setLimparNome(ev.target.value)} /></div>
+            <div className="grid gap-1.5"><Label htmlFor="ld-conf">Para confirmar, digite <b>{limpar?.slug}</b></Label><Input id="ld-conf" value={limparConfirma} onChange={(ev) => setLimparConfirma(ev.target.value)} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLimpar(null)}>Cancelar</Button>
+            <Button variant="destructive" disabled={limparConfirma.trim() !== limpar?.slug || limparNome.trim().length < 2 || limparDemo.isPending}
+              onClick={() => limpar && limparDemo.mutate(limpar)} data-testid="limpar-demo-confirmar">Apagar dados fictícios</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!linkAtivacao} onOpenChange={(o) => !o && setLinkAtivacao(null)}>
         <DialogContent className="sm:max-w-lg">

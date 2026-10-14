@@ -325,3 +325,25 @@ async def importar_revendas(empresa_id: str, input: ImportarPlanilhaIn, principa
     if not input.simular:
         logger.info("planilha CRM Revendas importada em %s por %s: %s", e.get("slug"), principal.email, r["contagens"])
     return r
+
+
+class LimparDemoIn(BaseModel):
+    confirmar: str = Field(min_length=1, max_length=80)  # o identificador (slug) da empresa
+    nome: str = Field(min_length=2, max_length=80)
+
+
+@router.post("/empresas/{empresa_id}/limpar-demonstracao")
+async def limpar_demonstracao(empresa_id: str, input: LimparDemoIn, principal: Principal = Depends(require("empresa:manage"))):
+    """Empresa de demonstração vira empresa real: apaga os dados fictícios e troca o nome. Só para `demo_apresentacao`."""
+    from lib import demo_pudim
+
+    e = await controle.empresas.find_one({"id": empresa_id})
+    if not e:
+        raise HTTPException(404, "Empresa não encontrada")
+    if not e.get("demo_apresentacao"):
+        raise HTTPException(409, "Esta empresa não é de demonstração: nada foi apagado.")
+    if input.confirmar.strip() != e.get("slug"):
+        raise HTTPException(422, "Confirmação não corresponde ao identificador da empresa")
+    r = await demo_pudim.limpar(e, input.nome.strip(), principal.nome)
+    logger.warning("dados de demonstração apagados em %s por %s: %s", e.get("slug"), principal.email, r["apagados"])
+    return r

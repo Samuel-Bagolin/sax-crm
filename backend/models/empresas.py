@@ -48,6 +48,7 @@ class Empresa(BaseModel):
     assinatura: dict | None = None
     termo_aceite: dict | None = None
     origem_marketing: dict | None = None  # utm_* e gclid do cadastro (de onde veio o cliente)  # resumo do último aceite do termo de adesão (lib/termo_aceite.py)
+    demo_apresentacao: bool = False  # empresa de demonstração com dados fictícios (lib/demo_pudim.py)
     origem: str = "painel"  # painel (criada pelo administrador de sistema) | cadastro (autoatendimento)
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
