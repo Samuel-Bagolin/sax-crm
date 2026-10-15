@@ -107,7 +107,7 @@ async def resumir(docs: list[dict]) -> list[NegocioResumo]:
             proxima_atividade_assunto=prox["assunto"] if prox else None,
             proxima_atividade_tipo=prox["tipo"] if prox else None,
             situacao_atividade=situacao, parado=parado, contrato_id=contratos.get(lead.id),
-            praca=lead.praca, supervisao_id=lead.supervisao_id, unidade_id=lead.unidade_id,
+            praca=lead.praca, supervisao_id=lead.supervisao_id, unidade_id=lead.unidade_id, temperatura=lead.temperatura,
         ))
     return saida
 
@@ -143,7 +143,9 @@ async def kanban(
         docs = await db.leads.find(filtro).sort("updated_at", -1).limit(2000).to_list(None)
     else:
         docs = await db.leads.find(filtro).sort("created_at", -1).to_list(None)
-    return await resumir(docs)
+    from lib.temperatura import ordenar
+
+    return await resumir(await ordenar(docs))
 
 
 @router.get("/metricas", response_model=LeadMetricas)
@@ -254,6 +256,9 @@ async def create_lead(input: LeadCreate, principal: Principal = Depends(require(
     data["estagio"] = estagio_legado(funil, etapa["id"], status)
     if status in ESTAGIOS_FECHADOS:
         data["closed_at"] = now_utc()
+    from lib import temperatura
+
+    await temperatura.definir(data)
     lead = Lead(**data)
     await db.leads.insert_one(lead.model_dump())
     await registrar(lead.id, "criado", f"Negócio criado em {funil['nome']} · {etapa['nome']}", principal)
@@ -304,6 +309,10 @@ async def _aplicar(doc: dict, data: dict, principal: Principal) -> dict:
             rotulo += f": {data['motivo_perda']}"
         eventos.append(("status", rotulo))
 
+    if "temperatura" in data and data["temperatura"] != doc.get("temperatura"):
+        from lib.temperatura import ROTULO
+
+        eventos.append(("campo", f"Temperatura: {ROTULO.get(data['temperatura'] or '', 'sem temperatura')}"))
     for campo, rotulo in (("valor_estimado", "Valor"), ("corretor_id", "Responsável"), ("imovel_id", "Imóvel")):
         if campo in data and data[campo] != doc.get(campo):
             eventos.append(("campo", f"{rotulo} alterado"))
@@ -334,6 +343,10 @@ async def _carregar(lead_id: str, principal: Principal, acao: str = "lead:update
 async def update_lead(lead_id: str, input: LeadUpdate, principal: Principal = Depends(require("lead:update"))):
     doc = await _carregar(lead_id, principal)
     data = patch_data(input, ("nome", "origem", "estagio", "funil_id", "etapa_id"))
+    if data.pop("sem_temperatura", None):
+        data["temperatura"] = None
+    elif "temperatura" in data and data["temperatura"] is None:
+        data.pop("temperatura")
     if not principal.is_admin:
         # Supervisor define o responsável entre os líderes que acompanha; líder não troca o dono.
         if not (principal.supervisiona and data.get("corretor_id") in [*principal.escopo_equipe, principal.pessoa_id]):
@@ -466,7 +479,7 @@ async def _pode_excluir(doc: dict, principal: Principal) -> None:
 
 class MassaIn(BaseModel):
     ids: list[str] = Field(min_length=1, max_length=500)
-    acao: Literal["responsavel", "etapa", "supervisao", "perdido", "reabrir", "excluir", "etiqueta"]
+    acao: Literal["responsavel", "etapa", "supervisao", "perdido", "reabrir", "excluir", "etiqueta", "temperatura"]
     corretor_id: str | None = None
     funil_id: str | None = None
     etapa_id: str | None = None
@@ -475,6 +488,7 @@ class MassaIn(BaseModel):
     motivo: str | None = Field(default=None, max_length=300)
     etiqueta: str | None = Field(default=None, max_length=40)
     confirmacao: str | None = None  # "EXCLUIR" para excluir em massa
+    temperatura: Literal["quente", "morno", "frio"] | None = None  # None = tirar a temperatura
 
 
 @router.post("/massa")
@@ -539,6 +553,8 @@ async def alterar_em_massa(input: MassaIn, principal: Principal = Depends(requir
                 if await db.contratos.find_one({"lead_id": lid, "status": "ativo"}):
                     raise HTTPException(409, "Negócio com contrato ativo não pode ser reaberto")
                 data["status"] = "aberto"
+            elif input.acao == "temperatura":
+                data["temperatura"] = input.temperatura
             elif input.acao == "etiqueta":
                 tag = (input.etiqueta or "").strip()
                 if not tag:

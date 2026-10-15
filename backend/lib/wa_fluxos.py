@@ -5,9 +5,12 @@ Um fluxo é uma lista de passos. O primeiro passo é o início. Tipos de passo:
 - menu: manda o texto com as opções numeradas e espera a resposta do cliente; cada opção leva a um passo.
 - transferir: manda o texto (se houver) e passa a conversa para uma pessoa, um setor ou a fila da equipe.
 - encerrar: manda o texto (se houver) e termina.
+- link: manda o texto com um link (agenda da empresa ou de quem atende, agenda de quem o cliente citou,
+  catálogo do site, um item ou endereço livre; `lib/wa_links.py`) e segue para `proximo`.
 
-Gatilhos: `nova_conversa` (primeira mensagem de um contato) e `palavra_chave` (a mensagem contém uma das
-palavras). A conversa guarda `fluxo` = {id, passo, em} enquanto espera a resposta de um menu. Quando alguém da
+Gatilhos: `nova_conversa` (primeira mensagem de um contato), `palavra_chave` (a mensagem contém uma das
+palavras) e `profissional` (a mensagem cita o nome de quem atende). Gatilho específico (palavra ou nome) vale
+antes do de conversa nova: quem já chega pedindo "quero marcar com o João" recebe a agenda do João. A conversa guarda `fluxo` = {id, passo, em} enquanto espera a resposta de um menu. Quando alguém da
 equipe responde, o fluxo para (`parar`). Mensagem do robô é gravada como `de_mim` com autor "Atendimento
 automático" e o eco dela no webhook não dispara nada (é `fromMe`).
 """
@@ -98,15 +101,25 @@ async def _transferir(conv: dict, passo: dict) -> None:
                                      {"$set": {"corretor_id": mudar["responsavel_id"], "na_fila": False, "atribuido_em": now_utc()}})
 
 
-async def executar(conv: dict, conexao: dict, fluxo: dict, passo_id: str | None) -> None:
+async def executar(conv: dict, conexao: dict, fluxo: dict, passo_id: str | None, texto_cliente: str = "") -> None:
     for _ in range(MAX_PASSOS):
         passo = _passo(fluxo, passo_id)
         if not passo:
             break
         tipo = passo.get("tipo")
+        if tipo == "link":
+            from lib import wa_links
+
+            url, valores = await wa_links.montar(passo, texto_cliente)
+            if not url:
+                logger.warning("fluxo %s: link do passo %s indisponível agora", fluxo.get("id"), passo.get("id"))
+            await _enviar(conv, conexao, wa_links.texto_com_link(passo.get("texto") or "", url, valores))
+            passo_id = passo.get("proximo")
+            continue
         if tipo == "menu":
             await _enviar(conv, conexao, texto_menu(passo))
-            await db.wa_conversas.update_one({"_id": conv["_id"]}, {"$set": {"fluxo": {"id": fluxo["id"], "passo": passo["id"], "em": now_utc(), "erros": 0}}})
+            await db.wa_conversas.update_one({"_id": conv["_id"]}, {"$set": {"fluxo": {"id": fluxo["id"], "passo": passo["id"], "em": now_utc(), "erros": 0,
+                                                                          "texto": (texto_cliente or "")[-500:]}}})
             return
         await _enviar(conv, conexao, passo.get("texto") or "")
         if tipo == "transferir":
@@ -150,7 +163,8 @@ async def ao_receber(conv: dict, conexao: dict, texto: str, nova: bool) -> None:
             return
         opcao = escolher(passo, texto)
         if opcao:
-            await executar(conv, conexao, fluxo, opcao.get("proximo"))
+            # o que o cliente já disse no fluxo vale para achar o profissional citado (ex.: "quero com o Diego" e depois "1")
+            await executar(conv, conexao, fluxo, opcao.get("proximo"), f"{estado.get('texto') or ''} {texto}".strip())
             return
         erros = int(estado.get("erros") or 0) + 1
         if erros >= 3:  # três respostas fora do menu: passa para a equipe
@@ -161,15 +175,23 @@ async def ao_receber(conv: dict, conexao: dict, texto: str, nova: bool) -> None:
         await db.wa_conversas.update_one({"_id": conv["_id"]}, {"$set": {"fluxo.erros": erros}})
         await _enviar(conv, conexao, "Não entendi. Responda com o número da opção.\n\n" + texto_menu({"opcoes": passo.get("opcoes")}))
         return
-    # Sem fluxo em andamento: conversa nova ou palavra-chave.
+    # Sem fluxo em andamento: palavra-chave ou nome de quem atende; senão, conversa nova.
     fluxo = None
-    if nova:
-        fluxo = await fluxo_de_entrada(conexao["id"])
-    if not fluxo:
-        t = normalizar(texto)
-        for f in await db.wa_fluxos.find({"gatilho": "palavra_chave"}).to_list(50):
-            if _vale_para(f, conexao["id"]) and any(p and normalizar(p) in t for p in f.get("palavras") or []):
+    t = normalizar(texto)
+    especificos = [f for f in await db.wa_fluxos.find({"gatilho": {"$in": ["palavra_chave", "profissional"]}}).to_list(50)
+                   if _vale_para(f, conexao["id"])]
+    for f in sorted(especificos, key=lambda f: f.get("gatilho") != "palavra_chave"):
+        if f.get("gatilho") == "palavra_chave":
+            if any(p and normalizar(p) in t for p in f.get("palavras") or []):
                 fluxo = f
                 break
+        else:
+            from lib import wa_links
+
+            if wa_links.citado(texto, await wa_links.profissionais()):
+                fluxo = f
+                break
+    if not fluxo and nova:
+        fluxo = await fluxo_de_entrada(conexao["id"])
     if fluxo and fluxo.get("passos"):
-        await executar(conv, conexao, fluxo, fluxo["passos"][0].get("id"))
+        await executar(conv, conexao, fluxo, fluxo["passos"][0].get("id"), texto)

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ImagePlus, Loader2, Lock, Trash2, X } from "lucide-react";
 import { apiDelete, apiGet, apiPost, detalheErro } from "@/lib/api";
 import { prepararImagem } from "@/lib/imagem";
+import { urlApi } from "@/lib/suporte";
 import { dataHoraBR } from "@/lib/format";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
@@ -111,7 +112,7 @@ export function PrintsPainel({ negocioId }: { negocioId: string }) {
           {prints.map((p) => (
             <li key={p.id}>
               <button type="button" onClick={() => setAberto(p)} className="block w-full overflow-hidden rounded-md border bg-muted text-left" title={p.atividade_assunto ?? p.nome}>
-                <img src={p.url} alt={p.nome} loading="lazy" className="aspect-square w-full object-cover object-top" />
+                <img src={urlApi(p.url)} alt={p.nome} loading="lazy" className="aspect-square w-full object-cover object-top" />
                 <span className="block truncate px-1.5 py-1 text-[11px] text-muted-foreground">{p.autor_nome ?? "Planilha"} · {dataHoraBR(p.created_at).slice(0, 5)}</span>
               </button>
             </li>
@@ -127,7 +128,7 @@ export function PrintsPainel({ negocioId }: { negocioId: string }) {
               <DialogTitle className="truncate">{aberto.atividade_assunto ?? aberto.nome}</DialogTitle>
               <DialogDescription>Anexado por {aberto.autor_nome ?? "planilha"} em {dataHoraBR(aberto.created_at)}</DialogDescription>
             </DialogHeader>
-            <a href={aberto.url} target="_blank" rel="noreferrer"><img src={aberto.url} alt={aberto.nome} className="mx-auto max-h-[70vh] w-auto rounded-md border" /></a>
+            <a href={urlApi(aberto.url)} target="_blank" rel="noreferrer"><img src={urlApi(aberto.url)} alt={aberto.nome} className="mx-auto max-h-[70vh] w-auto rounded-md border" /></a>
             {(isAdmin || aberto.autor_pessoa_id === principal?.pessoa_id) && (
               <Button variant="ghost" className="mr-auto text-destructive" onClick={() => excluir.mutate(aberto.id)} disabled={excluir.isPending}>
                 <Trash2 className="h-4 w-4" /> Excluir print

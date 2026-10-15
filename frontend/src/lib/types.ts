@@ -134,6 +134,7 @@ export type StatusNegocio = "aberto" | "ganho" | "perdido";
 export interface Lead {
   id: string;
   nome: string;
+  temperatura?: "quente" | "morno" | "frio" | null;
   praca?: string | null;
   supervisao_id?: string | null;
   unidade_id?: string | null;
@@ -591,6 +592,8 @@ export interface CrmConfig {
   distribuicao: "manual" | "rodizio";
   exige_motivo_perda: boolean;
   print_obrigatorio?: boolean;
+  regras_temperatura?: { origem: string; temperatura: "quente" | "morno" | "frio" }[];
+  ordenar_por_temperatura?: boolean;
   sla_primeiro_contato_min: number | null;
   automacoes: Automacao[];
   repescagem_horas?: number | null;
@@ -616,6 +619,7 @@ export type SituacaoAtividade = "atrasada" | "hoje" | "futura" | "nenhuma";
 export interface NegocioResumo {
   id: string;
   nome: string;
+  temperatura?: "quente" | "morno" | "frio" | null;
   praca?: string | null;
   supervisao_id?: string | null;
   unidade_id?: string | null;
@@ -665,6 +669,7 @@ export type StatusEntrada = "novo" | "em_contato" | "convertido" | "descartado";
 export interface Entrada {
   id: string;
   nome: string;
+  temperatura?: "quente" | "morno" | "frio" | null;
   telefone: string | null;
   email: string | null;
   origem: string;

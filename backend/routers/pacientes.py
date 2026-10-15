@@ -222,6 +222,9 @@ async def paciente_para_orcamento(input: PacienteOrcamento, principal: Principal
         e = Entrada(nome=nome, telefone=telefone, origem="Orçamento", interesse="outro", cliente_id=p["id"],
                     corretor_id=principal.pessoa_id, status="em_contato", primeiro_contato_em=now_utc(),
                     mensagem="Cadastrado ao criar um orçamento").model_dump()
+        from lib.temperatura import da_origem
+
+        e["temperatura"] = await da_origem(e["origem"])
         e["atribuido_em"] = now_utc() if principal.pessoa_id else None
         await db.entradas.insert_one(e)
         lead_criado = True

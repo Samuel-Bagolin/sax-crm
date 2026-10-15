@@ -8,15 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Funil } from "@/lib/types";
+import { SelectTemperatura, type Temperatura } from "@/components/crm/Temperatura";
 
 /* Alteração em massa na lista de negócios (todos os segmentos). O servidor confere cada negócio:
    o que estiver fora da regra volta com o motivo e não trava os demais. */
 
-type Acao = "responsavel" | "etapa" | "supervisao" | "etiqueta" | "perdido" | "reabrir" | "excluir";
+type Acao = "responsavel" | "etapa" | "supervisao" | "temperatura" | "etiqueta" | "perdido" | "reabrir" | "excluir";
 interface Resultado { ok: number; iguais: number; falhas: { id: string; nome: string; motivo: string }[] }
 
 const ROTULO: Record<Acao, string> = {
-  responsavel: "Trocar responsável", etapa: "Mudar etapa ou funil", supervisao: "Mudar supervisão", etiqueta: "Pôr etiqueta",
+  responsavel: "Trocar responsável", etapa: "Mudar etapa ou funil", supervisao: "Mudar supervisão", temperatura: "Mudar temperatura", etiqueta: "Pôr etiqueta",
   perdido: "Marcar como perdido", reabrir: "Reabrir", excluir: "Excluir",
 };
 
@@ -33,7 +34,7 @@ export function EdicaoMassa({ ids, funis, funilAtual, equipe, supervisoes, podeE
   const [acao, setAcao] = useState<Acao | null>(null);
   const [falhas, setFalhas] = useState<Resultado["falhas"]>([]);
   if (!ids.length && !falhas.length) return null;
-  const acoes: Acao[] = ["responsavel", "etapa", ...(supervisoes?.length ? (["supervisao"] as Acao[]) : []), "etiqueta", "perdido", "reabrir", ...(podeExcluir ? (["excluir"] as Acao[]) : [])];
+  const acoes: Acao[] = ["responsavel", "etapa", ...(supervisoes?.length ? (["supervisao"] as Acao[]) : []), "temperatura", "etiqueta", "perdido", "reabrir", ...(podeExcluir ? (["excluir"] as Acao[]) : [])];
   return (
     <>
       {ids.length > 0 && (
@@ -71,12 +72,13 @@ function MassaDialog({ acao, ids, funis, funilAtual, equipe, supervisoes, onClos
   const [sup, setSup] = useState("");
   const [motivo, setMotivo] = useState("");
   const [etiqueta, setEtiqueta] = useState("");
+  const [temp, setTemp] = useState<Temperatura | null>(null);
   const [confirma, setConfirma] = useState("");
   const funil = funis.find((f) => f.id === funilId);
   const enviar = useMutation({
     mutationFn: () => apiPost<Resultado>("/leads/massa", {
       ids, acao, corretor_id: corretor || null, funil_id: funilId || null, etapa_id: etapaId || null, supervisao_id: sup || null,
-      motivo: motivo.trim() || null, etiqueta: etiqueta.trim() || null, confirmacao: confirma.trim() || null,
+      motivo: motivo.trim() || null, etiqueta: etiqueta.trim() || null, confirmacao: confirma.trim() || null, temperatura: temp,
     }),
     onSuccess: (r) => {
       const partes = [`${r.ok} alterado(s)`, r.iguais ? `${r.iguais} já estava(m) assim` : "", r.falhas.length ? `${r.falhas.length} fora da regra` : ""].filter(Boolean);
@@ -126,6 +128,9 @@ function MassaDialog({ acao, ids, funis, funilAtual, equipe, supervisoes, onClos
               <option value="">Sem supervisão (todos da praça veem)</option>
               {supervisoes.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
             </select>
+          )}
+          {acao === "temperatura" && (
+            <SelectTemperatura valor={temp} onChange={setTemp} vazio="Tirar a temperatura" className="w-full" data-testid="massa-temperatura-sel" />
           )}
           {acao === "etiqueta" && (
             <>

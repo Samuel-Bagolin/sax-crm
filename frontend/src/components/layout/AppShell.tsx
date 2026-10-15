@@ -20,6 +20,7 @@ import {
   Contact,
   Crown,
   CreditCard,
+  FileSpreadsheet,
   Store,
   LayoutDashboard,
   LogOut,
@@ -135,6 +136,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
       { to: "/usuarios", modulo: "usuarios", icon: Users, rotulo: "{profissionais}", curto: "Equipe", nivel: "admin" },
       { to: "/unidades", modulo: "usuarios", icon: Store, rotulo: "{unidades}", nivel: "admin" },
       { to: "/crm/configurar", modulo: "crm", icon: SlidersHorizontal, rotulo: "Configurar CRM", curto: "Ajustes", nivel: "admin" },
+      { to: "/dados", modulo: "usuarios", icon: FileSpreadsheet, rotulo: "Importar dados", curto: "Dados", nivel: "admin" },
       { to: "/assinatura", modulo: "usuarios", icon: CreditCard, rotulo: "Assinatura", curto: "Plano", nivel: "admin" },
       { to: "/configuracoes", modulo: "configuracoes", icon: Settings, rotulo: "Configurador do sistema", curto: "Sistema", nivel: "sysadmin" },
       { to: "/empresas", modulo: "empresas", icon: Building, rotulo: "Empresas", nivel: "sysadmin" },
@@ -160,6 +162,7 @@ const TITULOS: Record<string, string> = {
   "/clube": "Clube de assinantes",
   "/veiculos": "Estoque de veículos",
   "/assinatura": "Assinatura",
+  "/dados": "Importar e exportar dados",
 };
 const MODULO_POR_ROTA: Record<string, string> = {
   "/": "dashboard",

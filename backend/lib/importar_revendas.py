@@ -22,7 +22,12 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from lib.db import client, controle
+from lib.temperatura import normalizar as normalizar_temp
+from lib.temperatura import pela_origem
 from models.common import new_id, now_utc
+
+# No CRM da planilha, prospecção pelo Google Maps entrava fria.
+REGRAS_TEMPERATURA = [{"origem": "Google Maps", "temperatura": "frio"}]
 
 FUSO = ZoneInfo("America/Sao_Paulo")
 PRACAS = {"CURITIBA": "Curitiba", "SAO PAULO": "São Paulo", "BRASILIA": "Brasília"}
@@ -199,6 +204,10 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
     drive_ja |= {d["drive_id"] for d in await banco.anexos_pendentes.find({}, {"drive_id": 1}).to_list(50000) if d.get("drive_id")}
     hist_db = {d["planilha_id"] for d in await banco.historico.find({"planilha_id": {"$ne": None}}, {"planilha_id": 1}).to_list(100000) if d.get("planilha_id")}
     cfg = await banco.configuracoes.find_one({"id": "singleton"}) or {}
+    regras_temp = (cfg.get("crm") or {}).get("regras_temperatura") or REGRAS_TEMPERATURA
+
+    def temp_da_origem(origem: str | None) -> str | None:
+        return pela_origem(origem, regras_temp)
 
     # ------------------------------------------------------------ supervisões (SUP-... -> id)
     sup_map: dict[str, dict] = {}
@@ -404,7 +413,7 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
             if existente:
                 cont["ja_importados"] += 1
                 cliente_do_lead[lid] = existente.get("cliente_id")
-                mudar("entradas", existente, {**local, "pixel": lead_info[lid]["pixel"]})
+                mudar("entradas", existente, {**local, "pixel": lead_info[lid]["pixel"], "temperatura": temp_da_origem(lead_info[lid]["origem"])})
                 continue
             tel = l.get("Telefone") or ""
             digitos = _digitos(tel)
@@ -433,7 +442,7 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
                       l.get("Observações") or "", f"Pixel: {l.get('Pixel')}" if l.get("Pixel") else "", *l.get("_extra", [])]
             novas_entradas.append({
                 "id": new_id(), "nome": nome[:200], "telefone": tel or None, "email": (l.get("E-mail") or "").strip() or None,
-                "origem": lead_info[lid]["origem"], "interesse": "outro", "mensagem": "\n".join(p for p in partes if p)[:2000] or None,
+                "origem": lead_info[lid]["origem"], "temperatura": temp_da_origem(lead_info[lid]["origem"]), "interesse": "outro", "mensagem": "\n".join(p for p in partes if p)[:2000] or None,
                 "imovel_id": None, "veiculo_id": None, "cliente_id": cliente["id"], "corretor_id": dono, "valor_estimado": None,
                 "etiquetas": [tipo], "status": "convertido" if neg else "novo", "negocio_id": negocio_novo_id.get((neg or {}).get("ID")) if neg else None,
                 "motivo_descarte": None, "primeiro_contato_em": criado if neg else None, "atribuido_em": criado if dono else None,
@@ -455,10 +464,17 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
             continue
         info = lead_info.get(n.get("ID Lead") or "", {})
         local = {k: info.get(k) for k in ("praca", "supervisao_id", "unidade_id")} if info else onde(n, None, None)
+        temp_planilha = next((normalizar_temp(t) for t in n.get("_extra", []) if normalizar_temp(t)), None) or normalizar_temp(n.get("Temperatura"))
         existente = leads_db.get(nid)
         if existente:
             cont["ja_importados"] += 1
-            mudar("leads", existente, {**local, "pixel": info.get("pixel")})
+            mudar("leads", existente, {**local, "pixel": info.get("pixel"), "temperatura": temp_planilha})
+            # importação antiga guardava a temperatura como etiqueta: sai da etiqueta, vira campo
+            velhas = [t for t in existente.get("etiquetas") or [] if normalizar_temp(t)]
+            if velhas and not simular:
+                atualizar.append(banco.leads.update_one({"id": existente["id"]}, {"$set": {
+                    "etiquetas": [t for t in existente["etiquetas"] if not normalizar_temp(t)],
+                    "temperatura": existente.get("temperatura") or temp_planilha or normalizar_temp(velhas[0])}}))
             continue
         fp = funis_planilha.get(n.get("Funil") or "")
         if not fp:
@@ -473,7 +489,7 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
         loja = n.get("Loja") or ""
         if loja:
             tags.append(f"Loja {_loja_curta(loja)}")
-        tags += [t for t in n.get("_extra", []) if len(t) <= 20]  # temperatura (Frio, Morno, Quente)
+        tags += [t for t in n.get("_extra", []) if len(t) <= 20 and not normalizar_temp(t)]
         etiquetas.update(tags)
         criado = _data(n.get("Criado em")) or agora
         doc = {
@@ -486,6 +502,7 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
             "previsao_fechamento": None, "etiquetas": tags, "entrada_id": (entradas_db.get(n.get("ID Lead")) or {}).get("id")
             or next((e["id"] for e in novas_entradas if e["planilha_id"] == n.get("ID Lead")), None),
             "etapas_alcancadas": [e["id"] for e in etapas[:pos + 1]], "pixel": info.get("pixel"), **local,
+            "temperatura": temp_planilha or temp_da_origem(info.get("origem")),
             "planilha_id": nid, "created_at": criado, "updated_at": _data(n.get("Atualizado em")) or criado,
             "closed_at": _data(n.get("Ganho em") if status == "ganho" else n.get("Perdido em")) if status != "aberto" else None,
         }
@@ -568,6 +585,8 @@ async def importar(empresa: dict, conteudo: bytes, *, simular: bool, por: str, n
         novas_origens = list(dict.fromkeys([*(crm.get("origens") or []), *sorted(origens)]))[:60]
         novas_etiquetas = list(dict.fromkeys([*(crm.get("etiquetas") or []), *sorted(etiquetas)]))[:80]
         await banco.configuracoes.update_one({"id": "singleton"}, {"$set": {"crm.origens": novas_origens, "crm.etiquetas": novas_etiquetas}})
+    if not simular and not (cfg.get("crm") or {}).get("regras_temperatura"):
+        await banco.configuracoes.update_one({"id": "singleton"}, {"$set": {"crm.regras_temperatura": REGRAS_TEMPERATURA, "crm.ordenar_por_temperatura": True}})
     if not simular and not leads_db and not entradas_db:
         # no CRM da planilha, contato e reunião só contavam com o print anexado (só na 1ª importação: depois vale o que a empresa escolher)
         await banco.configuracoes.update_one({"id": "singleton"}, {"$set": {"crm.print_obrigatorio": True}})

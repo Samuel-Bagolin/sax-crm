@@ -24,6 +24,7 @@ import { useCatalogoPlanos } from "@/lib/diferenciais";
 import { CatalogoComercial, ComercialDialog } from "@/components/empresas/Comercial";
 import { Administradores } from "@/components/empresas/Administradores";
 import { ImportarPrints, ImportarRevendas } from "@/components/empresas/ImportarRevendas";
+import { ImportarDados } from "@/components/dados/ImportarDados";
 import { ConfigPagamentos, DadosContratada, DominiosClientes, PainelSegmentos, ServidorWhatsApp } from "@/components/empresas/Plataforma";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +57,7 @@ export default function Empresas() {
   const [filtroSeg, setFiltroSeg] = useState<string>("");
   const [importar, setImportar] = useState<EmpresaResumo | null>(null);
   const [prints, setPrints] = useState<EmpresaResumo | null>(null);
+  const [dados, setDados] = useState<EmpresaResumo | null>(null);
   const [limpar, setLimpar] = useState<EmpresaResumo | null>(null);
   const [limparNome, setLimparNome] = useState("");
   const [limparConfirma, setLimparConfirma] = useState("");
@@ -410,6 +412,9 @@ export default function Empresas() {
                     <Trash2 className="h-4 w-4" /> Apagar dados fictícios
                   </Button>
                 )}
+                <Button variant="outline" size="sm" onClick={() => setDados(e)} data-testid={`empresa-dados-${e.slug}`}>
+                  <FileSpreadsheet className="h-4 w-4" /> Dados (planilha)
+                </Button>
                 {e.segmento === "comercio" && !e.demo_apresentacao && (
                   <Button variant="outline" size="sm" onClick={() => setImportar(e)} data-testid={`empresa-importar-${e.slug}`}>
                     <FileSpreadsheet className="h-4 w-4" /> Importar planilha
@@ -534,6 +539,17 @@ export default function Empresas() {
 
       {importar && <ImportarRevendas empresa={importar} onClose={() => setImportar(null)} />}
       {prints && <ImportarPrints empresa={prints} onClose={() => setPrints(null)} />}
+      {dados && (
+        <Dialog open onOpenChange={(o) => !o && setDados(null)}>
+          <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Dados por planilha: {dados.nome}</DialogTitle>
+              <DialogDescription>Modelo feito para esta empresa ({dados.segmento}), importação conferida antes de gravar e exportação completa.</DialogDescription>
+            </DialogHeader>
+            <ImportarDados base={`/plataforma/empresas/${dados.id}/dados`} comCrm={!["barbearia", "terapia"].includes(dados.segmento ?? "")} />
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Dialog open={!!limpar} onOpenChange={(o) => !o && setLimpar(null)}>
         <DialogContent className="sm:max-w-md">

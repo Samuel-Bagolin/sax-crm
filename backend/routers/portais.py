@@ -287,8 +287,11 @@ async def receber_lead(token: str, request: Request):
         nome=nome, telefone=telefone, email=(str(p.get("email") or "").strip().lower() or None),
         origem=ORIGEM_PORTAL.get(origem_bruta.lower(), origem_bruta[:40] or "Portal"), interesse=interesse,
         mensagem="\n".join(x for x in partes if x)[:2000] or None, imovel_id=(imovel or {}).get("id"), corretor_id=corretor_id,
-        etiquetas=["Quente"] if str(p.get("temperature") or "").lower() == "alta" else [], portal_lead_id=lead_id,
+        etiquetas=[], portal_lead_id=lead_id,
     )
+    from lib.temperatura import da_origem
+
+    entrada.temperatura = "quente" if str(p.get("temperature") or "").lower() == "alta" else await da_origem(entrada.origem)
     await db.entradas.insert_one(entrada.model_dump())
     await automacoes.lead_novo(entrada.model_dump())
     return {"lead_id": entrada.id, "imovel_vinculado": imovel is not None}

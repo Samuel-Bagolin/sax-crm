@@ -1,3 +1,4 @@
+import { SelectTemperatura, type Temperatura } from "@/components/crm/Temperatura";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ interface Form {
   previsao: string;
   etiquetas: string[];
   observacoes: string;
+  temperatura: Temperatura | null;
 }
 
 export default function NegocioModal({
@@ -69,6 +71,7 @@ export default function NegocioModal({
       origem: config?.origens[0] ?? "Indicação / Carteira",
       previsao: "",
       etiquetas: [],
+      temperatura: null,
       observacoes: "",
     };
   };
@@ -90,6 +93,7 @@ export default function NegocioModal({
         origem: negocio.origem,
         previsao: negocio.previsao_fechamento ?? "",
         etiquetas: negocio.etiquetas ?? [],
+        temperatura: negocio.temperatura ?? null,
         observacoes: negocio.observacoes ?? "",
       });
     } else {
@@ -137,6 +141,7 @@ export default function NegocioModal({
         previsao_fechamento: form.previsao || null,
         etiquetas: form.etiquetas,
         observacoes: form.observacoes.trim() || null,
+        ...(form.temperatura ? { temperatura: form.temperatura } : negocio ? { sem_temperatura: true } : {}),
       };
       return negocio ? apiPatch<Lead>(`/leads/${negocio.id}`, corpo) : apiPost<Lead>("/leads", corpo);
     },
@@ -277,6 +282,11 @@ export default function NegocioModal({
                 <option key={o}>{o}</option>
               ))}
             </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="neg-temperatura">Temperatura</Label>
+            <SelectTemperatura valor={form.temperatura} onChange={(v) => set("temperatura", v)} vazio={negocio ? "Sem temperatura" : "Pela origem"}
+              className="h-8 w-full rounded-lg border-input bg-transparent dark:bg-input/30" data-testid="neg-temperatura" />
           </div>
 
           {funil && (

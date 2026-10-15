@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, BadgeCheck, FileText, GitBranch, Globe, ListChecks, Plus, Shuffle, Star, Trash2, X, Zap } from "lucide-react";
 import AutomacoesConfig from "@/components/crm/AutomacoesConfig";
+import { TemperaturaConfig } from "@/components/crm/TemperaturaConfig";
 import PortaisConfig from "@/components/crm/PortaisConfig";
 import PlanoUso from "@/components/shared/PlanoUso";
 import { usePlano } from "@/lib/diferenciais";
@@ -416,6 +417,7 @@ export default function CrmConfig() {
             <Checkbox checked={!!config.print_obrigatorio} onCheckedChange={(v) => salvarConfig.mutate({ print_obrigatorio: !!v })} data-testid="cfg-print" />
             Exigir print para concluir ligação, WhatsApp, e-mail, visita ou reunião de um negócio (só quem anexou e a gestão veem o print)
           </label>
+          <TemperaturaConfig config={config} salvar={(p) => salvarConfig.mutate(p)} />
         </div>
       )}
 

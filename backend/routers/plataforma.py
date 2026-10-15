@@ -404,3 +404,60 @@ async def limpar_demonstracao(empresa_id: str, input: LimparDemoIn, principal: P
     r = await demo_pudim.limpar(e, input.nome.strip(), principal.nome)
     logger.warning("dados de demonstração apagados em %s por %s: %s", e.get("slug"), principal.email, r["apagados"])
     return r
+
+
+# ------------------------------------------------------------------ planilha de dados (qualquer empresa)
+
+
+class ImportarDadosEmpresaIn(BaseModel):
+    arquivo_base64: str = Field(min_length=10, max_length=4_400_000)
+    simular: bool = True
+
+
+async def _empresa_dados(empresa_id: str) -> dict:
+    e = await controle.empresas.find_one({"id": empresa_id})
+    if not e:
+        raise HTTPException(404, "Empresa não encontrada")
+    return e
+
+
+@router.get("/empresas/{empresa_id}/dados/modelo")
+async def dados_modelo(empresa_id: str, principal: Principal = Depends(require("empresa:manage"))):
+    from lib import dados_planilha as dp
+    from lib.db import client
+    from routers.dados import arquivo
+
+    e = await _empresa_dados(empresa_id)
+    return arquivo(await dp.modelo(client[e["db_name"]], segmento_de(e)), f"Modelo de dados {e.get('nome') or e.get('slug')}.xlsx")
+
+
+@router.get("/empresas/{empresa_id}/dados/exportar")
+async def dados_exportar(empresa_id: str, principal: Principal = Depends(require("empresa:manage"))):
+    from lib import dados_planilha as dp
+    from lib.db import client
+    from routers.dados import arquivo
+
+    e = await _empresa_dados(empresa_id)
+    conteudo = await dp.exportar(client[e["db_name"]], segmento_de(e))
+    logger.info("dados exportados de %s por %s", e.get("slug"), principal.email)
+    return arquivo(conteudo, f"Dados {e.get('nome') or e.get('slug')}.xlsx")
+
+
+@router.post("/empresas/{empresa_id}/dados/importar")
+async def dados_importar(empresa_id: str, input: ImportarDadosEmpresaIn, principal: Principal = Depends(require("empresa:manage"))):
+    from lib import dados_planilha as dp
+    from lib.db import client, definir_empresa
+    from routers.dados import decodificar
+
+    e = await _empresa_dados(empresa_id)
+    definir_empresa(e["db_name"])
+    try:
+        r = await dp.importar(client[e["db_name"]], segmento_de(e), decodificar(input.arquivo_base64), simular=input.simular,
+                              por=f"{principal.nome} (SAX)", por_usuario_id=None)
+    except dp.ErroPlanilha as err:
+        raise HTTPException(422, str(err))
+    finally:
+        definir_empresa(None)
+    if not input.simular:
+        logger.info("dados importados em %s por %s: %s", e.get("slug"), principal.email, r["contagens"])
+    return r

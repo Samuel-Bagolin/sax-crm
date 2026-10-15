@@ -19,6 +19,7 @@ STATUS_NEGOCIO = ["aberto", "ganho", "perdido"]
 
 Estagio = Literal["novo", "atendimento", "visita", "proposta", "ganho", "perdido"]
 StatusNegocio = Literal["aberto", "ganho", "perdido"]
+Temperatura = Literal["quente", "morno", "frio"]
 
 
 class Lead(BaseModel):
@@ -46,6 +47,7 @@ class Lead(BaseModel):
     supervisao_id: str | None = None
     unidade_id: str | None = None  # loja
     pixel: str | None = None  # campanha do lead (define a supervisão)
+    temperatura: Temperatura | None = None  # lib/temperatura.py
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
     closed_at: datetime | None = None
@@ -68,6 +70,7 @@ class LeadCreate(BaseModel):
     praca: str | None = None
     supervisao_id: str | None = None
     unidade_id: str | None = None
+    temperatura: Temperatura | None = None
 
 
 class LeadUpdate(BaseModel):
@@ -87,6 +90,8 @@ class LeadUpdate(BaseModel):
     praca: str | None = None
     supervisao_id: str | None = None
     unidade_id: str | None = None
+    temperatura: Temperatura | None = None
+    sem_temperatura: bool | None = None  # true = limpa a temperatura
 
 
 class OrigemCount(BaseModel):

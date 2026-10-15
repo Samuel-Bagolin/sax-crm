@@ -1,3 +1,4 @@
+import { ChipTemperatura, TEMPERATURAS } from "@/components/crm/Temperatura";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -91,6 +92,7 @@ function CardNegocio({
           <span className="h-5 w-5 rounded-full border border-dashed border-muted-foreground/50" title="Sem responsável" />
         )}
         <span className="num text-xs font-semibold">{n.valor_estimado ? brlCompacto(n.valor_estimado) : "—"}</span>
+        <ChipTemperatura valor={n.temperatura} />
         {rotuloRede && <span className="truncate rounded-sm bg-primary/10 px-1.5 text-[10px] font-medium text-primary" data-testid="card-supervisao">{rotuloRede}</span>}
         {n.etiquetas.slice(0, 1).map((t) => (
           <span key={t} className="truncate rounded-sm bg-latao/15 px-1.5 text-[10px] font-medium text-foreground">
@@ -119,6 +121,7 @@ export default function Negocios() {
   const [sel, setSel] = useState<string[]>([]);
   const [pedidoPara, setPedidoPara] = useState<NegocioResumo | null>(null);
   const [praca, setPraca] = useState("");
+  const [temp, setTemp] = useState("");
   const [supervisao, setSupervisao] = useState("");
   const { data: funis = [] } = useFunis();
   const { data: equipe = [] } = useEquipe();
@@ -167,14 +170,15 @@ export default function Negocios() {
     const t = busca.trim().toLowerCase();
     const base = negocios.filter((n) =>
       alerta === "sem_passo" ? n.situacao_atividade === "nenhuma" : alerta === "parados" ? n.parado : alerta === "atrasadas" ? n.situacao_atividade === "atrasada" : true,
-    ).filter((n) => (!praca || n.praca === praca) && (!supervisao || (supervisao === "__sem" ? !n.supervisao_id : n.supervisao_id === supervisao)));
+    ).filter((n) => (!praca || n.praca === praca) && (!supervisao || (supervisao === "__sem" ? !n.supervisao_id : n.supervisao_id === supervisao)))
+      .filter((n) => !temp || (temp === "__sem" ? !n.temperatura : n.temperatura === temp));
     if (!t) return base;
     return base.filter((n) =>
       [n.nome, n.cliente_nome, n.imovel_titulo, n.imovel_codigo, n.cliente_telefone, n.corretor_nome]
         .filter(Boolean)
         .some((x) => x!.toLowerCase().includes(t)),
     );
-  }, [negocios, busca, alerta, praca, supervisao]);
+  }, [negocios, busca, alerta, praca, supervisao, temp]);
 
   const porEtapa = useMemo(() => {
     const mapa: Record<string, NegocioResumo[]> = {};
@@ -323,6 +327,11 @@ export default function Negocios() {
               <option value="todos">Todos</option>
             </select>
           )}
+          <select value={temp} onChange={(e) => setTemp(e.target.value)} className="h-8 rounded-md border bg-card px-2 text-sm" aria-label="Temperatura" data-testid="filtro-temperatura">
+            <option value="">Todas as temperaturas</option>
+            {TEMPERATURAS.map((t) => <option key={t.valor} value={t.valor}>{t.rotulo}</option>)}
+            <option value="__sem">Sem temperatura</option>
+          </select>
           {temRede && rede && rede.pracas.length > 1 && (isAdmin || (supervisiona && rede.eu.pracas.length > 1)) && (
             <select value={praca} onChange={(e) => { setPraca(e.target.value); setSupervisao(""); }} className="h-8 rounded-md border bg-card px-2 text-sm" aria-label="Praça" data-testid="filtro-praca">
               <option value="">Todas as praças</option>
@@ -570,9 +579,12 @@ export default function Negocios() {
                         onChange={(e) => setSel(e.target.checked ? [...sel, n.id] : sel.filter((x) => x !== n.id))} />
                     </td>
                     <td className="px-3 py-2">
-                      <Link to={`/negocios/${n.id}`} className="font-medium hover:text-primary hover:underline">
-                        {n.nome}
-                      </Link>
+                      <span className="flex items-center gap-1.5">
+                        <Link to={`/negocios/${n.id}`} className="font-medium hover:text-primary hover:underline">
+                          {n.nome}
+                        </Link>
+                        <ChipTemperatura valor={n.temperatura} compacto />
+                      </span>
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">{n.cliente_nome ?? "—"}</td>
                     <td className="num px-3 py-2 text-right">{brl(n.valor_estimado)}</td>

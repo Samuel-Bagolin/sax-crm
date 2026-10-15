@@ -136,6 +136,14 @@ async def put_crm_config(input: CrmConfigUpdate, principal: Principal = Depends(
                 if not a.get("etapa_id") or not any(a["etapa_id"] in etapas for etapas in funis.values()):
                     raise HTTPException(422, f"Automação \"{a['nome']}\": escolha a etapa")
         atual["automacoes"] = entrada.pop("automacoes")
+    if entrada.get("regras_temperatura") is not None:
+        vistas, regras = set(), []
+        for r in entrada.pop("regras_temperatura"):
+            chave = r["origem"].strip()[:80]
+            if chave and chave.lower() not in vistas:
+                vistas.add(chave.lower())
+                regras.append({"origem": chave, "temperatura": r["temperatura"]})
+        atual["regras_temperatura"] = regras
     for k, v in entrada.items():
         if v is None:
             continue
@@ -239,7 +247,9 @@ async def list_entradas(status: str | None = Query(None), principal: Principal =
     elif status != "todos":
         filtro["status"] = status
     docs = await db.entradas.find(filtro).sort("created_at", -1).to_list(2000)
-    return [to_entrada(d) for d in docs]
+    from lib.temperatura import ordenar
+
+    return [to_entrada(d) for d in await ordenar(docs)]
 
 
 @router.post("/entradas", response_model=Entrada, status_code=201)
@@ -265,6 +275,9 @@ async def criar_entrada(input: EntradaCreate, principal: Principal = Depends(req
     await reference("pessoas", data.get("corretor_id"), principal)
     if data.get("corretor_id"):
         data["atribuido_em"] = now_utc()
+    from lib import temperatura
+
+    await temperatura.definir(data)
     entrada = Entrada(**data)
     await db.entradas.insert_one(entrada.model_dump())
     await automacoes.lead_novo(entrada.model_dump())
@@ -287,6 +300,10 @@ async def editar_entrada(entrada_id: str, input: EntradaUpdate, principal: Princ
     if doc.get("status") == "convertido":
         raise HTTPException(409, "Lead já convertido em negócio")
     data = patch_data(input, ("nome",))
+    if data.pop("sem_temperatura", None):
+        data["temperatura"] = None
+    elif "temperatura" in data and data["temperatura"] is None:
+        data.pop("temperatura")
     if not principal.is_admin:
         data.pop("corretor_id", None)
     await reference("imoveis", data.get("imovel_id"))
@@ -373,6 +390,7 @@ async def converter_entrada(entrada_id: str, input: ConverterEntrada, principal:
         estagio=estagio_legado(funil, etapa["id"], "aberto"), etapa_desde=now_utc(),
         etiquetas=doc.get("etiquetas") or [], entrada_id=entrada_id, etapas_alcancadas=[etapa["id"]],
         praca=doc.get("praca"), supervisao_id=doc.get("supervisao_id"), unidade_id=doc.get("unidade_id"), pixel=doc.get("pixel"),
+        temperatura=doc.get("temperatura"),
     )
     await db.leads.insert_one(lead.model_dump())
     await db.entradas.update_one({"id": entrada_id}, {"$set": {"status": "convertido", "negocio_id": lead.id, "cliente_id": cliente_id, "updated_at": now_utc(),

@@ -132,3 +132,4 @@ class LeadDoSite(BaseModel):
     pixel: str | None = Field(default=None, max_length=120)
     localidade: str | None = Field(default=None, max_length=120)
     etiquetas: list[str] = Field(default_factory=list, max_length=10)
+    temperatura: str | None = Field(default=None, max_length=20)  # quente, morno ou frio (senão sai da origem)

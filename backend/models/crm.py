@@ -72,6 +72,11 @@ class Automacao(BaseModel):
 # ------------------------------------------------------------------ configuração do CRM
 
 
+class RegraTemperatura(BaseModel):
+    origem: str = Field(min_length=1, max_length=80)  # igual à origem ou palavra contida nela
+    temperatura: Literal["quente", "morno", "frio"]
+
+
 class CrmConfig(BaseModel):
     origens: List[str] = Field(default_factory=list)
     motivos_perda: List[str] = Field(default_factory=list)
@@ -79,6 +84,8 @@ class CrmConfig(BaseModel):
     distribuicao: Literal["manual", "rodizio"] = "manual"
     exige_motivo_perda: bool = True
     print_obrigatorio: bool = False  # contato e reunião de um negócio só concluem com print anexado
+    regras_temperatura: List[RegraTemperatura] = Field(default_factory=list)  # origem -> quente/morno/frio
+    ordenar_por_temperatura: bool = True  # quente em cima, morno no meio, frio no fim
     sla_primeiro_contato_min: int | None = Field(default=30, ge=1, le=10080)  # None = sem SLA
     # Lead novo sem atendimento depois de X horas sai do vendedor e vai para a fila livre (None = desligado).
     repescagem_horas: int | None = Field(default=24, ge=1, le=720)
@@ -93,6 +100,8 @@ class CrmConfigUpdate(BaseModel):
     distribuicao: Literal["manual", "rodizio"] | None = None
     exige_motivo_perda: bool | None = None
     print_obrigatorio: bool | None = None
+    regras_temperatura: List[RegraTemperatura] | None = Field(default=None, max_length=60)
+    ordenar_por_temperatura: bool | None = None
     sla_primeiro_contato_min: int | None = Field(default=None, ge=1, le=10080)
     sem_sla: bool | None = None  # true = desliga o SLA (None no campo acima significa "não alterar")
     repescagem_horas: int | None = Field(default=None, ge=1, le=720)
@@ -132,6 +141,7 @@ class Entrada(BaseModel):
     supervisao_id: str | None = None
     unidade_id: str | None = None
     pixel: str | None = None
+    temperatura: Literal["quente", "morno", "frio"] | None = None
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -152,6 +162,7 @@ class EntradaCreate(BaseModel):
     supervisao_id: str | None = None
     unidade_id: str | None = None
     pixel: str | None = Field(default=None, max_length=120)
+    temperatura: Literal["quente", "morno", "frio"] | None = None
 
 
 class EntradaUpdate(BaseModel):
@@ -169,6 +180,8 @@ class EntradaUpdate(BaseModel):
     status: Literal["novo", "em_contato", "descartado"] | None = None
     motivo_descarte: str | None = None
     na_fila: bool | None = None  # gestor manda o lead para a fila livre
+    temperatura: Literal["quente", "morno", "frio"] | None = None
+    sem_temperatura: bool | None = None
 
 
 class ConverterEntrada(BaseModel):
@@ -324,6 +337,7 @@ class NegocioResumo(BaseModel):
     corretor_cor: str | None = None
     origem: str | None = None
     etiquetas: List[str] = Field(default_factory=list)
+    temperatura: str | None = None
     previsao_fechamento: str | None = None
     etapa_desde: datetime | None = None
     created_at: datetime

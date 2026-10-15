@@ -1,3 +1,4 @@
+import { ChipTemperatura, SelectTemperatura, TEMPERATURAS, type Temperatura } from "@/components/crm/Temperatura";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -56,12 +57,12 @@ function NovoLeadDialog({ open, onClose }: { open: boolean; onClose: () => void 
   const item = useItemSegmento(open);
   const seg = useSegmento();
   const interesses = interessesDo(seg.chave);
-  const [f, setF] = useState({ nome: "", telefone: "", email: "", origem: "", interesse: "compra" as InteresseEntrada, mensagem: "", imovel_id: null as string | null, valor: "", corretor_id: "" });
+  const [f, setF] = useState({ nome: "", telefone: "", email: "", origem: "", interesse: "compra" as InteresseEntrada, mensagem: "", imovel_id: null as string | null, valor: "", corretor_id: "", temperatura: null as Temperatura | null });
   const origemPadrao = config?.origens[0] ?? "Manual";
   // Limpa o formulário só quando o diálogo abre. Antes, cada atualização da configuração do CRM
   // (ao voltar para a aba, por exemplo) apagava o que já tinha sido digitado.
   useEffect(() => {
-    if (open) setF({ nome: "", telefone: "", email: "", origem: origemPadrao, interesse: "compra", mensagem: "", imovel_id: null, valor: "", corretor_id: "" });
+    if (open) setF({ nome: "", telefone: "", email: "", origem: origemPadrao, interesse: "compra", mensagem: "", imovel_id: null, valor: "", corretor_id: "", temperatura: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -77,6 +78,7 @@ function NovoLeadDialog({ open, onClose }: { open: boolean; onClose: () => void 
         ...(item.campo ? { [item.campo]: f.imovel_id } : {}),
         valor_estimado: parseNumber(f.valor),
         corretor_id: isAdmin ? f.corretor_id || null : undefined,
+        temperatura: f.temperatura,
       }),
     onSuccess: () => {
       toast.success("Lead adicionado");
@@ -119,6 +121,11 @@ function NovoLeadDialog({ open, onClose }: { open: boolean; onClose: () => void 
                 <option key={o}>{o}</option>
               ))}
             </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ld-temp">Temperatura</Label>
+            <SelectTemperatura valor={f.temperatura} onChange={(v) => setF({ ...f, temperatura: v })} vazio="Pela origem"
+              className="h-8 w-full rounded-lg border-input bg-transparent dark:bg-input/30" data-testid="ld-temperatura" />
           </div>
           {interesses.length > 0 && <div className="space-y-1.5">
             <Label>Quer</Label>
@@ -369,10 +376,17 @@ export default function Leads() {
   });
   const itemDe = (e: Entrada) => item.opcoes.find((i) => i.id === (item.campo === "veiculo_id" ? e.veiculo_id : e.imovel_id));
 
+  const [temp, setTemp] = useState("");
+  const mudarTemp = useMutation({
+    mutationFn: ({ id, v }: { id: string; v: Temperatura | null }) => apiPatch(`/entradas/${id}`, v ? { temperatura: v } : { sem_temperatura: true }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["entradas"] }),
+    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível mudar a temperatura"),
+  });
   const filtradas = useMemo(() => {
     const t = busca.trim().toLowerCase();
-    return t ? entradas.filter((e) => [e.nome, e.telefone, e.email, e.origem, e.mensagem].filter(Boolean).some((x) => x!.toLowerCase().includes(t))) : entradas;
-  }, [entradas, busca]);
+    const base = temp ? entradas.filter((e) => (temp === "__sem" ? !e.temperatura : e.temperatura === temp)) : entradas;
+    return t ? base.filter((e) => [e.nome, e.telefone, e.email, e.origem, e.mensagem].filter(Boolean).some((x) => x!.toLowerCase().includes(t))) : base;
+  }, [entradas, busca, temp]);
   const atual = entradas.find((e) => e.id === selecionado) ?? null;
   const pessoaDe = (id: string | null) => (id ? equipe.find((m) => m.pessoa_id === id) : undefined);
 
@@ -427,6 +441,11 @@ export default function Leads() {
           <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
           <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nome, telefone, origem" className="h-8 bg-card pl-8" />
         </div>
+        <select value={temp} onChange={(e) => setTemp(e.target.value)} className="h-8 rounded-md border bg-card px-2 text-sm" aria-label="Temperatura" data-testid="leads-filtro-temperatura">
+          <option value="">Todas as temperaturas</option>
+          {TEMPERATURAS.map((t) => <option key={t.valor} value={t.valor}>{t.rotulo}</option>)}
+          <option value="__sem">Sem temperatura</option>
+        </select>
         <Button className="ml-auto" onClick={() => setNovo(true)} data-testid="btn-novo-lead">
           <Plus className="h-4 w-4" /> Lead
         </Button>
@@ -460,6 +479,7 @@ export default function Leads() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className={cn("truncate text-sm", e.status === "novo" ? "font-semibold" : "font-medium")}>{e.nome}</p>
+                        <ChipTemperatura valor={e.temperatura} />
                         <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{e.origem}</span>
                         {seg.vendas && <span className="shrink-0 text-[11px] text-muted-foreground">{rotuloInteresse(seg.chave, e.interesse)}</span>}
                         <SlaChip e={e} sla={config?.sla_primeiro_contato_min} agora={agora} />
@@ -508,6 +528,10 @@ export default function Leads() {
                 <p className="text-xs text-muted-foreground">
                   {atual.origem}, há {idade(atual.created_at)}
                 </p>
+                {atual.status !== "convertido" && (
+                  <SelectTemperatura valor={atual.temperatura} onChange={(v) => mudarTemp.mutate({ id: atual.id, v })}
+                    className="mt-2 h-7 text-xs" data-testid="lead-temperatura" />
+                )}
               </div>
               <Button variant="ghost" size="icon-sm" onClick={() => setSelecionado(null)} aria-label="Fechar">
                 <X className="h-4 w-4" />

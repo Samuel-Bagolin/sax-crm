@@ -38,6 +38,7 @@ import Assinatura from "@/pages/Assinatura";
 import Unidades from "@/pages/Unidades";
 import Cashback from "@/pages/Cashback";
 import Comissoes from "@/pages/Comissoes";
+import Dados from "@/pages/Dados";
 import SitePublico from "@/pages/SitePublico";
 import WhatsApp from "@/pages/WhatsApp";
 import { Toaster } from "@/components/ui/sonner";
@@ -95,6 +96,7 @@ export default function App() {
               <Route path="/cashback" element={<Cashback />} />
               <Route path="/comissoes" element={<Comissoes />} />
               <Route path="/crm/configurar" element={<CrmConfig />} />
+              <Route path="/dados" element={<Dados />} />
             </Route>
             {/* Configurador: exclusivo do Administrador de Sistema (servidor nega com 403) */}
             <Route element={<RotaProtegida somenteSysadmin />}>

@@ -1,3 +1,4 @@
+import { SelectTemperatura, TEMPERATURAS, type Temperatura } from "@/components/crm/Temperatura";
 import { useConfig } from "@/lib/useConfig";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -157,6 +158,12 @@ export default function NegocioDetalhe() {
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível concluir"),
   });
 
+  const mudarTemp = useMutation({
+    mutationFn: (v: Temperatura | null) => apiPatch<Lead>(`/leads/${id}`, v ? { temperatura: v } : { sem_temperatura: true }),
+    onSuccess: () => invalidar(),
+    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível mudar a temperatura"),
+  });
+
   const salvarNota = useMutation({
     mutationFn: () => apiPost(`/leads/${id}/notas`, { texto: nota.trim() }),
     onSuccess: () => {
@@ -232,6 +239,8 @@ export default function NegocioDetalhe() {
                 )}
                 {resumo.corretor_nome ?? "Sem responsável"}
               </span>
+              <SelectTemperatura valor={n.temperatura} onChange={(v) => mudarTemp.mutate(v)}
+                className={cn("h-7 text-xs font-semibold", TEMPERATURAS.find((t) => t.valor === n.temperatura)?.classe)} data-testid="detalhe-temperatura" />
               {n.etiquetas.map((t) => (
                 <span key={t} className="rounded-sm bg-latao/15 px-1.5 text-xs font-medium">
                   {t}

@@ -17,6 +17,7 @@ fica, com update condicional).
 """
 
 import hmac
+import re
 from typing import Literal
 import logging
 from datetime import datetime, timezone
@@ -327,21 +328,52 @@ class PosIn(BaseModel):
 class PassoIn(BaseModel):
     id: str = Field(min_length=1, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")
     pos: PosIn | None = None  # posição no desenho do fluxo (só visual)
-    tipo: Literal["mensagem", "menu", "transferir", "encerrar"]
+    tipo: Literal["mensagem", "menu", "transferir", "encerrar", "link"]
     texto: str = Field(default="", max_length=1500)
     opcoes: list[OpcaoIn] = Field(default_factory=list, max_length=10)
     proximo: str | None = Field(default=None, max_length=40)
     destino_tipo: Literal["pessoa", "setor", "fila"] | None = None
     destino_id: str | None = Field(default=None, max_length=64)
+    # passo "link" (lib/wa_links.py): agenda, agenda de um profissional, do profissional citado, catálogo, item ou URL
+    link_tipo: Literal["agenda", "agenda_profissional", "agenda_citado", "catalogo", "item", "url"] | None = None
+    url: str | None = Field(default=None, max_length=500)
 
 
 class FluxoIn(BaseModel):
     nome: str = Field(min_length=2, max_length=60)
     ativo: bool = True
-    gatilho: Literal["nova_conversa", "palavra_chave"] = "nova_conversa"
+    gatilho: Literal["nova_conversa", "palavra_chave", "profissional"] = "nova_conversa"
     palavras: list[str] = Field(default_factory=list, max_length=20)
     conexoes: list[str] = Field(default_factory=list, max_length=LIMITE_NUMEROS + 5)
     passos: list[PassoIn] = Field(min_length=1, max_length=40)
+
+
+async def _validar_link(p: PassoIn, i: int) -> None:
+    from lib import wa_links
+
+    if not p.link_tipo:
+        raise HTTPException(422, f"Escolha o link do passo {i}.")
+    if p.link_tipo == "url":
+        if not re.match(r"^https?://[^\s]+\.[^\s]+$", (p.url or "").strip()):
+            raise HTTPException(422, f"O link do passo {i} precisa começar com https:// e ser um endereço válido.")
+        p.url = p.url.strip()
+        return
+    p.url = None
+    if p.link_tipo.startswith("agenda"):
+        if not await wa_links.agenda_slug():
+            raise HTTPException(422, f"Passo {i}: ligue a agenda online (Agenda online, endereço e Ativar) para mandar o link.")
+        if p.link_tipo == "agenda_profissional":
+            prof = next((x for x in await wa_links.profissionais() if x["id"] == p.destino_id), None)
+            if not prof:
+                raise HTTPException(422, f"Passo {i}: escolha quem atende.")
+            if not prof.get("agenda_slug"):
+                raise HTTPException(422, f"Passo {i}: {prof.get('nome')} ainda não tem endereço próprio na agenda online.")
+        return
+    if p.link_tipo in ("catalogo", "item"):
+        if not await wa_links._site():
+            raise HTTPException(422, f"Passo {i}: publique o site (Meu site) para mandar o link do catálogo.")
+        if p.link_tipo == "item" and not await wa_links.item(p.destino_id):
+            raise HTTPException(422, f"Passo {i}: escolha o item.")
 
 
 async def _validar_fluxo(f: FluxoIn, ignorar: str | None = None) -> dict:
@@ -360,11 +392,18 @@ async def _validar_fluxo(f: FluxoIn, ignorar: str | None = None) -> dict:
             raise HTTPException(422, f"Escreva a mensagem do passo {i}.")
         if p.proximo and p.proximo not in existe:
             raise HTTPException(422, f"O passo {i} segue para um passo que não existe.")
+        if p.tipo == "link":
+            await _validar_link(p, i)
         if p.tipo == "transferir":
             if p.destino_tipo == "pessoa":
                 await _validar_equipe([p.destino_id or ""])
             elif p.destino_tipo == "setor" and p.destino_id not in setores:
                 raise HTTPException(422, f"Escolha o setor do passo {i}.")
+    if f.gatilho == "profissional":
+        from lib import wa_links
+
+        if not await wa_links.profissionais():
+            raise HTTPException(422, "Ninguém da equipe atende pela agenda ainda: marque quem atende em Equipe.")
     palavras = [w.strip()[:40] for w in f.palavras if w.strip()]
     if f.gatilho == "palavra_chave" and not palavras:
         raise HTTPException(422, "Informe ao menos uma palavra-chave.")
@@ -386,6 +425,14 @@ async def _validar_fluxo(f: FluxoIn, ignorar: str | None = None) -> dict:
 
 def _saida_fluxo(d: dict) -> dict:
     return {k: d.get(k) for k in ("id", "nome", "ativo", "gatilho", "palavras", "conexoes", "passos")} | {"atualizado_em": _iso(d.get("atualizado_em"))}
+
+
+@router.get("/fluxos/opcoes-link")
+async def opcoes_link(principal: Principal = Depends(_gerir)):
+    """Agenda, profissionais, catálogo e itens que o passo de link pode mandar."""
+    from lib import wa_links
+
+    return await wa_links.opcoes()
 
 
 @router.get("/fluxos")
@@ -666,6 +713,9 @@ async def _novo_lead(conv: dict, mensagem: str | None, corretor_id: str | None) 
 
     entrada = Entrada(nome=(conv.get("nome") or conv.get("telefone") or "Contato do WhatsApp")[:200], telefone=conv.get("telefone"),
                       origem="WhatsApp", interesse="outro", mensagem=(mensagem or None) and mensagem[:2000], corretor_id=corretor_id)
+    from lib.temperatura import da_origem
+
+    entrada.temperatura = await da_origem(entrada.origem)
     await db.entradas.insert_one(entrada.model_dump())
     await lead_novo(entrada.model_dump())
     return entrada.id

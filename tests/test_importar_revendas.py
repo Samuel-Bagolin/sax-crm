@@ -69,7 +69,8 @@ def test_importa_planilha_sem_senhas_e_sem_duplicar(sysadmin, cartao_demo):  # n
     lojas = {u["nome"] for u in c.get("/unidades").json()}
     assert {"Curitiba - Batel", "São Paulo - Moema"} <= lojas
     neg = c.get("/leads").json()
-    assert len(neg) == 1 and neg[0]["nome"] == "Restaurante Fictício" and "Loja Batel" in neg[0]["etiquetas"] and "Frio" in neg[0]["etiquetas"]
+    assert len(neg) == 1 and neg[0]["nome"] == "Restaurante Fictício" and "Loja Batel" in neg[0]["etiquetas"]
+    assert neg[0]["temperatura"] == "frio" and "Frio" not in neg[0]["etiquetas"]  # temperatura é campo, não etiqueta
     funil = next(f for f in c.get("/funis").json() if f["id"] == neg[0]["funil_id"])
     assert [e["nome"] for e in funil["etapas"]] == ["Novo lead", "Primeiro contato", "Proposta"]
     assert neg[0]["etapa_id"] == funil["etapas"][1]["id"]

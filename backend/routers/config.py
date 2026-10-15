@@ -311,6 +311,9 @@ async def receber_lead_do_site(input: LeadDoSite, x_api_key: str | None = Header
                       praca=praca, supervisao_id=supervisao_id, pixel=(input.pixel or "").strip() or None,
                       etiquetas=[e.strip()[:40] for e in input.etiquetas if e and e.strip()][:10],
                       na_fila=False)
+    from lib import temperatura
+
+    entrada.temperatura = temperatura.normalizar(input.temperatura) or await temperatura.da_origem(entrada.origem)
     r = await db.entradas.update_one({"_id": "site:" + lid}, {"$setOnInsert": entrada.model_dump()}, upsert=True)
     if r.upserted_id is not None:
         from lib import automacoes

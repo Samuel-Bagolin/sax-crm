@@ -26,6 +26,7 @@ import {
 import { apiGet } from "@/lib/api";
 import { brl, brlCompacto, mesLabel } from "@/lib/format";
 import { useAuth } from "@/lib/useAuth";
+import { useConfig } from "@/lib/useConfig";
 import type { Imovel, Lead, LeadMetricas, MinhasComissoes, ResumoFinanceiro } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusImovelBadge } from "@/components/shared/badges";
@@ -84,6 +85,7 @@ export default function Dashboard() {
 
 function DashboardImobiliaria() {
   const { isAdmin } = useAuth();
+  const { moduloAtivo } = useConfig();
   // Comércio usa o mesmo painel de vendas, com clientes no lugar do estoque.
   const comercio = useSegmento().comercio;
   const imoveisQ = useQuery({ queryKey: ["imoveis"], queryFn: () => apiGet<Imovel[]>("/imoveis"), enabled: !comercio });
@@ -94,7 +96,7 @@ function DashboardImobiliaria() {
   const resumoQ = useQuery({
     queryKey: ["resumo"],
     queryFn: () => apiGet<ResumoFinanceiro>("/resumo"),
-    enabled: isAdmin,
+    enabled: isAdmin && moduloAtivo("financeiro"),  // plano sem Financeiro não chama (403)
   });
   const comissoesQ = useQuery({
     queryKey: ["minhas-comissoes"],

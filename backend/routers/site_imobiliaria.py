@@ -931,6 +931,9 @@ async def contato(slug: str, input: ContatoSite, request: Request):
         imovel_id=None if veiculos else (imovel or {}).get("id"), veiculo_id=(imovel or {}).get("id") if veiculos else None,
         valor_estimado=((imovel or {}).get("valor_aluguel") if fin == "locacao" else (imovel or {}).get("valor_venda")) or (item or {}).get("preco"),
     )
+    from lib.temperatura import da_origem
+
+    entrada.temperatura = await da_origem(entrada.origem)
     await db.entradas.insert_one(entrada.model_dump())
     await lead_novo(entrada.model_dump())
     await db.site_metricas.update_one({"id": (imovel or {}).get("id") or "_site"}, {"$inc": {"contatos": 1}}, upsert=True)

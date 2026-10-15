@@ -364,3 +364,73 @@ def test_fluxo_de_resposta(servidor, cartao_demo):
     assert enviadas(n4) == []
     assert c.delete(f"/whatsapp/fluxos/{f['id']}").status_code == 204
     c.delete(f"/whatsapp/conexoes/{con['id']}")
+
+
+def test_fluxo_com_link_de_agenda_e_profissional_citado(servidor, cartao_demo):
+    """Barbearia: quem cita o barbeiro recebe a agenda dele; o menu manda a agenda da casa; link livre e catálogo validados."""
+    c, _ = _cadastrar("barbearia", cartao_demo)
+    for nome in ("Diego Souza", "Rafa Lima"):
+        assert c.post("/usuarios", json={"nome": nome, "email": f"{nome.split()[0].lower()}.{uuid.uuid4().hex[:5]}@exemplo.com",
+                                         "senha": "SenhaForte#123", "papel": "corretor"}).status_code == 201
+    profs = {p["nome"]: p for p in c.get("/atendimentos/profissionais?todos=true").json()}
+    for nome in ("Diego Souza", "Rafa Lima"):
+        assert c.put(f"/atendimentos/profissionais/{profs[nome]['id']}", json={"atende": True, "online": True}).status_code == 200
+    passo_link = {"id": "ag", "tipo": "link", "link_tipo": "agenda_citado", "texto": "Fechou! Agenda do {nome}: {link}"}
+    citado = {"nome": "Barbeiro citado", "gatilho": "profissional", "passos": [passo_link]}
+    # sem agenda online ligada não deixa salvar
+    r = c.post("/whatsapp/fluxos", json=citado)
+    assert r.status_code == 422 and "agenda online" in r.json()["detail"]
+    slug = f"barba-{uuid.uuid4().hex[:6]}"
+    assert c.put("/atendimentos/config", json={"ativo": True, "slug": slug}).status_code == 200
+    assert c.post("/whatsapp/fluxos", json=citado).status_code == 201, r.text
+
+    opcoes = c.get("/whatsapp/fluxos/opcoes-link").json()
+    assert opcoes["agenda"].endswith(f"/agendar/{slug}") and len(opcoes["profissionais"]) >= 2 and opcoes["catalogo"] is None
+    diego = next(p for p in opcoes["profissionais"] if p["nome"] == "Diego Souza")
+    assert diego["url"].startswith(f"{opcoes['agenda']}/")
+
+    # validações do passo de link
+    def um_passo(p):
+        return {"nome": "Teste link", "gatilho": "palavra_chave", "palavras": ["teste"], "passos": [p]}
+    assert c.post("/whatsapp/fluxos", json=um_passo({"id": "u", "tipo": "link", "link_tipo": "url", "url": "ftp://x"})).status_code == 422
+    assert c.post("/whatsapp/fluxos", json=um_passo({"id": "u", "tipo": "link", "link_tipo": "catalogo"})).json()["detail"].startswith("Passo 1: publique o site")
+    assert c.post("/whatsapp/fluxos", json=um_passo({"id": "u", "tipo": "link", "link_tipo": "agenda_profissional"})).status_code == 422
+    assert c.post("/whatsapp/fluxos", json=um_passo({"id": "u", "tipo": "link"})).status_code == 422
+
+    menu = {"nome": "Boas-vindas", "gatilho": "nova_conversa", "passos": [
+        {"id": "m", "tipo": "menu", "texto": "Fala! O que você precisa?", "opcoes": [
+            {"rotulo": "Agendar horário", "proximo": "ag"}, {"rotulo": "Agendar com o Rafa", "proximo": "rafa"}, {"rotulo": "Instagram", "proximo": "ig"}]},
+        {"id": "ag", "tipo": "link", "link_tipo": "agenda", "texto": "Escolha o melhor horário:", "proximo": "tchau"},
+        {"id": "rafa", "tipo": "link", "link_tipo": "agenda_profissional", "destino_id": profs["Rafa Lima"]["id"], "texto": "Agenda do {nome}: {link}"},
+        {"id": "ig", "tipo": "link", "link_tipo": "url", "url": "https://instagram.com/barbearia.teste", "texto": "Segue a gente:"},
+        {"id": "tchau", "tipo": "encerrar", "texto": "Qualquer coisa, é só chamar."},
+    ]}
+    r = c.post("/whatsapp/fluxos", json=menu)
+    assert r.status_code == 201, r.text
+    assert r.json()["passos"][1]["link_tipo"] == "agenda"
+    con, inst = _conectar(c, "Recepção")
+
+    def enviadas(num):
+        return [x["text"] for x in httpx.get(f"{EVO}/_teste/enviadas").json() if x["number"] == num and "text" in x]
+
+    # chegou citando o barbeiro: vale o fluxo do nome, não o de boas-vindas
+    n1 = _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n1, "nome": "Cliente", "texto": "Quero cortar com o diego amanhã"})
+    assert enviadas(n1) == [f"Fechou! Agenda do Diego Souza: {diego['url']}"]
+
+    # conversa nova sem nome: menu; opção 1 manda a agenda da casa (link numa linha no fim) e segue
+    n2 = _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n2, "nome": "Cliente 2", "texto": "Boa tarde"})
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n2, "nome": "Cliente 2", "texto": "1"})
+    t = enviadas(n2)
+    assert t[1] == f"Escolha o melhor horário:\n{opcoes['agenda']}" and t[2] == "Qualquer coisa, é só chamar."
+    n3 = _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n3, "nome": "Cliente 3", "texto": "Oi"})
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n3, "nome": "Cliente 3", "texto": "3"})
+    assert enviadas(n3)[-1] == "Segue a gente:\nhttps://instagram.com/barbearia.teste"
+    n4 = _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n4, "nome": "Cliente 4", "texto": "Oi"})
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n4, "nome": "Cliente 4", "texto": "2"})
+    rafa = next(p for p in opcoes["profissionais"] if p["nome"] == "Rafa Lima")
+    assert enviadas(n4)[-1] == f"Agenda do Rafa Lima: {rafa['url']}"
+    c.delete(f"/whatsapp/conexoes/{con['id']}")
