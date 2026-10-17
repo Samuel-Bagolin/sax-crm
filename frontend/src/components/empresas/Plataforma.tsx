@@ -437,7 +437,7 @@ export function DominiosClientes() {
   );
 }
 
-interface ServidorWa { configurado: boolean; por_env: boolean; url: string; chave_mascarada: string | null; numeros: number }
+interface ServidorWa { configurado: boolean; por_env: boolean; url: string; chave_mascarada: string | null; numeros: number; disparador?: string }
 
 /** Servidor da Evolution API que segura as conexões de WhatsApp de todos os clientes. */
 export function ServidorWhatsApp() {
@@ -470,6 +470,16 @@ export function ServidorWhatsApp() {
             <Input id="evo-key" type="password" autoComplete="off" value={v.apikey} placeholder={d?.chave_mascarada ? "Manter a atual" : "AUTHENTICATION_API_KEY"} onChange={(e) => setF({ ...v, apikey: e.target.value })} /></div>
           <Button type="submit" disabled={salvar.isPending || !f || v.url.length < 8}>{salvar.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Salvar e testar</Button>
         </form>
+      )}
+      {d?.disparador && (
+        <div className="grid gap-1.5 rounded-lg bg-muted/50 p-3 text-sm" data-testid="wa-disparador">
+          <p className="font-medium">Disparador das campanhas</p>
+          <p className="text-muted-foreground">O Vercel só roda a rotina uma vez por dia. Para as campanhas andarem com a tela fechada, peça a um agendador (cron no servidor do WhatsApp ou um serviço de cron) para abrir este endereço de 1 em 1 minuto. Guarde como senha.</p>
+          <div className="flex gap-2">
+            <Input readOnly value={`${window.location.origin}${d.disparador}`} onFocus={(e) => e.currentTarget.select()} />
+            <Button type="button" variant="outline" onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}${d.disparador}`); toast.success("Endereço copiado."); }}>Copiar</Button>
+          </div>
+        </div>
       )}
     </section>
   );

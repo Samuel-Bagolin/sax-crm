@@ -454,3 +454,55 @@ def test_fluxo_com_link_de_agenda_e_profissional_citado(servidor, cartao_demo):
     rafa = next(p for p in opcoes["profissionais"] if p["nome"] == "Rafa Lima")
     assert enviadas(n4)[-1] == f"Agenda do Rafa Lima: {rafa['url']}"
     c.delete(f"/whatsapp/conexoes/{con['id']}")
+
+
+def test_campanha_em_massa_com_limite_e_sair(servidor, cartao_demo, sysadmin):  # noqa: F811
+    """Campanha: só contatos com telefone que já conversaram, uma mensagem por toque, SAIR tira da lista."""
+    c, _ = _cadastrar("barbearia", cartao_demo)
+    con, inst = _conectar(c, "Principal")
+    tel_ja, tel_novo = _numero(), _numero()
+    ja = c.post("/pessoas", json={"nome": "joão conversou", "papeis": ["cliente"], "telefone": f"({tel_ja[2:4]}) {tel_ja[4:]}"}).json()
+    c.post("/pessoas", json={"nome": "Nunca Falou", "papeis": ["cliente"], "telefone": tel_novo[2:]})
+    c.post("/pessoas", json={"nome": "Sem Telefone", "papeis": ["cliente"]})
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": tel_ja, "nome": "João", "texto": "Oi"})
+
+    p = c.post("/whatsapp/campanhas/previa", json={"origem": "clientes"}).json()
+    assert p["total"] == 1 and p["sem_conversa"] == 1 and p["sem_telefone"] >= 1 and p["amostra"] == ["joão conversou"]
+    assert c.post("/whatsapp/campanhas/previa", json={"origem": "clientes", "ja_conversou": False}).json()["total"] == 2
+
+    base = {"nome": "Volta às aulas", "conexao_id": con["id"], "mensagem": "Oi {nome}, saudade de você aqui na {empresa}!",
+            "intervalo_min": 20, "intervalo_max": 30, "teto_diario": 50, "hora_inicio": "00:00", "hora_fim": "23:59", "domingo": True}
+    assert c.post("/whatsapp/campanhas", json={**base, "intervalo_min": 10}).status_code == 422  # intervalo mínimo de 20 s
+    assert c.post("/whatsapp/campanhas", json={**base, "intervalo_max": 20, "intervalo_min": 40}).status_code == 422
+    camp = c.post("/whatsapp/campanhas", json=base).json()
+    assert camp["status"] == "rascunho" and camp["total"] == 1
+    assert c.post(f"/whatsapp/campanhas/{camp['id']}/iniciar").json()["status"] == "enviando"
+    antes = len(httpx.get(f"{EVO}/_teste/enviadas").json())
+    assert c.post("/whatsapp/campanhas/processar").json()["enviados"] == 1
+    assert c.post("/whatsapp/campanhas/processar").json()["enviados"] == 0  # intervalo: não manda duas de uma vez
+    env = httpx.get(f"{EVO}/_teste/enviadas").json()[antes:]
+    assert len(env) == 1 and env[0]["text"].startswith("Oi João, saudade") and "responda SAIR" in env[0]["text"]
+    lista = c.get(f"/whatsapp/campanhas/{camp['id']}/envios").json()
+    assert lista[0]["status"] == "enviado"
+    conv = next(x for x in c.get("/whatsapp/conversas").json() if x["telefone"] == tel_ja)
+    ult = c.get(f"/whatsapp/conversas/{conv['id']}/mensagens").json()["mensagens"][-1]
+    assert "saudade" in ult["texto"] and ult["autor"] == "Campanha: Volta às aulas"
+
+    # responde SAIR: entra na lista de quem saiu e recebe a confirmação
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": tel_ja, "nome": "João", "texto": "Sair"})
+    assert "não vai mais receber" in httpx.get(f"{EVO}/_teste/enviadas").json()[-1]["text"]
+    saidas = c.get("/whatsapp/campanhas/saidas").json()
+    assert [s["nome"] for s in saidas] == ["João"]
+    p = c.post("/whatsapp/campanhas/previa", json={"origem": "clientes"}).json()
+    assert p["total"] == 0 and p["sairam"] == 1
+    assert c.post("/whatsapp/campanhas", json=base).status_code == 422
+
+    # só o gestor
+    func, _ = _membro(c, "Caio")
+    assert func.get("/whatsapp/campanhas").status_code == 403
+    assert c.post(f"/whatsapp/campanhas/{camp['id']}/cancelar").status_code in (200, 409)
+    assert ja["id"]
+    # disparador externo (agendador de 1 em 1 minuto): token do administrador da plataforma
+    caminho = sysadmin.get("/plataforma/whatsapp").json()["disparador"].removeprefix("/api")
+    assert httpx.get(f"{API}{caminho}").status_code == 200
+    assert httpx.get(f"{API}/publico/whatsapp/disparar/token-errado-com-tamanho-bom").status_code == 404

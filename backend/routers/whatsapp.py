@@ -827,9 +827,13 @@ async def _mensagem_recebida(instancia: str, item: dict) -> None:
         atualizar["$inc"] = {"nao_lidas": 1}
     await db.wa_conversas.update_one({"_id": conversa_id}, atualizar)
     if not de_mim:
-        from lib import wa_fluxos
+        from lib import wa_campanhas, wa_fluxos
 
         try:
+            conv_atual = await db.wa_conversas.find_one({"_id": conversa_id}) or conv
+            if await wa_campanhas.pediu_para_sair(conv_atual, conexao, texto):
+                await _mudou()
+                return
             await wa_fluxos.ao_receber(await db.wa_conversas.find_one({"_id": conversa_id}) or conv, conexao, texto, nova)
         except Exception:  # robô com problema nunca derruba o recebimento da mensagem
             logger.exception("fluxo de resposta falhou")
@@ -892,8 +896,11 @@ async def ver_servidor(principal: Principal = Depends(require("empresa:manage"))
     cfg = await wa.config()
     chave = cfg.get("apikey") or ""
     total = await controle[wa.INDICE].count_documents({})
+    from routers.campanhas import token_disparador
+
     return {"configurado": wa.configurado(cfg), "por_env": cfg["por_env"], "url": cfg["url"],
-            "chave_mascarada": (chave[:3] + "..." + chave[-3:]) if len(chave) > 8 else None, "numeros": total}
+            "chave_mascarada": (chave[:3] + "..." + chave[-3:]) if len(chave) > 8 else None, "numeros": total,
+            "disparador": f"/api/publico/whatsapp/disparar/{await token_disparador()}"}
 
 
 @admin_router.put("")

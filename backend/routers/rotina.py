@@ -79,4 +79,10 @@ async def rotina(authorization: str | None = Header(None), user_agent: str | Non
                 resumo["falhas"] += 1
                 logger.exception("rotina: %s falhou em %s", chave, nome)
         definir_empresa(None)
+    try:  # campanhas de WhatsApp em envio: um toque (o resto anda pela tela aberta ou pelo disparador externo)
+        from lib.wa_campanhas import processar_todas
+
+        resumo["whatsapp"] = await processar_todas(15)
+    except Exception:
+        logger.exception("rotina: campanhas de WhatsApp falharam")
     return resumo

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumerosWhatsApp, type Conexao, type Setor } from "@/components/whatsapp/NumerosWhatsApp";
 import { FluxosWhatsApp } from "@/components/whatsapp/FluxosWhatsApp";
+import { CampanhasWhatsApp } from "@/components/whatsapp/CampanhasWhatsApp";
 import { cn } from "@/lib/utils";
 
 interface Situacao { servidor_ok: boolean; liberado: boolean; pode_gerir: boolean; versao: number; conexoes: Conexao[]; setores?: Setor[] }
@@ -102,7 +103,7 @@ export default function WhatsApp() {
   // Uma leitura leve a cada 8 s, só com a aba visível; a lista só recarrega quando algo mudou.
   const ver = useQuery({ queryKey: ["wa", "versao"], queryFn: () => apiGet<{ versao: number }>("/whatsapp/versao"), enabled: ok, refetchInterval: 8000, refetchIntervalInBackground: false });
   const versao = ver.data?.versao ?? 0;
-  const [aba, setAba] = useState<"conversas" | "numeros" | "fluxos">("conversas");
+  const [aba, setAba] = useState<"conversas" | "numeros" | "fluxos" | "campanhas">("conversas");
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [busca, setBusca] = useState("");
   const [ativa, setAtiva] = useState<string | null>(null);
@@ -156,6 +157,9 @@ export default function WhatsApp() {
           {sit.data.pode_gerir && (
             <button type="button" role="tab" aria-selected={aba === "fluxos"} onClick={() => setAba("fluxos")} className={cn("rounded-md px-3 py-1.5 text-sm font-medium", aba === "fluxos" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} data-testid="wa-aba-fluxos">Fluxos</button>
           )}
+          {sit.data.pode_gerir && (
+            <button type="button" role="tab" aria-selected={aba === "campanhas"} onClick={() => setAba("campanhas")} className={cn("rounded-md px-3 py-1.5 text-sm font-medium", aba === "campanhas" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} data-testid="wa-aba-campanhas">Campanhas</button>
+          )}
         </div>
         {conexoes.some((c) => c.status !== "conectado") && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
@@ -164,7 +168,9 @@ export default function WhatsApp() {
         )}
       </div>
 
-      {aba === "fluxos" ? (
+      {aba === "campanhas" ? (
+        <CampanhasWhatsApp conexoes={conexoes} />
+      ) : aba === "fluxos" ? (
         <FluxosWhatsApp conexoes={conexoes} setores={setores} />
       ) : aba === "numeros" ? (
         <NumerosWhatsApp conexoes={conexoes} setores={setores} podeGerir={!!sit.data.pode_gerir} />

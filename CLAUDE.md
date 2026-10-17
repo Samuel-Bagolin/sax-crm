@@ -128,6 +128,13 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    (`lib/wa_fluxos.py`, coleção `wa_fluxos`): passos mensagem, menu, transferir (pessoa, setor ou fila) e encerrar;
    gatilho conversa nova (um por número) ou palavra-chave. A conversa guarda `fluxo` enquanto espera o menu; quem da
    equipe responde para o robô. Transferir para setor grava `setor_id` na conversa e os membros passam a vê-la.
+   Número pessoal: quem não é gestor conecta o próprio celular (`dono_pessoa_id`), só a pessoa e o gestor veem.
+   Campanhas (`lib/wa_campanhas.py`, `routers/campanhas.py`, aba Campanhas, só gestor): público filtrado (clientes ou
+   negócios; aniversário, sem movimento há N dias, funil, etapa, temperatura, etiqueta; por padrão só quem já conversou),
+   fila `wa_campanha_envios` (`_id` campanha|ordem) com `cursor`, intervalo aleatório (mín. 20 s), teto por número e dia
+   (`wa_envio_dia`), janela de horário. A fila anda em toques: tela aberta (15 s), cron diário e disparador externo
+   `/api/publico/whatsapp/disparar/{token}` (endereço em Empresas > Pagamentos). Resposta SAIR grava `wa_optout` (chave
+   DDD + 8 dígitos) e ninguém nessa lista recebe campanha.
    Teste local: `tests/fake_evolution.py` na porta 8098.
 11. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
    `FIREBASE_SERVICE_ACCOUNT`; o resto é gerado e guardado no banco (`lib/autoconfig.py`).
