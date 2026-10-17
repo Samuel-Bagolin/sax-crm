@@ -156,7 +156,14 @@ async def presenca(aid: str, input: PresencaIn, principal: Principal = Depends(r
         extra["status"] = "em_atendimento"
     if a.get("status") in ("agendado", "confirmado") and all(p.get("presenca") in ("falta", "falta_justificada") for p in lista):
         extra["status"] = "faltou"
-    return _saida(await _gravar(a, lista, extra), await capacidade(a))
+    final = await _gravar(a, lista, extra)
+    from routers.convenios import desfazer_uso, registrar_uso  # sessão de convênio consome a guia
+
+    if input.presenca == "presente":
+        await registrar_uso(final, input.cliente_id)
+    else:
+        await desfazer_uso(final, input.cliente_id)
+    return _saida(final, await capacidade(a))
 
 
 # ------------------------------------------------------------------ controle de atendimento

@@ -92,6 +92,11 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    sessão; grupo conta por sessão ou por paciente). Só conta paciente presente com evolução. Fechar grava `folhas`
    (retrato congelado) e conta a pagar 2.3.2 com id fixo `folha-AAAA-MM-usuario`; reabrir só se não paga. Com regra de
    folha, concluir atendimento não lança a comissão `comissao_pct` (não paga duas vezes).
+   Convênios (`routers/convenios.py`, `lib/tiss.py`, tela /convenios em terapia e odontologia): operadora (registro ANS,
+   código do prestador, tabela serviço -> código TUSS e valor; Bradesco Saúde como modelo, ANS 005711), guia com senha,
+   validade e sessões autorizadas; presença "presente" consome uma sessão (`guia_usos`, `_id` agendamento|paciente) e
+   tirar a presença devolve (se não faturada). Lote por operadora e período, XML TISS 4.03.00 SP/SADT com hash MD5 no
+   epílogo (não validado contra o XSD: o gestor valida no portal), recebimento com glosa lança receita `lote-{id}`.
    Barbearia: clube de assinantes em `routers/clube.py` (mensalidade com id fixo por mês, não duplica).
    Texto de tela compartilhada nunca fixa "imóvel", "corretor" ou "imobiliária": use `useSegmento()`
    (`termos`, `empresa`, `registro`, `dominio`) e, no servidor, o segmento da empresa. Recursos do plano

@@ -91,7 +91,7 @@ async def listar(busca: str | None = Query(None, max_length=80), principal: Prin
     docs.sort(key=lambda p: p.get("nome", "").lower())
     return [{"id": p["id"], "nome": p["nome"], "telefone": p.get("telefone"), "email": p.get("email"),
              "data_nascimento": p.get("data_nascimento"), "ultimo_atendimento": p.get("ultimo_atendimento"),
-             "cpf_cnpj": p.get("cpf_cnpj")} for p in docs[:2000]]
+             "cpf_cnpj": p.get("cpf_cnpj"), "carteiras": p.get("carteiras") or []} for p in docs[:2000]]
 
 
 class PacienteIn(BaseModel):
@@ -367,6 +367,9 @@ async def nova_evolucao(paciente_id: str, input: EvolucaoIn, principal: Principa
                 p["presenca"] = p.get("presenca") or "presente"
         await db.agendamentos.update_one({"id": ag["id"]}, {"$set": {"participantes": lista,
                                                                     "participantes_ids": [p["cliente_id"] for p in lista if p.get("cliente_id")]}})
+        from routers.convenios import registrar_uso
+
+        await registrar_uso({**ag, "participantes": lista}, paciente_id)
     return _limpo(d)
 
 
