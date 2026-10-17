@@ -4,7 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { TermoGate } from "@/components/termo/TermoGate";
 import { usePlano, type Recurso } from "@/lib/diferenciais";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardList, ClipboardCheck,
+import { Wallet, ClipboardList, ClipboardCheck,
   MessageSquareText,
   Building,
   Building2,
@@ -127,6 +127,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
     titulo: "Operação",
     itens: [
       { to: "/financeiro", modulo: "financeiro", icon: CircleDollarSign, nivel: "todos" },
+      { to: "/folha", modulo: "atendimentos", icon: Wallet, rotulo: "Folha", nivel: "todos", segmentos: ["terapia", "odontologia", "estetica"] },
       { to: "/comissoes", modulo: "crm", icon: Percent, rotulo: "Comissões", nivel: "todos", segmentos: ["comercio"] },
       { to: "/cashback", modulo: "pacientes", icon: Gift, rotulo: "Afiliados e cashback", curto: "Afiliados", nivel: "todos", segmentos: ["comercio"] },
       { to: "/relatorios", modulo: "crm", icon: ChartNoAxesColumn, rotulo: "Relatórios", nivel: "todos" },
@@ -169,6 +170,7 @@ const TITULOS: Record<string, string> = {
   "/dados": "Importar e exportar dados",
   "/pesquisas": "Pesquisas e NPS",
   "/controle-atendimento": "Controle de atendimento",
+  "/folha": "Folha por profissional",
 };
 const MODULO_POR_ROTA: Record<string, string> = {
   "/": "dashboard",

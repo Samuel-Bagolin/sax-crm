@@ -495,7 +495,7 @@ async def _lancar_conclusao(a: dict, input: Conclusao, principal: Principal) -> 
         await db.transacoes.insert_one(t)
         transacao_id = t["id"]
         pct = float(prof.get("comissao_pct") or 0)
-        if pct > 0 and prof.get("pessoa_id"):
+        if pct > 0 and prof.get("pessoa_id") and not (prof.get("folha") or {}).get("modelo"):  # com folha, paga pela folha (routers/folha.py)
             from lib.integrity import percentage
 
             conta_c = await db.plano_contas.find_one({"codigo": "2.3.1"}) or await db.plano_contas.find_one({"tipo": "despesa"})

@@ -88,6 +88,10 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    `capacidade` > 1 aceita vários pacientes (`agendamento.participantes`, `participantes_ids`); presença por paciente
    (só quem atende ou o gestor, só no dia ou depois); evolução ligada à sessão (`prontuario.agendamento_id`, uma por
    paciente e sessão, `no_prazo` = até 24 h depois do fim). `_atende` e a ficha olham `participantes_ids` também.
+   Folha por profissional (`routers/folha.py`, tela /folha): regra em `usuarios.folha` (por sessão, % da sessão ou fixo +
+   sessão; grupo conta por sessão ou por paciente). Só conta paciente presente com evolução. Fechar grava `folhas`
+   (retrato congelado) e conta a pagar 2.3.2 com id fixo `folha-AAAA-MM-usuario`; reabrir só se não paga. Com regra de
+   folha, concluir atendimento não lança a comissão `comissao_pct` (não paga duas vezes).
    Barbearia: clube de assinantes em `routers/clube.py` (mensalidade com id fixo por mês, não duplica).
    Texto de tela compartilhada nunca fixa "imóvel", "corretor" ou "imobiliária": use `useSegmento()`
    (`termos`, `empresa`, `registro`, `dominio`) e, no servidor, o segmento da empresa. Recursos do plano
