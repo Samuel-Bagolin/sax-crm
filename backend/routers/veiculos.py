@@ -69,6 +69,18 @@ class VeiculoIn(BaseModel):
     repasse_valor: float | None = Field(default=None, gt=0, le=100_000_000)  # quanto o dono recebe na venda
     consignacao_comissao_pct: float | None = Field(default=None, ge=0, le=100)
     consignacao_fim: str | None = None  # prazo da consignação (AAAA-MM-DD)
+    olx: OlxIn | None = None  # None = não mexe no que já está (situação do envio fica)
+
+
+class OlxIn(BaseModel):
+    """Anúncio na OLX: códigos de marca, modelo e versão do catálogo da OLX (os nomes só para mostrar)."""
+    publicar: bool = False
+    marca: str | None = Field(default=None, max_length=20)
+    modelo: str | None = Field(default=None, max_length=20)
+    versao: str | None = Field(default=None, max_length=20)
+    marca_nome: str | None = Field(default=None, max_length=80)
+    modelo_nome: str | None = Field(default=None, max_length=80)
+    versao_nome: str | None = Field(default=None, max_length=120)
 
 
 class Venda(BaseModel):
@@ -273,7 +285,12 @@ async def editar(veiculo_id: str, input: VeiculoIn, principal: Principal = Depen
     d["updated_at"] = now_utc()
     if d["consignado"] and not await db.pessoas.find_one({"id": d["consignante_id"]}, {"id": 1}):
         raise HTTPException(422, "Dono do veículo não encontrado no cadastro")
-    await db.veiculos.update_one({"id": veiculo_id}, {"$set": d})
+    olx_in = d.pop("olx", None)
+    sets = dict(d)
+    if olx_in is not None:  # só os campos da tela; situação e erros do último envio ficam
+        sets.update({f"olx.{k}": val for k, val in olx_in.items()})
+        d["olx"] = {**(antes.get("olx") or {}), **olx_in}
+    await db.veiculos.update_one({"id": veiculo_id}, {"$set": sets})
     await sincronizar_consignacao({**antes, **d}, principal)
     from routers.site_imobiliaria import limpar_cache
 
@@ -330,6 +347,9 @@ async def registrar_venda(veiculo_id: str, input: Venda, principal: Principal, c
     from routers.site_imobiliaria import limpar_cache
 
     limpar_cache()
+    from routers.olx import tirar_vendido
+
+    await tirar_vendido(v)
     return {**v, **dados}
 
 

@@ -16,6 +16,7 @@ import SiteStatusPicker from "@/components/site/SiteStatusPicker";
 import type { Lead, Pessoa, SiteStatus } from "@/lib/types";
 import { useConfig } from "@/lib/useConfig";
 import Combo from "@/components/shared/Combo";
+import { CamposOlx, OLX_VAZIO, PainelOlx, SeloOlx, useOlx, type OlxVeiculo } from "@/components/veiculos/Olx";
 import { cn } from "@/lib/utils";
 
 type StatusV = "preparacao" | "disponivel" | "reservado" | "vendido";
@@ -66,6 +67,7 @@ interface Veiculo {
   consignacao_fim?: string | null;
   consignante?: { nome: string; telefone?: string | null; cpf_cnpj?: string | null } | null;
   contratos?: { id: string; numero: string; tipo: string; status: string; assinatura_status?: string; valor: number }[];
+  olx?: OlxVeiculo | null;
 }
 interface Resumo {
   em_estoque: number;
@@ -99,6 +101,18 @@ export default function Veiculos() {
   const { config } = useConfig();
   const pessoasTodas = useQuery({ queryKey: ["pessoas"], queryFn: () => apiGet<Pessoa[]>("/pessoas") });
   const [aba, setAba] = useState("estoque");
+  const [painelOlx, setPainelOlx] = useState(false);
+  // volta da OLX depois de autorizar: avisa e abre o painel
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("olx");
+    if (!p) return;
+    const msg: Record<string, [string, boolean]> = { conectado: ["Conta da OLX conectada", true], recusado: ["A autorização na OLX foi cancelada", false],
+      expirou: ["O pedido de conexão expirou. Tente de novo.", false], erro: ["A OLX não liberou o acesso. Tente de novo.", false] };
+    const [t, ok] = msg[p] ?? msg.erro;
+    (ok ? toast.success : toast.error)(t);
+    window.history.replaceState(null, "", window.location.pathname);
+    setPainelOlx(true);
+  }, []);
   const filtrada = useMemo(() => {
     const t = busca.toLowerCase().trim();
     return (lista.data ?? []).filter((v) => (aba === "vendidos" ? v.status === "vendido" : v.status !== "vendido") && (!t || `${v.titulo} ${v.codigo} ${v.placa ?? ""} ${v.cor ?? ""}`.toLowerCase().includes(t)));
@@ -118,6 +132,7 @@ export default function Veiculos() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <TabsList><TabsTrigger value="estoque">Estoque</TabsTrigger><TabsTrigger value="vendidos">Vendidos</TabsTrigger></TabsList>
           <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Buscar por modelo, código, placa ou cor" value={busca} onChange={(e) => setBusca(e.target.value)} /></div>
+          {isAdmin && <Button variant="outline" onClick={() => setPainelOlx(true)} data-testid="abrir-olx"><span className="rounded bg-[#6e0ad6] px-1 text-[11px] font-bold text-white">OLX</span> Anúncios</Button>}
           <Button onClick={() => setEdit("novo")} data-testid="novo-veiculo"><Plus className="h-4 w-4" /> Novo veículo</Button>
         </div>
         <TabsContent value={aba} className="mt-4">
@@ -141,7 +156,10 @@ export default function Veiculos() {
                         <p className="text-lg font-bold">{v.status === "vendido" ? brl(v.valor_vendido ?? 0) : v.preco_venda ? brl(v.preco_venda) : "Sem preço"}</p>
                         {isAdmin && v.margem != null && <p className={cn("text-xs font-semibold", v.margem >= 0 ? "text-emerald-600" : "text-red-600")}>margem {brlCompacto(v.margem)}{v.margem_pct != null ? ` (${v.margem_pct}%)` : ""}</p>}
                       </div>
-                      <p className="text-[11px] text-muted-foreground">{v.codigo}, {v.dias_estoque} dia(s) {v.status === "vendido" ? "até a venda" : "em estoque"}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-muted-foreground">{v.codigo}, {v.dias_estoque} dia(s) {v.status === "vendido" ? "até a venda" : "em estoque"}</p>
+                        {v.status !== "vendido" && <SeloOlx olx={v.olx} />}
+                      </div>
                     </div>
                   </button>
                   {v.status !== "vendido" ? (
@@ -162,6 +180,7 @@ export default function Veiculos() {
       </Tabs>
       <VeiculoDialog veiculo={edit} onClose={() => setEdit(null)} onSalvo={atualizar} />
       <VendaDialog veiculo={vender} onClose={() => setVender(null)} onSalvo={atualizar} />
+      {isAdmin && <PainelOlx aberto={painelOlx} onClose={() => setPainelOlx(false)} />}
     </div>
   );
 }
@@ -186,7 +205,10 @@ function VeiculoDialog({ veiculo, onClose, onSalvo }: { veiculo: Veiculo | "novo
   const det = useQuery({ queryKey: ["veiculo", id], queryFn: () => apiGet<Veiculo>(`/veiculos/${id}`), enabled: !!id });
   const pessoas = useQuery({ queryKey: ["pessoas"], queryFn: () => apiGet<Pessoa[]>("/pessoas"), enabled: !!veiculo && f.consignado });
   const arquivo = useRef<HTMLInputElement>(null);
+  const [olx, setOlx] = useState<OlxVeiculo>(OLX_VAZIO);
+  const olxSit = useOlx(!!veiculo);
   useEffect(() => {
+    setOlx(veiculo && veiculo !== "novo" && veiculo.olx ? { ...OLX_VAZIO, ...veiculo.olx } : OLX_VAZIO);
     if (veiculo === "novo") setF(VAZIO);
     else if (veiculo) {
       const v = veiculo;
@@ -203,7 +225,9 @@ function VeiculoDialog({ veiculo, onClose, onSalvo }: { veiculo: Veiculo | "novo
         preco_venda: n(f.preco_venda), preco_fipe: n(f.preco_fipe), custo_aquisicao: n(f.custo_aquisicao),
         despesas: f.despesas.filter((d) => d.descricao.trim().length > 1).map((d) => ({ descricao: d.descricao, valor: n(d.valor) ?? 0 })),
         consignante_id: f.consignado ? f.consignante_id || null : null, repasse_valor: f.consignado ? n(f.repasse_valor) : null,
-        consignacao_comissao_pct: f.consignado ? n(f.consignacao_comissao_pct) : null, consignacao_fim: f.consignado ? f.consignacao_fim || null : null };
+        consignacao_comissao_pct: f.consignado ? n(f.consignacao_comissao_pct) : null, consignacao_fim: f.consignado ? f.consignacao_fim || null : null,
+        olx: { publicar: olx.publicar, marca: olx.marca, modelo: olx.modelo, versao: olx.versao, marca_nome: olx.marca_nome ?? null,
+          modelo_nome: olx.modelo_nome ?? null, versao_nome: olx.versao_nome ?? null } };
       for (const [rotulo, v] of [["Preço de venda", corpo.preco_venda], ["FIPE", corpo.preco_fipe], ["Custo de aquisição", corpo.custo_aquisicao], ["Repasse ao dono", corpo.repasse_valor]] as const) {
         if (v != null && (Number.isNaN(v) || v < 0)) throw new Error(`${rotulo}: informe um valor igual ou maior que zero.`);
       }
@@ -314,6 +338,7 @@ function VeiculoDialog({ veiculo, onClose, onSalvo }: { veiculo: Veiculo | "novo
             </div>
           )}
         </div>
+        {f.categoria !== "moto" && <CamposOlx valor={olx} onChange={setOlx} conectado={!!olxSit.data?.conectado} />}
         <div className="grid gap-1.5"><Label htmlFor="v-desc">Descrição para o site</Label><Textarea id="v-desc" rows={3} value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} /></div>
         <div className="grid gap-1.5">
           <Label>No site da loja</Label>

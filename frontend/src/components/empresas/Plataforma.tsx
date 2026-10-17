@@ -474,3 +474,47 @@ export function ServidorWhatsApp() {
     </section>
   );
 }
+
+interface AppOlx { configurado: boolean; por_env: boolean; client_id: string | null; segredo_mascarado: string | null; redirect_uri: string; lojas_conectadas: number }
+
+/** Aplicativo da SAX na OLX (client_id e client_secret enviados pelo suporte de integração da OLX). */
+export function AplicativoOlx() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["olx-app"], queryFn: () => apiGet<AppOlx>("/plataforma/olx") });
+  const [f, setF] = useState<{ client_id: string; client_secret: string } | null>(null);
+  const v = f ?? { client_id: q.data?.client_id ?? "", client_secret: "" };
+  const salvar = useMutation({
+    mutationFn: () => apiPut<AppOlx>("/plataforma/olx", { client_id: v.client_id.trim(), client_secret: v.client_secret.trim() || null }),
+    onSuccess: (r) => { qc.setQueryData(["olx-app"], r); setF(null); toast.success("Aplicativo da OLX salvo."); },
+    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível salvar"),
+  });
+  const d = q.data;
+  return (
+    <section className="grid gap-4 rounded-xl border bg-card p-4 sm:p-5" data-testid="aplicativo-olx">
+      <div>
+        <h2 className="font-semibold">OLX (lojas de veículos)</h2>
+        <p className="text-sm text-muted-foreground">
+          Peça o cadastro do aplicativo ao suporte de integração da OLX (suporteintegrador@olxbr.com) informando a URL de retorno abaixo.
+          Com o client_id e a chave secreta salvos aqui, cada loja conecta a própria conta profissional da OLX.
+        </p>
+      </div>
+      {d && (
+        <div className="grid gap-1 text-sm">
+          <p>URL de retorno para a OLX: <code className="break-all rounded bg-muted px-1">{d.redirect_uri}</code></p>
+          {d.configurado
+            ? <p className="flex items-center gap-1.5 text-emerald-700"><ShieldCheck className="h-4 w-4" /> Aplicativo {d.client_id}{d.segredo_mascarado ? ` (chave ${d.segredo_mascarado})` : ""}. {d.lojas_conectadas} loja(s) conectada(s).</p>
+            : <p className="flex items-center gap-1.5 text-amber-700"><AlertTriangle className="h-4 w-4" /> Sem aplicativo: as lojas veem a OLX como em liberação.</p>}
+        </div>
+      )}
+      {!d?.por_env && (
+        <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end" onSubmit={(e) => { e.preventDefault(); salvar.mutate(); }}>
+          <div className="grid gap-1.5"><Label htmlFor="olx-cid">client_id</Label>
+            <Input id="olx-cid" value={v.client_id} onChange={(e) => setF({ ...v, client_id: e.target.value })} /></div>
+          <div className="grid gap-1.5"><Label htmlFor="olx-sec">Chave secreta (client_secret)</Label>
+            <Input id="olx-sec" type="password" autoComplete="off" value={v.client_secret} placeholder={d?.segredo_mascarado ? "Manter a atual" : ""} onChange={(e) => setF({ ...v, client_secret: e.target.value })} /></div>
+          <Button type="submit" disabled={salvar.isPending || !f || v.client_id.trim().length < 3}>{salvar.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Salvar</Button>
+        </form>
+      )}
+    </section>
+  );
+}

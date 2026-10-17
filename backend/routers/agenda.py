@@ -341,6 +341,12 @@ async def _tarefa_lembretes(data_alvo: str, run_id: str) -> None:
             except Exception:
                 logger.exception("Falha de lembretes para empresa; demais empresas serão processadas")
         definir_empresa(None)
+        try:  # lojas de veículos conectadas à OLX mandam o estoque de novo (preço, fotos, vendidos)
+            from routers.olx import sincronizar_todas
+
+            logger.info("cron %s: olx em %s loja(s)", run_id, await sincronizar_todas())
+        except Exception:
+            logger.exception("cron %s: falha na sincronização da OLX", run_id)
     except Exception as e:  # o cron não repete: registra e segue
         logger.error(f"[cron {run_id}] falha nos lembretes de visitas: {e}")
 

@@ -26,7 +26,7 @@ import { Administradores } from "@/components/empresas/Administradores";
 import { ImportarPrints, ImportarRevendas } from "@/components/empresas/ImportarRevendas";
 import { ImportarDados } from "@/components/dados/ImportarDados";
 import { Demonstracoes } from "@/components/empresas/Demonstracoes";
-import { ConfigPagamentos, DadosContratada, DominiosClientes, PainelSegmentos, ServidorWhatsApp } from "@/components/empresas/Plataforma";
+import { AplicativoOlx, ConfigPagamentos, DadosContratada, DominiosClientes, PainelSegmentos, ServidorWhatsApp } from "@/components/empresas/Plataforma";
 import { cn } from "@/lib/utils";
 
 function Uso({ rotulo, uso, limite }: { rotulo: string; uso: number; limite: number | null }) {
@@ -260,7 +260,7 @@ export default function Empresas() {
       ) : aba === "admins" ? (
         <Administradores />
       ) : aba === "pagamentos" ? (
-        <div className="grid gap-6"><ConfigPagamentos /><ServidorWhatsApp /><DadosContratada /><DominiosClientes /></div>
+        <div className="grid gap-6"><ConfigPagamentos /><ServidorWhatsApp /><AplicativoOlx /><DadosContratada /><DominiosClientes /></div>
       ) : aba === "planos" ? (
         <CatalogoComercial />
       ) : (
