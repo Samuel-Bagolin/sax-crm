@@ -325,6 +325,9 @@ async def processar_empresa(ate: float | None = None) -> int:
         from lib.wa_cadencia import preparar_dia
 
         await preparar_dia()
+        from routers.espera import expirar_ofertas
+
+        await expirar_ofertas()  # lista de espera: oferta sem resposta passa ao próximo
     except Exception:
         logger.exception("cadência do WhatsApp falhou")
     for c in await db.wa_campanhas.find({"status": "enviando"}).to_list(20):

@@ -101,6 +101,11 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    terapia com itens de serviço), prontuário, receituário/atestado/declaração (`documentos_clinicos`, texto fixo depois de
    emitido) e arquivos do prontuário (`prontuario_arquivos`, PDF/imagem até 3 MB, confere a assinatura do arquivo). Tudo
    com a regra do prontuário (`_acessa_saude`) e registro em `prontuario_acessos`.
+   Lista de espera e remanejamento (`routers/espera.py`, botão "Lista de espera" na agenda): é por regras, não é IA
+   (pontos por serviço, profissional, dia, período, prioridade e tempo de espera). Cancelou horário futuro (CRM ou "2" no
+   lembrete): vira vaga; com `espera_config.auto`, oferece pelo WhatsApp ao primeiro candidato (`espera_ofertas`, "1" agenda
+   com trava, "2" ou prazo vencido passa ao próximo no toque da fila). `/espera/remanejar` sugere outro profissional no
+   mesmo horário ou o mesmo em outro dia; aplicar usa o PATCH da agenda.
    Barbearia: clube de assinantes em `routers/clube.py` (mensalidade com id fixo por mês, não duplica).
    Texto de tela compartilhada nunca fixa "imóvel", "corretor" ou "imobiliária": use `useSegmento()`
    (`termos`, `empresa`, `registro`, `dominio`) e, no servidor, o segmento da empresa. Recursos do plano

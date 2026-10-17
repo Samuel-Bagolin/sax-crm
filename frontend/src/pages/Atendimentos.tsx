@@ -17,6 +17,7 @@ import {
   Plus,
   Settings2,
   UserRound,
+  Users,
   UserX,
   X,
 } from "lucide-react";
@@ -36,6 +37,7 @@ import {
 } from "@/lib/atendimentos";
 import AgendaOnline, { ProfissionalDialog } from "@/pages/AgendaOnline";
 import { PainelSessao } from "@/components/atendimentos/Sessao";
+import { ListaEspera } from "@/components/atendimentos/ListaEspera";
 import { AvisoEvolucoes } from "@/pages/ControleAtendimento";
 import { useSegmento } from "@/lib/segmento";
 import { useAuth } from "@/lib/useAuth";
@@ -79,6 +81,7 @@ export default function Atendimentos() {
   const [unidadeSel, setUnidadeSel] = useState<string | null>(null);
   const [configurar, setConfigurar] = useState<string | null>(null);
   const [editarProf, setEditarProf] = useState<Profissional | null>(null);
+  const [espera, setEspera] = useState(false);
   const seg = useSegmento();
   const { isAdmin, principal } = useAuth();
   const profs = useProfissionais();
@@ -138,6 +141,7 @@ export default function Atendimentos() {
                   </Chip>
                 ))}
               </div>
+              <Button variant="outline" size="sm" onClick={() => setEspera(true)} data-testid="abrir-espera"><Users className="h-4 w-4" /> Lista de espera</Button>
               {isAdmin && (
                 <Button variant="outline" size="sm" onClick={() => setConfigurar("servicos")} data-testid="configurar-agenda">
                   <Settings2 className="h-4 w-4" /> {seg.termos.itens} e regras
@@ -269,6 +273,7 @@ export default function Atendimentos() {
         </DialogContent>
       </Dialog>
       <ProfissionalDialog prof={editarProf} onClose={() => setEditarProf(null)} />
+      <ListaEspera aberto={espera} onClose={() => setEspera(false)} dia={dia} />
 
       <NovoAgendamento
         aberto={!!novo}

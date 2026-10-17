@@ -198,5 +198,8 @@ async def resposta_confirmacao(conv: dict, conexao: dict, texto: str) -> bool:
                                          {"$set": {"status": "cancelado", "cancelado_por": "Cliente pelo WhatsApp", "updated_at": now_utc()}})
     if r.modified_count == 1:
         await destravar(a)
+        from routers.espera import vaga_aberta
+
+        await vaga_aberta({**a, "status": "cancelado"})
     await _enviar(conv, conexao, f"Pronto, cancelamos o horário de {quando}. Se quiser marcar outro dia, é só responder aqui.")
     return True

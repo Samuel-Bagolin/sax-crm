@@ -433,6 +433,10 @@ async def atualizar(agendamento_id: str, input: AgendamentoUpdate, principal: Pr
                 except HTTPException:
                     pass
         raise
+    if input.status == "cancelado" and a["status"] != "cancelado" and final["data"] >= agora_local().date().isoformat():
+        from routers.espera import vaga_aberta
+
+        await vaga_aberta(final)  # lista de espera: oferece o horário (se o automático estiver ligado)
     return _saida(final)
 
 

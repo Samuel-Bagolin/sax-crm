@@ -568,3 +568,50 @@ def test_lembrete_resposta_2_cancela_e_libera(servidor, cartao_demo):
     assert "cancelamos o horário" in httpx.get(f"{EVO}/_teste/enviadas").json()[-1]["text"]
     # horário livre de novo
     assert _agendar_amanha(c, "Outro Cliente", _numero(), "11:00")["status"] in ("agendado", "confirmado")
+
+
+def test_lista_de_espera_oferece_vaga_e_agenda(servidor, cartao_demo):
+    """Cancelou: o primeiro da lista de espera recebe a oferta; "2" passa para o próximo; "1" agenda no horário."""
+    c, _ = _cadastrar("barbearia", cartao_demo)
+    con, inst = _conectar(c, "Recepção")
+    assert c.put("/espera/config", json={"auto": True, "minutos": 30}).status_code == 200
+    corte = next(s for s in c.get("/atendimentos/servicos").json() if s["nome"] == "Corte")
+    tel_a, tel_b, tel_c = _numero(), _numero(), _numero()
+    a = _agendar_amanha(c, "Ana Cancela", tel_a, "10:00")
+    b = c.post("/espera", json={"cliente_nome": "Bia Espera", "cliente_telefone": tel_b[2:], "servico_id": corte["id"]}).json()
+    cc = c.post("/espera", json={"cliente_nome": "Caio Urgente", "cliente_telefone": tel_c[2:], "prioridade": "alta"}).json()
+    c.post("/espera", json={"cliente_nome": "Davi Domingo", "cliente_telefone": _numero()[2:], "dias": [0], "periodos": ["noite"]})
+    assert c.post("/espera", json={"cliente_id": b["cliente_id"], "servico_id": corte["id"]}).status_code == 409
+    antes = len(httpx.get(f"{EVO}/_teste/enviadas").json())
+    assert c.patch(f"/atendimentos/{a['id']}", json={"status": "cancelado"}).status_code == 200
+    env = httpx.get(f"{EVO}/_teste/enviadas").json()[antes:]
+    assert len(env) == 1 and env[0]["number"] == tel_c and "Responda 1 para confirmar" in env[0]["text"]  # prioridade alta primeiro
+    vagas = c.get("/espera/vagas").json()
+    assert vagas[0]["id"] == a["id"] and vagas[0]["oferta"]["nome"] == "Caio Urgente"
+    assert [x["cliente_nome"] for x in vagas[0]["candidatos"]] == ["Bia Espera"]  # Davi só domingo à noite
+    # Caio não pode: vai para a Bia
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": tel_c, "nome": "Caio", "texto": "2"})
+    ult = httpx.get(f"{EVO}/_teste/enviadas").json()[-2:]
+    assert "continua na lista de espera" in ult[0]["text"] and ult[1]["number"] == tel_b
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": tel_b, "nome": "Bia", "texto": "1"})
+    assert "Seu horário ficou marcado" in httpx.get(f"{EVO}/_teste/enviadas").json()[-1]["text"]
+    dia = a["data"]
+    novos = [x for x in c.get("/atendimentos", params={"inicio": dia, "fim": dia}).json() if x["status"] == "confirmado" and x["inicio"] == "10:00"]
+    assert len(novos) == 1 and novos[0]["cliente_nome"] == "Bia Espera"
+    assert [e["cliente_nome"] for e in c.get("/espera").json()] == ["Caio Urgente", "Davi Domingo"]
+    assert c.get("/espera/vagas").json() == []
+
+
+def test_remanejar_dia_do_profissional(servidor, cartao_demo):
+    c, _ = _cadastrar("barbearia", cartao_demo)
+    me = c.get("/auth/me").json()
+    a = _agendar_amanha(c, "Rui Remaneja", _numero(), "14:00")
+    outro, _pid = _membro(c, "Leo")
+    leo = next(u for u in c.get("/usuarios").json() if u["nome"] == "Leo")
+    assert c.put(f"/atendimentos/profissionais/{leo['id']}", json={"atende": True, "jornada": {str(d): [["08:00", "20:00"]] for d in range(7)}, "comissao_pct": 0}).status_code == 200
+    r = c.post("/espera/remanejar", json={"profissional_id": me["usuario_id"], "data": a["data"]}).json()
+    ops = r["atendimentos"][0]["opcoes"]
+    assert any(o["tipo"] == "outro_profissional" and o["profissional_nome"] == "Leo" and o["inicio"] == "14:00" for o in ops)
+    assert any(o["tipo"] == "outro_dia" and o["data"] > a["data"] for o in ops)
+    o = next(o for o in ops if o["tipo"] == "outro_profissional")
+    assert c.patch(f"/atendimentos/{a['id']}", json={"profissional_id": o["profissional_id"], "data": o["data"], "inicio": o["inicio"]}).status_code == 200

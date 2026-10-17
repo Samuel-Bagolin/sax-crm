@@ -832,8 +832,10 @@ async def _mensagem_recebida(instancia: str, item: dict) -> None:
         try:
             conv_atual = await db.wa_conversas.find_one({"_id": conversa_id}) or conv
             from lib.wa_cadencia import resposta_confirmacao
+            from routers.espera import resposta_oferta
 
-            if await resposta_confirmacao(conv_atual, conexao, texto) or await wa_campanhas.pediu_para_sair(conv_atual, conexao, texto):
+            if (await resposta_oferta(conv_atual, conexao, texto) or await resposta_confirmacao(conv_atual, conexao, texto)
+                    or await wa_campanhas.pediu_para_sair(conv_atual, conexao, texto)):
                 await _mudou()
                 return
             await wa_fluxos.ao_receber(await db.wa_conversas.find_one({"_id": conversa_id}) or conv, conexao, texto, nova)
