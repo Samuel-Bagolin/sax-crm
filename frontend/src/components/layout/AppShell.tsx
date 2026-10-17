@@ -4,7 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { TermoGate } from "@/components/termo/TermoGate";
 import { usePlano, type Recurso } from "@/lib/diferenciais";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck,
+import { ClipboardList, ClipboardCheck,
   MessageSquareText,
   Building,
   Building2,
@@ -117,6 +117,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
       { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Negócios", nivel: "todos", segmentos: SERVICOS },
       { to: "/pacientes", modulo: "pacientes", icon: Contact, rotulo: "{clientes}", nivel: "todos", segmentos: SERVICOS },
       { to: "/atendimentos", modulo: "atendimentos", icon: CalendarDays, rotulo: "Agenda", nivel: "todos", segmentos: SERVICOS },
+      { to: "/controle-atendimento", modulo: "atendimentos", icon: ClipboardList, rotulo: "Controle de atendimento", curto: "Controle", nivel: "todos", segmentos: ["terapia", "odontologia", "estetica"] },
       { to: "/clube", modulo: "atendimentos", icon: Crown, rotulo: "Assinantes", curto: "Clube", nivel: "todos", segmentos: ["barbearia"] },
       { to: "/orcamentos", modulo: "pacientes", icon: ReceiptText, rotulo: "Orçamentos", curto: "Orçam.", nivel: "todos", segmentos: COM_ORCAMENTO },
       { to: "/meu-site", modulo: "atendimentos", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: SERVICOS },
@@ -167,6 +168,7 @@ const TITULOS: Record<string, string> = {
   "/assinatura": "Assinatura",
   "/dados": "Importar e exportar dados",
   "/pesquisas": "Pesquisas e NPS",
+  "/controle-atendimento": "Controle de atendimento",
 };
 const MODULO_POR_ROTA: Record<string, string> = {
   "/": "dashboard",

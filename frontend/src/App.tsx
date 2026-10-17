@@ -40,6 +40,7 @@ import Cashback from "@/pages/Cashback";
 import Comissoes from "@/pages/Comissoes";
 import Dados from "@/pages/Dados";
 import Pesquisas from "@/pages/Pesquisas";
+import ControleAtendimento from "@/pages/ControleAtendimento";
 import ResponderFormulario from "@/pages/ResponderFormulario";
 import SitePublico from "@/pages/SitePublico";
 import WhatsApp from "@/pages/WhatsApp";
@@ -76,6 +77,7 @@ export default function App() {
             <Route path="/meu-site" element={<MeuSite />} />
             <Route path="/whatsapp" element={<WhatsApp />} />
             <Route path="/atendimentos" element={<Atendimentos />} />
+            <Route path="/controle-atendimento" element={<ControleAtendimento />} />
             <Route path="/agenda-online" element={<AgendaOnline />} />
             <Route path="/pacientes" element={<Pacientes />} />
             <Route path="/pacientes/:id" element={<PacienteDetalhe />} />

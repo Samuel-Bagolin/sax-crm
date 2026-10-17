@@ -55,7 +55,7 @@ async def _atende(principal: Principal, paciente_id: str) -> bool:
     p = await db.pessoas.find_one({"id": paciente_id}, {"criado_por_id": 1})
     if (p or {}).get("criado_por_id") == principal.usuario_id:
         return True  # cadastro feito por este profissional (ex.: orçamento de paciente novo): ninguém mais tem histórico nele
-    async for a in db.agendamentos.find({"cliente_id": paciente_id, "profissional_id": principal.usuario_id},
+    async for a in db.agendamentos.find({"profissional_id": principal.usuario_id, "$or": [{"cliente_id": paciente_id}, {"participantes_ids": paciente_id}]},
                                         {"status": 1, "criado_por_id": 1}):
         if a.get("status") in ("confirmado", "em_atendimento", "concluido"):
             return True
@@ -251,7 +251,12 @@ async def editar(paciente_id: str, input: PacienteIn, principal: Principal = Dep
 @router.get("/{paciente_id}")
 async def ficha(paciente_id: str, principal: Principal = Depends(require("paciente:read"))):
     p = await _paciente(paciente_id)
-    ag = await db.agendamentos.find({"cliente_id": paciente_id}).to_list(500)
+    ag = await db.agendamentos.find({"$or": [{"cliente_id": paciente_id}, {"participantes_ids": paciente_id}]}).to_list(500)
+    from routers.sessoes import participantes, presenca_efetiva
+
+    def _sessao(a: dict) -> dict:
+        eu = next((x for x in participantes(a) if x.get("cliente_id") == paciente_id), {})
+        return {"presenca": presenca_efetiva(a, eu), "evolucao_id": eu.get("evolucao_id"), "grupo": len(participantes(a)) > 1}
     ag.sort(key=lambda a: (a["data"], a["inicio"]), reverse=True)
     trat = await db.planos_tratamento.find({"paciente_id": paciente_id}).to_list(100)
     trat.sort(key=lambda t: t.get("created_at") or now_utc(), reverse=True)
@@ -276,7 +281,8 @@ async def ficha(paciente_id: str, principal: Principal = Depends(require("pacien
         "anamnese": ficha_doc.get("anamnese") or {},
         "alertas": ficha_doc.get("alertas") or [],
         "odontograma": ficha_doc.get("odontograma") or {},
-        "agendamentos": [{k: a.get(k) for k in ("id", "data", "inicio", "fim", "status", "profissional_nome", "servicos", "valor", "valor_cobrado")} for a in ag[:100]],
+        "agendamentos": [{**{k: a.get(k) for k in ("id", "data", "inicio", "fim", "status", "profissional_nome", "servicos", "valor", "valor_cobrado")},
+                          **_sessao(a)} for a in ag[:100]],
         "proximo": next((a for a in sorted(ag, key=lambda a: (a["data"], a["inicio"])) if a["data"] >= hoje and a["status"] in ("agendado", "confirmado")), None),
         "tratamentos": [_limpo(t) for t in trat],
         "resumo": {"atendimentos": len(concluidos), "faltas": sum(1 for a in ag if a["status"] == "faltou"),
@@ -334,10 +340,33 @@ async def nova_evolucao(paciente_id: str, input: EvolucaoIn, principal: Principa
     await _paciente(paciente_id)
     if not await _acessa_saude(principal, paciente_id):
         raise HTTPException(403, SUPORTE_SEM_PRONTUARIO if principal.suporte else "Só o profissional que atende este paciente ou o gestor escreve no prontuário")
+    sessao: dict = {}
+    ag = None
+    if input.agendamento_id:
+        from routers.sessoes import participantes, prazo_evolucao
+
+        ag = await db.agendamentos.find_one({"id": input.agendamento_id})
+        if not ag or not any(p.get("cliente_id") == paciente_id for p in participantes(ag)):
+            raise HTTPException(422, "Esta sessão não é deste paciente")
+        if ag.get("status") == "cancelado":
+            raise HTTPException(409, "Sessão cancelada não recebe evolução")
+        if input.tipo == "evolucao" and await db.prontuario.find_one({"agendamento_id": ag["id"], "paciente_id": paciente_id, "tipo": "evolucao"}, {"id": 1}):
+            raise HTTPException(409, "Esta sessão já tem evolução para o paciente. Use um adendo para completar.")
+        sessao = {"data": ag["data"], "no_prazo": now_utc() <= prazo_evolucao(ag), "sessao_profissional_id": ag.get("profissional_id")}
     d = {"id": new_id(), "paciente_id": paciente_id, "tipo": input.tipo, "texto": input.texto.strip(), "agendamento_id": input.agendamento_id,
          "data": input.data or agora_local().date().isoformat(), "autor_id": principal.usuario_id, "autor_nome": principal.nome,
-         "adendos": [], "created_at": now_utc()}
+         "adendos": [], "created_at": now_utc(), **sessao}
     await db.prontuario.insert_one(d)
+    if ag and input.tipo == "evolucao":  # liga a evolução ao paciente na sessão e marca a presença
+        from routers.sessoes import participantes
+
+        lista = participantes(ag)
+        for p in lista:
+            if p.get("cliente_id") == paciente_id:
+                p["evolucao_id"] = d["id"]
+                p["presenca"] = p.get("presenca") or "presente"
+        await db.agendamentos.update_one({"id": ag["id"]}, {"$set": {"participantes": lista,
+                                                                    "participantes_ids": [p["cliente_id"] for p in lista if p.get("cliente_id")]}})
     return _limpo(d)
 
 

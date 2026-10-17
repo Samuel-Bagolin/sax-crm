@@ -40,11 +40,12 @@ class ServicoIn(BaseModel):
     profissionais: List[str] = Field(default_factory=list)  # vazio = todos que atendem
     retorno_dias: int | None = Field(default=None, ge=1, le=730)  # lembrete de retorno (ex.: toxina 120 dias)
     unidade: str | None = Field(default=None, max_length=10)  # preço por unidade aplicada (U, ml, frasco); vazio = por atendimento
+    capacidade: int = Field(default=1, ge=1, le=30)  # pacientes por sessão (terapia em grupo); routers/sessoes.py
 
 
 def _servico(d: dict) -> dict:
     return {k: d.get(k) for k in ("id", "nome", "duracao_min", "preco", "categoria", "descricao", "online", "ativo", "profissionais",
-                                  "retorno_dias", "unidade", "valor_exemplo")}
+                                  "retorno_dias", "unidade", "valor_exemplo", "capacidade")}
 
 
 @router.get("/servicos")

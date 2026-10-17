@@ -17,6 +17,7 @@ export interface Servico {
   retorno_dias: number | null;
   unidade: string | null;
   valor_exemplo?: boolean;
+  capacidade?: number | null;
 }
 
 export interface Profissional {
@@ -56,6 +57,8 @@ export interface Agendamento {
   forma_pagamento?: string;
   origem: "online" | "manual";
   observacoes: string | null;
+  grupo?: boolean;
+  participantes?: { cliente_id: string; cliente_nome: string }[];
 }
 
 export interface AgendaConfig {

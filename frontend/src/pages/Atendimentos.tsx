@@ -35,6 +35,8 @@ import {
   type Profissional,
 } from "@/lib/atendimentos";
 import AgendaOnline, { ProfissionalDialog } from "@/pages/AgendaOnline";
+import { PainelSessao } from "@/components/atendimentos/Sessao";
+import { AvisoEvolucoes } from "@/pages/ControleAtendimento";
 import { useSegmento } from "@/lib/segmento";
 import { useAuth } from "@/lib/useAuth";
 import { useConfig } from "@/lib/useConfig";
@@ -105,6 +107,7 @@ export default function Atendimentos() {
 
   return (
     <div className="flex flex-col gap-4">
+      <AvisoEvolucoes />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Indicador rotulo={`${seg.termos.atendimentos} hoje`} valor={String(resumo.data?.hoje.length ?? "-")} />
         <Indicador rotulo="Faturado no mês" valor={resumo.data ? brl(resumo.data.mes.faturado) : "-"} detalhe={resumo.data?.mes.ticket_medio ? `ticket médio ${brl(resumo.data.mes.ticket_medio)}` : undefined} />
@@ -237,14 +240,14 @@ export default function Atendimentos() {
                         <p className="flex items-center gap-1 truncate leading-tight">
                           <span className="font-semibold">{a.inicio}</span>
                           {a.origem === "online" && <Globe className="h-3 w-3 shrink-0" aria-label="Agendado pelo link" />}
-                          <span className="truncate font-medium">{a.cliente_nome}</span>
+                          <span className="truncate font-medium">{a.cliente_nome}{(a.participantes?.length ?? 0) > 1 ? ` +${a.participantes!.length - 1}` : ""}</span>
                         </p>
                       ) : (
                         <>
                           <p className="flex items-center gap-1 font-semibold">
                             {a.inicio} {a.origem === "online" && <Globe className="h-3 w-3" aria-label="Agendado pelo link" />}
                           </p>
-                          <p className="truncate font-medium">{a.cliente_nome}</p>
+                          <p className="truncate font-medium">{a.cliente_nome}{(a.participantes?.length ?? 0) > 1 ? ` +${a.participantes!.length - 1}` : ""}</p>
                         </>
                       )}
                       {alt > 50 && <p className="truncate opacity-75">{a.servicos.map((s) => s.nome).join(", ")}</p>}
@@ -525,9 +528,9 @@ function DetalheAgendamento({ agendamento: a, onClose }: { agendamento: Agendame
   const ativo = ["agendado", "confirmado", "em_atendimento"].includes(a.status);
   return (
     <Dialog open={!!a} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{a.cliente_nome}</DialogTitle>
+          <DialogTitle>{(a.participantes?.length ?? 0) > 1 ? `Sessão em grupo (${a.participantes!.length})` : a.cliente_nome}</DialogTitle>
           <DialogDescription>
             {a.data.split("-").reverse().join("/")}, {a.inicio} às {a.fim} com {a.profissional_nome}
           </DialogDescription>
@@ -539,6 +542,7 @@ function DetalheAgendamento({ agendamento: a, onClose }: { agendamento: Agendame
           </div>
           <p>{a.servicos.map((s) => s.nome).join(", ")}, <b>{brl(a.valor_cobrado ?? a.valor)}</b></p>
           {a.observacoes && <p className="rounded-lg bg-muted/50 p-2 text-muted-foreground">{a.observacoes}</p>}
+          {seg.saude && <PainelSessao agendamentoId={a.id} />}
           <div className="flex flex-wrap gap-2">
             <Link to={`/pacientes/${a.cliente_id}`} className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-muted"><UserRound className="h-4 w-4" /> Ficha do {seg.termos.cliente.toLowerCase()}</Link>
             {whats && ativo && <a href={whats} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-muted"><MessageCircle className="h-4 w-4" /> Confirmar no WhatsApp</a>}

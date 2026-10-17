@@ -84,6 +84,10 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    Agenda, Orçamentos, Contratos, depois Operação e Gestão. Item de interesse do negócio por segmento:
    `useItemSegmento()` (imóvel ou veículo; atendimento não tem). Leads: rodízio e fila livre
    (`repescar_leads` em `routers/crm.py`; quem pega primeiro fica, com `update_one` condicional).
+   Sessão em grupo e controle de atendimento (`routers/sessoes.py`, tela /controle-atendimento nas clínicas): serviço com
+   `capacidade` > 1 aceita vários pacientes (`agendamento.participantes`, `participantes_ids`); presença por paciente
+   (só quem atende ou o gestor, só no dia ou depois); evolução ligada à sessão (`prontuario.agendamento_id`, uma por
+   paciente e sessão, `no_prazo` = até 24 h depois do fim). `_atende` e a ficha olham `participantes_ids` também.
    Barbearia: clube de assinantes em `routers/clube.py` (mensalidade com id fixo por mês, não duplica).
    Texto de tela compartilhada nunca fixa "imóvel", "corretor" ou "imobiliária": use `useSegmento()`
    (`termos`, `empresa`, `registro`, `dominio`) e, no servidor, o segmento da empresa. Recursos do plano

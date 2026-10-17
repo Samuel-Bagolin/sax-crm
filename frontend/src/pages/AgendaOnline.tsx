@@ -61,7 +61,7 @@ function Servicos() {
           <li key={s.id} className={cn("flex items-center gap-3 px-4 py-3", !s.ativo && "opacity-50")}>
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{s.nome} {!s.online && <span className="ml-1 rounded bg-muted px-1.5 text-[11px] text-muted-foreground">só no balcão</span>}</p>
-              <p className="text-xs text-muted-foreground">{[s.categoria, `${s.duracao_min} min`, s.retorno_dias ? `retorno em ${s.retorno_dias} dias` : null].filter(Boolean).join(", ")}</p>
+              <p className="text-xs text-muted-foreground">{[s.categoria, `${s.duracao_min} min`, s.retorno_dias ? `retorno em ${s.retorno_dias} dias` : null, (s.capacidade ?? 1) > 1 ? `grupo de até ${s.capacidade}` : null].filter(Boolean).join(", ")}</p>
             </div>
             <p className="num shrink-0 font-semibold">{brl(s.preco)}{s.unidade ? <span className="text-xs font-normal text-muted-foreground"> por {s.unidade}</span> : null}</p>
             {isAdmin && (
@@ -82,18 +82,18 @@ function ServicoDialog({ servico, onClose }: { servico: Servico | "novo" | null;
   const qc = useQueryClient();
   const seg = useSegmento();
   const profs = useProfissionais();
-  const vazio = { nome: "", duracao_min: "30", preco: "", categoria: "", descricao: "", online: true, ativo: true, profissionais: [] as string[], retorno_dias: "", unidade: "" };
+  const vazio = { nome: "", duracao_min: "30", preco: "", categoria: "", descricao: "", online: true, ativo: true, profissionais: [] as string[], retorno_dias: "", unidade: "", capacidade: "1" };
   const [f, setF] = useState(vazio);
   useEffect(() => {
     if (servico === "novo") setF(vazio);
     else if (servico) setF({ nome: servico.nome, duracao_min: String(servico.duracao_min), preco: String(servico.preco), categoria: servico.categoria ?? "", descricao: servico.descricao ?? "",
-      online: servico.online, ativo: servico.ativo, profissionais: servico.profissionais, retorno_dias: servico.retorno_dias ? String(servico.retorno_dias) : "", unidade: servico.unidade ?? "" });
+      online: servico.online, ativo: servico.ativo, profissionais: servico.profissionais, retorno_dias: servico.retorno_dias ? String(servico.retorno_dias) : "", unidade: servico.unidade ?? "", capacidade: String(servico.capacidade ?? 1) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [servico]);
   const salvar = useMutation({
     mutationFn: () => {
       const corpo = { ...f, duracao_min: Number(f.duracao_min), preco: Number(f.preco.replace(",", ".")) || 0, categoria: f.categoria || null, descricao: f.descricao || null,
-        retorno_dias: f.retorno_dias ? Number(f.retorno_dias) : null, unidade: f.unidade || null };
+        retorno_dias: f.retorno_dias ? Number(f.retorno_dias) : null, unidade: f.unidade || null, capacidade: Math.min(30, Math.max(1, Number(f.capacidade) || 1)) };
       return servico === "novo" ? apiPost("/atendimentos/servicos", corpo) : apiPut(`/atendimentos/servicos/${(servico as Servico).id}`, corpo);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["servicos"] }); toast.success("Salvo"); onClose(); },
@@ -109,6 +109,12 @@ function ServicoDialog({ servico, onClose }: { servico: Servico | "novo" | null;
           <div className="grid gap-1.5"><Label htmlFor="s-preco">Preço (R$)</Label><Input id="s-preco" inputMode="decimal" value={f.preco} onChange={(e) => setF({ ...f, preco: e.target.value })} /></div>
           <div className="grid gap-1.5"><Label htmlFor="s-cat">Categoria</Label><Input id="s-cat" value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} /></div>
           <div className="grid gap-1.5"><Label htmlFor="s-ret">Lembrar retorno em (dias)</Label><Input id="s-ret" inputMode="numeric" value={f.retorno_dias} onChange={(e) => setF({ ...f, retorno_dias: e.target.value.replace(/\D/g, "") })} placeholder="Ex.: 30" /></div>
+          {seg.servicos && !seg.barbearia && (
+            <div className="grid gap-1.5"><Label htmlFor="s-cap">{seg.termos.clientes} por sessão</Label>
+              <Input id="s-cap" inputMode="numeric" value={f.capacidade} onChange={(e) => setF({ ...f, capacidade: e.target.value.replace(/\D/g, "") })} placeholder="1" data-testid="servico-capacidade" />
+              <span className="text-xs text-muted-foreground">Mais de 1 para atendimento em grupo.</span>
+            </div>
+          )}
           {(seg.chave === "estetica" || seg.chave === "odontologia") && (
             <div className="grid gap-1.5"><Label htmlFor="s-un">Preço por unidade aplicada</Label>
               <select id="s-un" className="h-9 rounded-lg border bg-transparent px-2 text-sm" value={f.unidade} onChange={(e) => setF({ ...f, unidade: e.target.value })}>
