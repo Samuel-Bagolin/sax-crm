@@ -9,11 +9,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/useAuth";
 
 export interface Conexao {
   id: string; nome: string; status: "conectado" | "conectando" | "desconectado" | "aguardando_qr"; numero: string | null; perfil: string | null;
   criado_em: string | null; setor_id: string | null; responsaveis: string[];
   no_site?: boolean; nome_site?: string | null; ordem_site?: number;
+  pessoal?: boolean; dono_usuario_id?: string | null; dono_nome?: string | null;
 }
 export interface Setor { id: string; nome: string; membros: string[] }
 
@@ -47,6 +49,8 @@ function numeroBonito(n: string | null) {
 export function NumerosWhatsApp({ conexoes, setores, podeGerir }: { conexoes: Conexao[]; setores: Setor[]; podeGerir: boolean }) {
   const qc = useQueryClient();
   const pessoas = usePessoasEquipe();
+  const { principal } = useAuth();
+  const meu = (c: Conexao) => podeGerir || (!!c.dono_usuario_id && c.dono_usuario_id === principal?.usuario_id);
   const [novo, setNovo] = useState(false);
   const [qr, setQr] = useState<Conexao | null>(null);
   const [editar, setEditar] = useState<Conexao | null>(null);
@@ -62,9 +66,12 @@ export function NumerosWhatsApp({ conexoes, setores, podeGerir }: { conexoes: Co
       <section className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
           <h2 className="font-semibold">Números de WhatsApp</h2>
-          <p className="text-sm text-muted-foreground">Conecte o WhatsApp da empresa lendo o QR code no celular, como no WhatsApp Web. As conversas chegam para toda a equipe aqui no CRM.</p>
+          <p className="text-sm text-muted-foreground">
+            {podeGerir ? "Conecte o WhatsApp da empresa lendo o QR code no celular, como no WhatsApp Web. Número ligado por alguém da equipe é só dessa pessoa; você, como gestor, vê todos."
+              : "Conecte o seu WhatsApp lendo o QR code no celular. As conversas desse número são só suas (o gestor também vê)."}
+          </p>
         </div>
-        {podeGerir && <Button onClick={() => setNovo(true)} data-testid="wa-conectar"><Plus className="h-4 w-4" /> Conectar número</Button>}
+        <Button onClick={() => setNovo(true)} data-testid="wa-conectar"><Plus className="h-4 w-4" /> {podeGerir ? "Conectar número" : "Conectar meu WhatsApp"}</Button>
       </section>
 
       <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
@@ -86,15 +93,16 @@ export function NumerosWhatsApp({ conexoes, setores, podeGerir }: { conexoes: Co
                   <p className="mt-0.5 text-xs" data-testid="wa-numero-acesso">
                     {c.setor_id && nomeSetor[c.setor_id] && <span className="mr-1.5 rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">{nomeSetor[c.setor_id]}</span>}
                     {c.responsaveis.length > 0 && <span className="text-muted-foreground">Responsáveis: {nomes(c.responsaveis, pessoas)}</span>}
-                    {!c.setor_id && c.responsaveis.length === 0 && <span className="text-muted-foreground">Aberto para toda a equipe</span>}
+                    {c.pessoal ? <span className="text-muted-foreground">Celular de {c.dono_nome ?? "um usuário"}: só essa pessoa e o gestor veem</span>
+                      : !c.setor_id && c.responsaveis.length === 0 && <span className="text-muted-foreground">Aberto para toda a equipe</span>}
                   </p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 pl-[52px] sm:pl-0">
                 <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", STATUS[c.status]?.cor)} data-testid="wa-status">{STATUS[c.status]?.rotulo ?? c.status}</span>
-                {podeGerir && <Button size="sm" variant="outline" onClick={() => setEditar(c)} data-testid="wa-editar-numero"><Pencil className="h-4 w-4" /> Setor e responsáveis</Button>}
-                {podeGerir && c.status !== "conectado" && <Button size="sm" variant="outline" onClick={() => setQr(c)}>Ler QR code</Button>}
-                {podeGerir && (
+                {podeGerir && !c.pessoal && <Button size="sm" variant="outline" onClick={() => setEditar(c)} data-testid="wa-editar-numero"><Pencil className="h-4 w-4" /> Setor e responsáveis</Button>}
+                {meu(c) && c.status !== "conectado" && <Button size="sm" variant="outline" onClick={() => setQr(c)}>Ler QR code</Button>}
+                {meu(c) && (
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={() => window.confirm(`Desconectar o número ${c.nome} do CRM? As conversas ficam guardadas.`) && remover.mutate(c.id)}>
                     <Trash2 className="h-4 w-4" /> Desconectar
                   </Button>

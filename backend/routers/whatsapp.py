@@ -74,7 +74,10 @@ async def _setores_dict() -> dict[str, dict]:
 
 
 def _equipe_do_numero(conexao: dict, setores: dict[str, dict]) -> set[str]:
-    """Quem atende o número: responsáveis + membros do setor. Vazio = número aberto para a equipe toda."""
+    """Quem atende o número: responsáveis + membros do setor. Vazio = número aberto para a equipe toda.
+    Número que um usuário comum ligou (`dono_pessoa_id`) é só dele (e do gestor)."""
+    if conexao.get("dono_pessoa_id"):
+        return {conexao["dono_pessoa_id"]}
     pessoas = set(conexao.get("responsaveis") or [])
     setor = setores.get(conexao.get("setor_id") or "")
     if setor:
@@ -83,7 +86,13 @@ def _equipe_do_numero(conexao: dict, setores: dict[str, dict]) -> set[str]:
 
 
 def _restrito(conexao: dict | None) -> bool:
-    return bool(conexao and (conexao.get("responsaveis") or conexao.get("setor_id")))
+    return bool(conexao and (conexao.get("responsaveis") or conexao.get("setor_id") or conexao.get("dono_pessoa_id")))
+
+
+def _dono_ou_gestor(c: dict, principal: Principal) -> None:
+    """Usuário comum só mexe no número que ele mesmo ligou."""
+    if not principal.is_admin and (not c.get("dono_usuario_id") or c["dono_usuario_id"] != principal.usuario_id):
+        raise HTTPException(404, "Número não encontrado")
 
 
 async def _acesso(principal: Principal) -> tuple[list[dict], set[str], set[str]]:
@@ -132,7 +141,8 @@ def _saida_conexao(c: dict) -> dict:
     return {"id": c["id"], "nome": c.get("nome"), "status": c.get("status") or "aguardando_qr", "numero": c.get("numero"),
             "perfil": c.get("perfil"), "criado_em": _iso(c.get("criado_em")), "setor_id": c.get("setor_id"),
             "responsaveis": list(c.get("responsaveis") or []), "no_site": c.get("no_site", True),
-            "nome_site": c.get("nome_site"), "ordem_site": int(c.get("ordem_site") or 50)}
+            "nome_site": c.get("nome_site"), "ordem_site": int(c.get("ordem_site") or 50),
+            "dono_usuario_id": c.get("dono_usuario_id"), "dono_nome": c.get("dono_nome"), "pessoal": bool(c.get("dono_usuario_id"))}
 
 
 def _saida_setor(s: dict) -> dict:
@@ -172,7 +182,7 @@ class ConexaoIn(BaseModel):
 
 
 @router.post("/conexoes", status_code=201)
-async def criar_conexao(input: ConexaoIn, request: Request, principal: Principal = Depends(_gerir)):
+async def criar_conexao(input: ConexaoIn, request: Request, principal: Principal = Depends(_atender)):
     import os
 
     if await db.wa_conexoes.count_documents({}) >= LIMITE_NUMEROS:
@@ -190,6 +200,10 @@ async def criar_conexao(input: ConexaoIn, request: Request, principal: Principal
     await wa.indexar(instancia, empresa_atual_db(), token)
     doc = {"id": new_id(), "nome": input.nome.strip(), "instancia": instancia, "status": "aguardando_qr", "numero": None,
            "criado_em": now_utc(), "criado_por": principal.nome}
+    if not principal.is_admin:  # celular de quem não é gestor: só essa pessoa (e o gestor) vê as conversas
+        if not principal.pessoa_id:
+            raise HTTPException(403, "Seu usuário não está ligado à equipe. Fale com o gestor.")
+        doc.update(dono_usuario_id=principal.usuario_id, dono_pessoa_id=principal.pessoa_id, dono_nome=principal.nome, no_site=False)
     await db.wa_conexoes.insert_one(doc)
     await _mudou()
     qr = ((r.get("qrcode") or {}).get("base64")) if isinstance(r.get("qrcode"), dict) else None
@@ -204,9 +218,10 @@ async def _conexao(conexao_id: str) -> dict:
 
 
 @router.get("/conexoes/{conexao_id}/qr")
-async def qr_conexao(conexao_id: str, principal: Principal = Depends(_gerir)):
+async def qr_conexao(conexao_id: str, principal: Principal = Depends(_atender)):
     """QR code para ler no celular. A tela chama de novo a cada poucos segundos até conectar."""
     c = await _conexao(conexao_id)
+    _dono_ou_gestor(c, principal)
     try:
         r = await wa.qr(c["instancia"])
     except wa.ErroWhatsApp as e:
@@ -218,8 +233,9 @@ async def qr_conexao(conexao_id: str, principal: Principal = Depends(_gerir)):
 
 
 @router.delete("/conexoes/{conexao_id}", status_code=204)
-async def remover_conexao(conexao_id: str, principal: Principal = Depends(_gerir)):
+async def remover_conexao(conexao_id: str, principal: Principal = Depends(_atender)):
     c = await _conexao(conexao_id)
+    _dono_ou_gestor(c, principal)
     await wa.remover_instancia(c["instancia"])
     await wa.desindexar(c["instancia"])
     await db.wa_conexoes.delete_one({"id": conexao_id})
@@ -829,6 +845,18 @@ async def _primeiro_contato(conv: dict, texto: str) -> None:
     if segmento_de(empresa) not in COM_LEADS:
         return
     telefone = conv.get("telefone")
+    conexao = await db.wa_conexoes.find_one({"id": conv.get("conexao_id")}) or {}
+    if conexao.get("dono_pessoa_id"):
+        # celular pessoal de alguém da equipe: o lead é dessa pessoa e a conversa continua só dela
+        existente = None
+        for alvo in ((telefone, telefone[2:] if telefone.startswith("55") else telefone) if telefone else ()):
+            existente = existente or await db.entradas.find_one({"telefone": alvo, "status": {"$in": ["novo", "em_contato"]}})
+        if existente:
+            await db.wa_conversas.update_one({"_id": conv["_id"]}, {"$set": {"entrada_id": existente["id"], "responsavel_id": conexao["dono_pessoa_id"]}})
+            return
+        entrada_id = await _novo_lead(conv, texto, conexao["dono_pessoa_id"])
+        await db.wa_conversas.update_one({"_id": conv["_id"]}, {"$set": {"entrada_id": entrada_id, "responsavel_id": conexao["dono_pessoa_id"]}})
+        return
     if telefone:  # já existe lead aberto com esse número: liga a conversa a ele
         for alvo in (telefone, telefone[2:] if telefone.startswith("55") else telefone):
             existente = await db.entradas.find_one({"telefone": alvo, "status": {"$in": ["novo", "em_contato"]}})
@@ -836,8 +864,6 @@ async def _primeiro_contato(conv: dict, texto: str) -> None:
                 await db.wa_conversas.update_one({"_id": conv["_id"]}, {"$set": {"entrada_id": existente["id"], "responsavel_id": existente.get("corretor_id")}})
                 return
     from routers.crm import _proximo_rodizio
-
-    conexao = await db.wa_conexoes.find_one({"id": conv.get("conexao_id")}) or {}
     from lib.wa_fluxos import fluxo_de_entrada
 
     if await fluxo_de_entrada(conexao.get("id") or ""):

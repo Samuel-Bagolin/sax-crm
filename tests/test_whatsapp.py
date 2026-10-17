@@ -102,7 +102,6 @@ def test_webhook_com_token_errado_e_sem_recurso(servidor, cartao_demo):
 def test_corretor_ve_as_dele_e_as_sem_responsavel(servidor):
     c = httpx.Client(base_url=API, timeout=30)
     assert c.post("/auth/login", json={"email": os.environ["CRM_CORRETOR"], "senha": os.environ["CRM_CORRETOR_SENHA"]}).status_code == 200
-    assert c.post("/whatsapp/conexoes", json={"nome": "X"}).status_code == 403  # só o gestor conecta número
     r = c.get("/whatsapp/conversas")
     assert r.status_code in (200, 403)  # 403 quando o plano da imobiliária de demonstração não tem o recurso
 
@@ -126,6 +125,27 @@ def _conectar(c: httpx.Client, nome: str) -> tuple[dict, str]:
 
 def _numero() -> str:
     return "554197" + uuid.uuid4().hex[:7].translate(str.maketrans("abcdef", "123456"))
+
+
+def test_numero_do_usuario_comum_so_ele_ve(servidor, cartao_demo):
+    """Quem não é gestor conecta o próprio WhatsApp: as conversas são só dele; o gestor vê todos os números."""
+    c, _ = _cadastrar("imobiliaria", cartao_demo)
+    ana, ana_id = _membro(c, "Ana")
+    bia, _ = _membro(c, "Bia")
+    con, inst = _conectar(ana, "Celular da Ana")
+    assert con["pessoal"] and con["dono_nome"].startswith("Ana")
+    assert con["id"] in [x["id"] for x in c.get("/whatsapp/situacao").json()["conexoes"]]  # gestor vê
+    assert con["id"] in [x["id"] for x in ana.get("/whatsapp/situacao").json()["conexoes"]]
+    assert con["id"] not in [x["id"] for x in bia.get("/whatsapp/situacao").json()["conexoes"]]
+    assert bia.get(f"/whatsapp/conexoes/{con['id']}/qr").status_code == 404
+    assert bia.delete(f"/whatsapp/conexoes/{con['id']}").status_code == 404
+    n = _numero()
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": n, "nome": "Cliente da Ana", "texto": "Oi Ana"})
+    conv = [x for x in ana.get("/whatsapp/conversas").json() if x["nome"] == "Cliente da Ana"]
+    assert conv and conv[0]["responsavel_id"] == ana_id
+    assert not [x for x in bia.get("/whatsapp/conversas").json() if x["nome"] == "Cliente da Ana"]
+    assert [x for x in c.get("/whatsapp/conversas").json() if x["nome"] == "Cliente da Ana"]
+    assert ana.delete(f"/whatsapp/conexoes/{con['id']}").status_code == 204
 
 
 def test_setores_e_responsaveis_por_numero(servidor, cartao_demo):
