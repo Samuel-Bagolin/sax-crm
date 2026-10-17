@@ -506,3 +506,65 @@ def test_campanha_em_massa_com_limite_e_sair(servidor, cartao_demo, sysadmin):  
     caminho = sysadmin.get("/plataforma/whatsapp").json()["disparador"].removeprefix("/api")
     assert httpx.get(f"{API}{caminho}").status_code == 200
     assert httpx.get(f"{API}/publico/whatsapp/disparar/token-errado-com-tamanho-bom").status_code == 404
+
+
+def _automaticas(c, con_id, **ativos):
+    cfg = c.get("/whatsapp/campanhas/automaticas").json()
+    corpo = {"conexao_id": con_id, **{k: {"ativo": ativos.get(k, False), "texto": cfg[k]["texto"]} for k in ("lembrete", "aniversario", "retorno")}}
+    r = c.put("/whatsapp/campanhas/automaticas", json=corpo)
+    assert r.status_code == 200, r.text
+
+
+def _agendar_amanha(c, nome, tel, hora="10:00"):
+    from datetime import date, timedelta
+    me = c.get("/auth/me").json()
+    corte = next(s for s in c.get("/atendimentos/servicos").json() if s["nome"] == "Corte")
+    c.put(f"/atendimentos/profissionais/{me['usuario_id']}", json={"atende": True, "jornada": {str(d): [["08:00", "20:00"]] for d in range(7)}, "comissao_pct": 0})
+    return c.post("/atendimentos", json={"profissional_id": me["usuario_id"], "servico_ids": [corte["id"]], "data": (date.today() + timedelta(days=1)).isoformat(),
+                                         "inicio": hora, "cliente_nome": nome, "cliente_telefone": tel[2:]}).json()["criados"][0]
+
+
+def test_lembrete_confirma_e_cancela_e_aniversario(servidor, cartao_demo):
+    """Mensagens automáticas: lembrete de amanhã (1 confirma, 2 cancela e libera o horário) e parabéns no aniversário."""
+    from datetime import date
+    c, _ = _cadastrar("barbearia", cartao_demo)
+    con, inst = _conectar(c, "Recepção")
+    assert c.put("/whatsapp/campanhas/automaticas", json={"lembrete": {"ativo": True, "texto": "Oi {nome}, amanhã tem horário."},
+                                                          "aniversario": {"ativo": False, "texto": "Parabéns!!"},
+                                                          "retorno": {"ativo": False, "texto": "Volta aqui"}}).status_code == 422  # sem 1 e 2
+    _automaticas(c, con["id"], lembrete=True, aniversario=True)
+    tel_a, tel_n = _numero(), _numero()
+    a = _agendar_amanha(c, "Ana Lembrete", tel_a)
+    hoje = date.today()
+    c.post("/pessoas", json={"nome": "Nina Aniversário", "papeis": ["cliente"], "telefone": tel_n[2:], "data_nascimento": f"1990-{hoje.month:02d}-{hoje.day:02d}"})
+    antes = len(httpx.get(f"{EVO}/_teste/enviadas").json())
+    assert c.post("/whatsapp/campanhas/tique").json()["enviados"] == 2
+    assert c.post("/whatsapp/campanhas/tique").json()["enviados"] == 0  # no máximo um toque a cada 15 s
+    env = {e["number"]: e["text"] for e in httpx.get(f"{EVO}/_teste/enviadas").json()[antes:]}
+    assert "Responda 1 para confirmar ou 2 para cancelar" in env[tel_a] and "às 10:00" in env[tel_a] and "SAIR" not in env[tel_a]
+    assert env[tel_n].startswith("Parabéns, Nina!") and "SAIR" in env[tel_n]
+    camps = c.get("/whatsapp/campanhas").json()["campanhas"]
+    assert {x["tipo"] for x in camps if x["sistema"]} == {"lembrete", "aniversario"}
+    # cliente responde 1: confirmado
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": tel_a, "nome": "Ana", "texto": "1"})
+    assert next(x for x in c.get("/atendimentos", params={"inicio": a["data"], "fim": a["data"]}).json() if x["id"] == a["id"])["status"] == "confirmado"
+    assert httpx.get(f"{EVO}/_teste/enviadas").json()[-1]["text"].startswith("Confirmado! Te esperamos")
+    # resposta "1" de novo não mexe (a pergunta já foi respondida) e vai para a equipe
+    n = len(httpx.get(f"{EVO}/_teste/enviadas").json())
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": tel_a, "nome": "Ana", "texto": "1"})
+    assert len(httpx.get(f"{EVO}/_teste/enviadas").json()) == n
+
+
+def test_lembrete_resposta_2_cancela_e_libera(servidor, cartao_demo):
+    c, _ = _cadastrar("barbearia", cartao_demo)
+    con, inst = _conectar(c, "Recepção")
+    _automaticas(c, con["id"], lembrete=True)
+    tel = _numero()
+    a = _agendar_amanha(c, "Beto Cancela", tel, "11:00")
+    assert c.post("/whatsapp/campanhas/tique").json()["enviados"] == 1
+    httpx.post(f"{EVO}/_teste/receber/{inst}", json={"numero": tel, "nome": "Beto", "texto": "2"})
+    ag = next(x for x in c.get("/atendimentos", params={"inicio": a["data"], "fim": a["data"]}).json() if x["id"] == a["id"])
+    assert ag["status"] == "cancelado"
+    assert "cancelamos o horário" in httpx.get(f"{EVO}/_teste/enviadas").json()[-1]["text"]
+    # horário livre de novo
+    assert _agendar_amanha(c, "Outro Cliente", _numero(), "11:00")["status"] in ("agendado", "confirmado")

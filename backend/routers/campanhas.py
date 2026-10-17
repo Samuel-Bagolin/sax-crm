@@ -16,7 +16,7 @@ from lib import wa_campanhas as camp
 from lib.auth import Principal
 from lib.db import controle, db
 from models.common import new_id, now_utc
-from routers.whatsapp import _gerir, _iso
+from routers.whatsapp import _atender, _gerir, _iso
 
 router = APIRouter(prefix="/whatsapp/campanhas", tags=["whatsapp"])
 publico_router = APIRouter(prefix="/publico/whatsapp", tags=["publico"])
@@ -67,7 +67,8 @@ def _saida(c: dict, hoje: dict[str, int] | None = None) -> dict:
             "formulario_id": c.get("formulario_id"), "hora_inicio": c.get("hora_inicio"), "hora_fim": c.get("hora_fim"), "domingo": bool(c.get("domingo")),
             "motivo_pausa": c.get("motivo_pausa"), "proximo_em": _iso(c.get("proximo_em")), "criado_em": _iso(c.get("criado_em")),
             "criado_por": c.get("criado_por"), "concluida_em": _iso(c.get("concluida_em")),
-            "enviados_hoje_no_numero": (hoje or {}).get(c.get("conexao_id") or "", 0)}
+            "enviados_hoje_no_numero": (hoje or {}).get(c.get("conexao_id") or "", 0), "sistema": bool(c.get("sistema")),
+            "tipo": c.get("tipo"), "transacional": bool(c.get("transacional"))}
 
 
 async def _campanha(campanha_id: str) -> dict:
@@ -179,6 +180,58 @@ async def saidas(principal: Principal = Depends(_gerir)):
 async def readmitir(chave: str, principal: Principal = Depends(_gerir)):
     """Só quando o próprio contato pedir para voltar a receber."""
     await db.wa_optout.delete_one({"_id": chave})
+
+
+# ------------------------------------------------------------------ mensagens automáticas
+
+
+class AutoTipoIn(BaseModel):
+    ativo: bool = False
+    texto: str = Field(min_length=5, max_length=1000)
+
+
+class AutomaticasIn(BaseModel):
+    conexao_id: str | None = Field(default=None, max_length=60)
+    lembrete: AutoTipoIn
+    aniversario: AutoTipoIn
+    retorno: AutoTipoIn
+
+
+@router.get("/automaticas")
+async def ver_automaticas(principal: Principal = Depends(_gerir)):
+    from lib import wa_cadencia
+
+    return {**await wa_cadencia.config(), "padrao": wa_cadencia.TEXTOS}
+
+
+@router.put("/automaticas")
+async def salvar_automaticas(input: AutomaticasIn, principal: Principal = Depends(_gerir)):
+    from lib import wa_cadencia
+
+    if input.conexao_id and not await db.wa_conexoes.find_one({"id": input.conexao_id}, {"id": 1}):
+        raise HTTPException(422, "Escolha um número conectado")
+    if input.lembrete.ativo and not ("1" in input.lembrete.texto and "2" in input.lembrete.texto):
+        raise HTTPException(422, "O lembrete precisa dizer ao cliente para responder 1 (confirmar) ou 2 (cancelar).")
+    await db.wa_cadencia.update_one({"_id": "config"}, {"$set": {**input.model_dump(), "atualizado_em": now_utc(), "atualizado_por": principal.nome}},
+                                    upsert=True)
+    return {**await wa_cadencia.config(), "padrao": wa_cadencia.TEXTOS}
+
+
+@router.post("/tique")
+async def tique(principal: Principal = Depends(_atender)):
+    """Chamado pela tela do WhatsApp aberta (qualquer pessoa da equipe): no máximo um toque a cada 15 s por empresa."""
+    from datetime import timedelta
+
+    agora = now_utc()
+    r = await db.wa_estado.update_one({"id": "tique", "em": {"$lt": agora - timedelta(seconds=15)}}, {"$set": {"em": agora}})
+    if r.modified_count != 1:
+        if await db.wa_estado.find_one({"id": "tique"}):
+            return {"enviados": 0}
+        try:
+            await db.wa_estado.insert_one({"_id": "tique", "id": "tique", "em": agora})
+        except Exception:
+            return {"enviados": 0}
+    return {"enviados": await camp.processar_empresa()}
 
 
 # ------------------------------------------------------------------ disparador externo

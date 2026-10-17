@@ -45,6 +45,14 @@ async def _autorizado(authorization: str | None, agente: str | None) -> None:
     raise HTTPException(401, "Não autorizado")
 
 
+async def _cadencia() -> int:
+    """Monta as mensagens automáticas do WhatsApp do dia (lembrete, aniversário, retorno)."""
+    from lib.wa_cadencia import preparar_dia
+
+    r = await preparar_dia()
+    return sum(v for k, v in r.items() if k in ("lembrete", "aniversario", "retorno"))
+
+
 async def _lembretes(enviar, data_alvo: str) -> int:
     return (await enviar(data_alvo)).emails_enviados
 
@@ -56,7 +64,7 @@ async def rotina(authorization: str | None = Header(None), user_agent: str | Non
     from lib.email import drenar_fila
     from routers.agenda import _amanha, enviar_lembretes
 
-    resumo = {"empresas": 0, "emails": 0, "automacoes": 0, "lembretes": 0, "falhas": 0}
+    resumo = {"empresas": 0, "emails": 0, "automacoes": 0, "lembretes": 0, "whatsapp": 0, "falhas": 0}
     resumo["emails"] += await drenar_fila(controle)
     try:  # Firestore não tem índice TTL: limpa os contadores de tentativa de login vencidos
         from models.common import now_utc
@@ -71,6 +79,7 @@ async def rotina(authorization: str | None = Header(None), user_agent: str | Non
             ("automacoes", negocios_parados),
             ("lembretes", lambda: _lembretes(enviar_lembretes, _amanha())),
             ("emails", lambda: drenar_fila(client[nome])),
+            ("whatsapp", _cadencia),
         )
         for chave, etapa in etapas:  # uma etapa com falha não impede as outras
             try:
@@ -82,7 +91,7 @@ async def rotina(authorization: str | None = Header(None), user_agent: str | Non
     try:  # campanhas de WhatsApp em envio: um toque (o resto anda pela tela aberta ou pelo disparador externo)
         from lib.wa_campanhas import processar_todas
 
-        resumo["whatsapp"] = await processar_todas(15)
+        resumo["whatsapp"] += await processar_todas(15)
     except Exception:
         logger.exception("rotina: campanhas de WhatsApp falharam")
     return resumo

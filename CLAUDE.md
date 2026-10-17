@@ -134,7 +134,12 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    fila `wa_campanha_envios` (`_id` campanha|ordem) com `cursor`, intervalo aleatório (mín. 20 s), teto por número e dia
    (`wa_envio_dia`), janela de horário. A fila anda em toques: tela aberta (15 s), cron diário e disparador externo
    `/api/publico/whatsapp/disparar/{token}` (endereço em Empresas > Pagamentos). Resposta SAIR grava `wa_optout` (chave
-   DDD + 8 dígitos) e ninguém nessa lista recebe campanha.
+   DDD + 8 dígitos) e ninguém nessa lista recebe campanha. A tela do WhatsApp aberta (qualquer pessoa) chama
+   `/whatsapp/campanhas/tique` a cada 20 s (no servidor, um toque a cada 15 s por empresa).
+   Mensagens automáticas (`lib/wa_cadencia.py`, config em `wa_cadencia`): lembrete do dia seguinte (resposta 1 confirma,
+   2 cancela e destrava; `conversa.confirmacao` vale 48 h), aniversário e retorno (prazo `servicos.retorno_dias`).
+   `preparar_dia` roda uma vez por dia a partir das 8h (`WA_CADENCIA_HORA`; nos testes locais use 0 e `WA_CADENCIA_FIM=23:59`)
+   e cria campanhas `sistema`; lembrete é `transacional` (fora do teto e do SAIR), não repete (`wa_cadencia_feitos`).
    Teste local: `tests/fake_evolution.py` na porta 8098.
 11. **Segredos.** Nada de chave, senha ou `.env` no Git. No Vercel a única variável obrigatória é
    `FIREBASE_SERVICE_ACCOUNT`; o resto é gerado e guardado no banco (`lib/autoconfig.py`).

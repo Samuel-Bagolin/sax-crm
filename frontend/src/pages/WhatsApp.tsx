@@ -15,6 +15,10 @@ import { FluxosWhatsApp } from "@/components/whatsapp/FluxosWhatsApp";
 import { CampanhasWhatsApp } from "@/components/whatsapp/CampanhasWhatsApp";
 import { cn } from "@/lib/utils";
 
+function conexoesConectadas(s?: { conexoes: Conexao[] }) {
+  return !!s?.conexoes.some((c) => c.status === "conectado");
+}
+
 interface Situacao { servidor_ok: boolean; liberado: boolean; pode_gerir: boolean; versao: number; conexoes: Conexao[]; setores?: Setor[] }
 interface Conversa {
   id: string; nome: string; telefone: string | null; conexao_id: string; responsavel_id: string | null; entrada_id: string | null;
@@ -103,6 +107,9 @@ export default function WhatsApp() {
   // Uma leitura leve a cada 8 s, só com a aba visível; a lista só recarrega quando algo mudou.
   const ver = useQuery({ queryKey: ["wa", "versao"], queryFn: () => apiGet<{ versao: number }>("/whatsapp/versao"), enabled: ok, refetchInterval: 8000, refetchIntervalInBackground: false });
   const versao = ver.data?.versao ?? 0;
+  // Tela aberta anda a fila das campanhas e das mensagens automáticas (o servidor limita a um toque a cada 15 s por empresa).
+  useQuery({ queryKey: ["wa", "tique"], queryFn: () => apiPost<{ enviados: number }>("/whatsapp/campanhas/tique").catch(() => ({ enviados: 0 })),
+    enabled: ok && conexoesConectadas(sit.data), refetchInterval: 20_000, refetchIntervalInBackground: false });
   const [aba, setAba] = useState<"conversas" | "numeros" | "fluxos" | "campanhas">("conversas");
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [busca, setBusca] = useState("");

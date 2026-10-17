@@ -251,7 +251,7 @@ async def processar_campanha(c: dict, agora: datetime | None = None) -> str:
     if conexao.get("status") != "conectado":
         await _pausar(c, "O número da campanha está desconectado. Leia o QR code de novo e retome.")
         return "desconectado"
-    if await enviados_hoje(conexao["id"], agora) >= int(c.get("teto_diario") or 60):
+    if not c.get("transacional") and await enviados_hoje(conexao["id"], agora) >= int(c.get("teto_diario") or 60):
         return "teto_do_dia"
     cursor = int(c.get("cursor") or 0)
     if cursor >= int(c.get("total") or 0):
@@ -270,12 +270,15 @@ async def processar_campanha(c: dict, agora: datetime | None = None) -> str:
     destino = await db.wa_campanha_envios.find_one({"_id": envio_id})
     if not destino:
         return "sem_destino"
-    if await db.wa_optout.find_one({"_id": chave(destino["telefone"])}):
+    if not c.get("transacional") and await db.wa_optout.find_one({"_id": chave(destino["telefone"])}):
         await db.wa_campanha_envios.update_one({"_id": envio_id}, {"$set": {"status": "pulado", "erro": "Pediu para sair"}})
         await db.wa_campanhas.update_one({"id": c["id"]}, {"$inc": {"pulados": 1}, "$set": {"proximo_em": agora}})
         return "pulado"
     pessoa = await db.pessoas.find_one({"id": destino.get("pessoa_id")}) or destino
-    texto = montar_texto(c.get("mensagem") or "", pessoa, c.get("empresa_nome") or "")
+    if destino.get("texto"):  # mensagem automática já montada por pessoa (lib/wa_cadencia.py)
+        texto = destino["texto"] if c.get("transacional") else f"{destino['texto']}\n\n{RODAPE}"
+    else:
+        texto = montar_texto(c.get("mensagem") or "", pessoa, c.get("empresa_nome") or "")
     if c.get("formulario_id"):  # pesquisa: link pessoal (uma resposta por pessoa)
         from lib import formularios
 
@@ -295,17 +298,22 @@ async def processar_campanha(c: dict, agora: datetime | None = None) -> str:
         if falhas >= MAX_FALHAS_SEGUIDAS:
             await _pausar(c, "Três envios seguidos falharam. Confira o número no WhatsApp e retome.")
         return "falhou"
-    await db.wa_envio_dia.update_one({"_id": f"{conexao['id']}|{_dia_local(agora)}"}, {"$inc": {"qtd": 1}}, upsert=True)
+    if not c.get("transacional"):
+        await db.wa_envio_dia.update_one({"_id": f"{conexao['id']}|{_dia_local(agora)}"}, {"$inc": {"qtd": 1}}, upsert=True)
     await db.wa_campanha_envios.update_one({"_id": envio_id}, {"$set": {"status": "enviado", "em": agora, "conversa_id": conv["_id"]}})
     await db.wa_campanhas.update_one({"id": c["id"]}, {"$inc": {"enviados": 1}, "$set": {"falhas_seguidas": 0}})
     doc = {"_id": f"{conexao['instancia']}|{msg_id or os.urandom(8).hex()}", "conversa_id": conv["_id"], "texto": texto[:4096], "tipo": "texto",
-           "de_mim": True, "em": agora.replace(microsecond=0), "recebido_em": agora, "autor": f"Campanha: {c.get('nome')}"[:80], "status": "enviada"}
+           "de_mim": True, "em": agora.replace(microsecond=0), "recebido_em": agora, "autor": "Mensagem automática" if c.get("sistema") else f"Campanha: {c.get('nome')}"[:80], "status": "enviada"}
     try:
         await db.wa_mensagens.insert_one(doc)
     except Exception:  # o eco do webhook chegou antes
         await db.wa_mensagens.update_one({"_id": doc["_id"]}, {"$set": {"autor": doc["autor"]}})
-    await db.wa_conversas.update_one({"_id": conv["_id"]}, {"$set": {"ultima_msg": texto[:160], "ultima_de_mim": True, "ultima_em": agora,
-                                                                     "campanha_em": agora}})
+    mudar = {"ultima_msg": texto[:160], "ultima_de_mim": True, "ultima_em": agora}
+    if destino.get("agendamento_id"):  # lembrete: a próxima resposta "1" ou "2" confirma ou cancela
+        mudar["confirmacao"] = {"agendamento_id": destino["agendamento_id"], "em": agora}
+    else:
+        mudar["campanha_em"] = agora
+    await db.wa_conversas.update_one({"_id": conv["_id"]}, {"$set": mudar})
     await db.wa_estado.update_one({"id": "singleton"}, {"$inc": {"versao": 1}, "$set": {"id": "singleton"}}, upsert=True)
     return "enviado"
 
@@ -313,6 +321,12 @@ async def processar_campanha(c: dict, agora: datetime | None = None) -> str:
 async def processar_empresa(ate: float | None = None) -> int:
     """Um toque em todas as campanhas em envio da empresa atual. Devolve quantas mensagens saíram."""
     n = 0
+    try:  # mensagens automáticas do dia (monta uma vez, a partir das 8h)
+        from lib.wa_cadencia import preparar_dia
+
+        await preparar_dia()
+    except Exception:
+        logger.exception("cadência do WhatsApp falhou")
     for c in await db.wa_campanhas.find({"status": "enviando"}).to_list(20):
         if ate and time.monotonic() > ate:
             break

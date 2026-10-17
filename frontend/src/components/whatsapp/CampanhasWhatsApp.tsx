@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Megaphone, Pause, Play, Plus, ShieldAlert, Users, X } from "lucide-react";
-import { apiDelete, apiGet, apiPost, detalheErro } from "@/lib/api";
+import { apiDelete, apiGet, apiPost, apiPut, detalheErro } from "@/lib/api";
 import { useCrmConfig, useFunis } from "@/lib/crm";
 import { useSegmento } from "@/lib/segmento";
 import { useConfig } from "@/lib/useConfig";
@@ -25,6 +25,7 @@ interface Campanha {
   total: number; enviados: number; falhas: number; pulados: number; cursor: number; intervalo_min: number; intervalo_max: number;
   teto_diario: number; hora_inicio: string; hora_fim: string; domingo: boolean; motivo_pausa: string | null; proximo_em: string | null;
   criado_em: string | null; criado_por: string | null; enviados_hoje_no_numero: number;
+  sistema?: boolean; tipo?: string | null; transacional?: boolean;
 }
 interface Previa { total: number; sem_telefone: number; sairam: number; sem_conversa: number; amostra: string[] }
 interface Envio { ordem: number; nome: string; telefone: string; status: string; erro: string | null; em: string | null }
@@ -99,7 +100,7 @@ export function CampanhasWhatsApp({ conexoes }: { conexoes: Conexao[] }) {
           <h2 className="flex items-center gap-2 font-semibold"><Megaphone className="h-4 w-4" /> Campanhas</h2>
           <p className="text-sm text-muted-foreground">
             Mensagem para uma lista de {termos.clientes.toLowerCase()} com intervalo aleatório entre envios, teto por dia e horário comercial.
-            Toda mensagem leva a opção de responder SAIR. Os envios andam enquanto esta tela estiver aberta em algum computador.
+            Toda mensagem leva a opção de responder SAIR. Os envios andam enquanto o WhatsApp do CRM estiver aberto em algum computador (ou pelo disparador da plataforma).
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -117,6 +118,8 @@ export function CampanhasWhatsApp({ conexoes }: { conexoes: Conexao[] }) {
         <p>A conexão por QR code não é a API oficial do WhatsApp. Mensagem em massa para quem não espera é o motivo mais comum de bloqueio do número. Comece com poucos contatos, mantenha o teto baixo e prefira quem já conversou com vocês.</p>
       </div>
 
+      <Automaticas conexoes={conexoes} />
+
       {lista.isLoading ? (
         <p className="text-sm text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Carregando...</p>
       ) : campanhas.length === 0 ? (
@@ -129,8 +132,8 @@ export function CampanhasWhatsApp({ conexoes }: { conexoes: Conexao[] }) {
               <div key={c.id} className="space-y-3 rounded-xl border bg-card p-4" data-testid={`wa-campanha-${c.id}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{c.nome}</p>
-                    <p className="text-xs text-muted-foreground">{c.conexao_nome} · {resumoPublico(c.publico, termos.clientes)}</p>
+                    <p className="truncate font-medium">{c.nome}{c.sistema && <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-normal text-primary">Automática</span>}</p>
+                    <p className="text-xs text-muted-foreground">{c.conexao_nome} · {c.sistema ? (c.transacional ? "lembrete de horário, não conta no teto" : "mensagem automática do dia") : resumoPublico(c.publico, termos.clientes)}</p>
                   </div>
                   <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-medium", ROTULO[c.status].cor)}>{ROTULO[c.status].t}</span>
                 </div>
@@ -406,5 +409,60 @@ function Saidas({ onFechar }: { onFechar: () => void }) {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+interface AutoTipo { ativo: boolean; texto: string }
+interface AutoCfg { conexao_id: string | null; lembrete: AutoTipo; aniversario: AutoTipo; retorno: AutoTipo; padrao: Record<string, string> }
+const AUTO: { k: "lembrete" | "aniversario" | "retorno"; t: string; d: string; vars: string; agenda?: boolean }[] = [
+  { k: "lembrete", t: "Lembrete do horário de amanhã", d: "Sai às 8h para quem tem horário no dia seguinte. Resposta 1 confirma e 2 cancela e libera o horário na agenda.", vars: "{nome} {data} {hora} {profissional} {empresa}", agenda: true },
+  { k: "aniversario", t: "Parabéns no aniversário", d: "No dia do aniversário, para quem tem data de nascimento e celular no cadastro.", vars: "{nome} {empresa}" },
+  { k: "retorno", t: "Convite para voltar", d: "Quando passa o prazo de retorno do serviço (ou o padrão da agenda) e a pessoa não tem horário marcado. Uma vez por atendimento.", vars: "{nome} {empresa}", agenda: true },
+];
+
+function Automaticas({ conexoes }: { conexoes: Conexao[] }) {
+  const qc = useQueryClient();
+  const { servicos } = useSegmento();
+  const q = useQuery({ queryKey: ["wa", "automaticas"], queryFn: () => apiGet<AutoCfg>("/whatsapp/campanhas/automaticas") });
+  const [f, setF] = useState<AutoCfg | null>(null);
+  const [aberto, setAberto] = useState(false);
+  const v = f ?? q.data;
+  const salvar = useMutation({
+    mutationFn: () => apiPut<AutoCfg>("/whatsapp/campanhas/automaticas", { conexao_id: v!.conexao_id, lembrete: v!.lembrete, aniversario: v!.aniversario, retorno: v!.retorno } as never),
+    onSuccess: (r) => { qc.setQueryData(["wa", "automaticas"], r); setF(null); toast.success("Mensagens automáticas salvas."); },
+    onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível salvar."),
+  });
+  if (!v) return null;
+  const tipos = AUTO.filter((a) => !a.agenda || servicos);
+  const ligadas = tipos.filter((a) => v[a.k].ativo).length;
+  return (
+    <div className="rounded-xl border bg-card p-4" data-testid="wa-automaticas">
+      <button type="button" className="flex w-full items-center justify-between gap-2 text-left" onClick={() => setAberto((x) => !x)}>
+        <span><span className="font-semibold">Mensagens automáticas</span> <span className="text-sm text-muted-foreground">· {ligadas ? `${ligadas} ligada(s)` : "desligadas"}</span></span>
+        <span className="text-sm text-primary">{aberto ? "Fechar" : "Configurar"}</span>
+      </button>
+      {aberto && (
+        <div className="mt-3 space-y-3">
+          <div className="max-w-sm space-y-1.5"><Label>Enviar pelo número</Label>
+            <select className={sel} value={v.conexao_id ?? ""} onChange={(e) => setF({ ...v, conexao_id: e.target.value || null })}>
+              <option value="">Primeiro conectado</option>{conexoes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </div>
+          {tipos.map((a) => (
+            <div key={a.k} className="space-y-2 rounded-lg border p-3">
+              <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5" checked={v[a.k].ativo} onChange={(e) => setF({ ...v, [a.k]: { ...v[a.k], ativo: e.target.checked } })} data-testid={`wa-auto-${a.k}`} />
+                <span><span className="font-medium">{a.t}</span><span className="block text-muted-foreground">{a.d}</span></span></label>
+              {v[a.k].ativo && (
+                <>
+                  <textarea className="min-h-20 w-full rounded-md border bg-background p-2 text-sm" maxLength={1000} value={v[a.k].texto} onChange={(e) => setF({ ...v, [a.k]: { ...v[a.k], texto: e.target.value } })} />
+                  <p className="text-xs text-muted-foreground">Variáveis: {a.vars}. <button type="button" className="text-primary" onClick={() => setF({ ...v, [a.k]: { ...v[a.k], texto: v.padrao[a.k] } })}>Voltar ao texto padrão</button></p>
+                </>
+              )}
+            </div>
+          ))}
+          <div className="flex justify-end"><Button onClick={() => salvar.mutate()} disabled={!f || salvar.isPending} data-testid="wa-auto-salvar">Salvar</Button></div>
+        </div>
+      )}
+    </div>
   );
 }
