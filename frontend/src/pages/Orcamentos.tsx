@@ -10,6 +10,7 @@ import { usePlano } from "@/lib/diferenciais";
 import type { FichaPaciente, ItemTratamento } from "@/lib/pacientes";
 import PainelOdonto from "@/components/odonto/PainelOdonto";
 import PainelFacial from "@/components/estetica/PainelFacial";
+import PainelServicos from "@/components/atendimentos/PainelServicos";
 import { NovoOrcamento } from "@/pages/PacienteDetalhe";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +75,7 @@ function Lista({ onNovo }: { onNovo: () => void }) {
           <div className="p-10 text-center">
             <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
             <p className="mt-2 font-medium">Nenhum orçamento {filtro ? "nesta situação" : "ainda"}.</p>
-            <p className="text-sm text-muted-foreground">Crie o primeiro: escolha o {seg.termos.cliente.toLowerCase()} e marque os procedimentos {seg.odonto ? "no odontograma" : "no mapa facial"}.</p>
+            <p className="text-sm text-muted-foreground">Crie o primeiro: escolha o {seg.termos.cliente.toLowerCase()} e marque os procedimentos {seg.odonto ? "no odontograma" : seg.chave === "estetica" ? "no mapa facial" : "e as sessões"}.</p>
           </div>
         ) : (
           <ul className="divide-y">
@@ -114,10 +115,10 @@ function CriarOrcamento({ onVoltar }: { onVoltar: () => void }) {
   const navigate = useNavigate();
   const [pacienteId, setPacienteId] = useState<string | null>(null);
   const [rascunho, setRascunho] = useState<ItemTratamento[]>([]);
-  const [criando, setCriando] = useState<"odonto" | "facial" | null>(null);
+  const [criando, setCriando] = useState<"odonto" | "facial" | "geral" | null>(null);
   const ficha = useQuery({ queryKey: ["ficha", pacienteId], queryFn: () => apiGet<FichaPaciente>(`/pacientes/${pacienteId}`), enabled: !!pacienteId });
-  const tipo: "odonto" | "facial" = seg.odonto ? "odonto" : "facial";
-  const libera = seg.odonto ? tem("odontograma") : tem("mapa_facial");
+  const tipo: "odonto" | "facial" | "geral" = seg.odonto ? "odonto" : seg.chave === "estetica" ? "facial" : "geral";
+  const libera = tipo === "odonto" ? tem("odontograma") : tipo === "facial" ? tem("mapa_facial") : true;
 
   return (
     <div className="grid gap-4">
@@ -136,6 +137,8 @@ function CriarOrcamento({ onVoltar }: { onVoltar: () => void }) {
         <div className="h-96 animate-pulse rounded-xl bg-muted" />
       ) : !libera ? (
         <p className="rounded-xl border p-6 text-sm">O {seg.odonto ? "odontograma 3D" : "mapa facial 3D"} não faz parte do plano atual. Veja os planos em Assinatura.</p>
+      ) : tipo === "geral" ? (
+        <PainelServicos rascunho={rascunho} setRascunho={setRascunho} onSalvarOrcamento={() => setCriando("geral")} />
       ) : tipo === "odonto" ? (
         <PainelOdonto pacienteId={pacienteId} odontograma={ficha.data.odontograma} rascunho={rascunho} setRascunho={setRascunho} onSalvarOrcamento={() => setCriando("odonto")} />
       ) : (

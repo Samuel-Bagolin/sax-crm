@@ -97,6 +97,10 @@ Antes de abrir pull request: testes passando, `tsc` sem erro e `yarn build` ok.
    validade e sessões autorizadas; presença "presente" consome uma sessão (`guia_usos`, `_id` agendamento|paciente) e
    tirar a presença devolve (se não faturada). Lote por operadora e período, XML TISS 4.03.00 SP/SADT com hash MD5 no
    epílogo (não validado contra o XSD: o gestor valida no portal), recebimento com glosa lança receita `lote-{id}`.
+   PDFs da clínica (`lib/pdf_clinica.py`, `routers/clinica_docs.py`): orçamento (plano de tratamento, agora também na
+   terapia com itens de serviço), prontuário, receituário/atestado/declaração (`documentos_clinicos`, texto fixo depois de
+   emitido) e arquivos do prontuário (`prontuario_arquivos`, PDF/imagem até 3 MB, confere a assinatura do arquivo). Tudo
+   com a regra do prontuário (`_acessa_saude`) e registro em `prontuario_acessos`.
    Barbearia: clube de assinantes em `routers/clube.py` (mensalidade com id fixo por mês, não duplica).
    Texto de tela compartilhada nunca fixa "imóvel", "corretor" ou "imobiliária": use `useSegmento()`
    (`termos`, `empresa`, `registro`, `dominio`) e, no servidor, o segmento da empresa. Recursos do plano

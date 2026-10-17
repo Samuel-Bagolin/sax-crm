@@ -14,6 +14,9 @@ import { useConfig } from "@/lib/useConfig";
 import { usePlano } from "@/lib/diferenciais";
 import PainelOdonto from "@/components/odonto/PainelOdonto";
 import PainelFacial from "@/components/estetica/PainelFacial";
+import PainelServicos from "@/components/atendimentos/PainelServicos";
+import DocumentosClinicos from "@/components/pacientes/DocumentosClinicos";
+import { urlApi } from "@/lib/suporte";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -41,7 +44,8 @@ export default function PacienteDetalhe() {
   const { tem } = usePlano();
   const q = useQuery({ queryKey: ["ficha", id], queryFn: () => apiGet<FichaPaciente>(`/pacientes/${id}`) });
   const [rascunho, setRascunho] = useState<ItemTratamento[]>([]);
-  const [criando, setCriando] = useState<"odonto" | "facial" | null>(null);
+  const [criando, setCriando] = useState<"odonto" | "facial" | "geral" | null>(null);
+  const [montando, setMontando] = useState(false);
   const [params] = useSearchParams();
   const [aba, setAba] = useState(params.get("aba") ?? "resumo");
 
@@ -53,7 +57,7 @@ export default function PacienteDetalhe() {
   const tel = (p.telefone ?? "").replace(/\D/g, "");
   const odonto = seg.chave === "odontologia" && tem("odontograma");
   const facial = seg.chave === "estetica" && tem("mapa_facial");
-  const comOrcamento = seg.chave === "odontologia" || seg.chave === "estetica";
+  const comOrcamento = seg.chave === "odontologia" || seg.chave === "estetica" || seg.chave === "terapia";
 
   return (
     <div className="flex flex-col gap-4">
@@ -123,6 +127,9 @@ export default function PacienteDetalhe() {
         )}
         {comOrcamento && (
           <TabsContent value="orcamentos" className="mt-4">
+            {seg.chave === "terapia" && (montando
+              ? <div className="mb-3"><PainelServicos rascunho={rascunho} setRascunho={setRascunho} onSalvarOrcamento={() => setCriando("geral")} /></div>
+              : <Button className="mb-3" size="sm" onClick={() => setMontando(true)} data-testid="orc-novo-paciente">Novo orçamento</Button>)}
             <Tratamentos pacienteId={id} nome={p.nome} lista={f.tratamentos} />
           </TabsContent>
         )}
@@ -131,7 +138,7 @@ export default function PacienteDetalhe() {
         </TabsContent>
         {seg.prontuario && (
           <TabsContent value="prontuario" className="mt-4">
-            {f.pode_prontuario ? <Prontuario pacienteId={id} /> : (
+            {f.pode_prontuario ? <><DocumentosClinicos pacienteId={id} paciente={p} /><Prontuario pacienteId={id} /></> : (
               <p className="flex items-center gap-2 rounded-xl border p-6 text-sm text-muted-foreground"><Lock className="h-4 w-4" /> Prontuário restrito ao profissional que atende este {seg.termos.cliente.toLowerCase()} e ao gestor.</p>
             )}
           </TabsContent>
@@ -162,7 +169,7 @@ export default function PacienteDetalhe() {
         pacienteId={id}
         itens={rascunho}
         onClose={() => setCriando(null)}
-        onCriado={() => { setRascunho([]); setCriando(null); setAba("orcamentos"); }}
+        onCriado={() => { setRascunho([]); setCriando(null); setMontando(false); setAba("orcamentos"); }}
       />
     </div>
   );
@@ -178,11 +185,11 @@ function Kpi({ rotulo, valor, detalhe }: { rotulo: string; valor: string; detalh
   );
 }
 
-export function NovoOrcamento({ tipo, pacienteId, itens, onClose, onCriado }: { tipo: "odonto" | "facial" | null; pacienteId: string; itens: ItemTratamento[]; onClose: () => void; onCriado: () => void }) {
+export function NovoOrcamento({ tipo, pacienteId, itens, onClose, onCriado }: { tipo: "odonto" | "facial" | "geral" | null; pacienteId: string; itens: ItemTratamento[]; onClose: () => void; onCriado: () => void }) {
   const qc = useQueryClient();
   const [f, setF] = useState({ titulo: "", desconto: "", parcelas: "1", primeira_parcela: "", observacoes: "" });
   useEffect(() => {
-    if (tipo) setF({ titulo: tipo === "odonto" ? "Plano de tratamento" : "Harmonização facial", desconto: "", parcelas: "1", primeira_parcela: "", observacoes: "" });
+    if (tipo) setF({ titulo: tipo === "odonto" ? "Plano de tratamento" : tipo === "facial" ? "Harmonização facial" : "Plano terapêutico", desconto: "", parcelas: "1", primeira_parcela: "", observacoes: "" });
   }, [tipo]);
   const subtotal = itens.reduce((a, i) => a + i.quantidade * i.valor_unitario, 0);
   const desc = Number(f.desconto.replace(",", ".")) || 0;
@@ -220,28 +227,8 @@ export function NovoOrcamento({ tipo, pacienteId, itens, onClose, onCriado }: { 
   );
 }
 
-/** Escapa texto digitado pelo usuário antes de entrar no HTML de impressão (sem isso, um título ou
-    observação com <script> rodaria na janela de impressão). */
-const esc = (t: unknown) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
-
-function imprimir(t: Tratamento, paciente: string, empresa: string) {
-  const w = window.open("", "_blank", "width=820,height=900");
-  if (!w) return;
-  const linhas = t.itens.map((i) => `<tr><td>${i.dente ? `Dente ${esc(i.dente)} ` : ""}${esc(i.descricao)}${i.faces?.length ? ` (${esc(i.faces.join(""))})` : ""}</td><td style="text-align:right">${esc(i.quantidade)} ${esc(i.unidade)}</td><td style="text-align:right">${brl(i.valor ?? i.quantidade * i.valor_unitario)}</td></tr>`).join("");
-  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(t.titulo)}</title><style>
-    body{font-family:system-ui,sans-serif;color:#1d1530;max-width:720px;margin:40px auto;padding:0 20px}h1{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{border-bottom:1px solid #e5e2ec;padding:8px 4px;text-align:left}.tot{font-size:20px;font-weight:700;text-align:right;margin-top:16px}.mut{color:#6b5f86}</style></head><body>
-    <p class="mut">${esc(empresa)}</p><h1>${esc(t.titulo)}</h1><p>${esc(paciente)}<br><span class="mut">Emitido em ${new Date().toLocaleDateString("pt-BR")}, válido por ${esc(t.validade_dias)} dias. Profissional: ${esc(t.profissional_nome)}</span></p>
-    <table><thead><tr><th>Procedimento</th><th style="text-align:right">Qtde.</th><th style="text-align:right">Valor</th></tr></thead><tbody>${linhas}</tbody></table>
-    ${t.desconto ? `<p style="text-align:right">Subtotal ${brl(t.subtotal)}<br>Desconto ${brl(t.desconto)}</p>` : ""}
-    <p class="tot">Total ${brl(t.total)}${t.parcelas > 1 ? ` em ${t.parcelas}x de ${brl(t.total / t.parcelas)}` : ""}</p>
-    ${t.observacoes ? `<p class="mut">${esc(t.observacoes)}</p>` : ""}
-    <p style="margin-top:60px">______________________________<br>${esc(paciente)}</p><script>window.print()</script></body></html>`);
-  w.document.close();
-}
-
 function Tratamentos({ pacienteId, nome, lista }: { pacienteId: string; nome: string; lista: Tratamento[] }) {
   const qc = useQueryClient();
-  const { config } = useConfig();
   const acao = useMutation({
     mutationFn: ({ t, acao, motivo }: { t: Tratamento; acao: string; motivo?: string }) => apiPost(`/pacientes/${pacienteId}/tratamentos/${t.id}/acao`, { acao, motivo }),
     onSuccess: (_, v) => {
@@ -255,7 +242,7 @@ function Tratamentos({ pacienteId, nome, lista }: { pacienteId: string; nome: st
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ficha", pacienteId] }),
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível"),
   });
-  if (!lista.length) return <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Nenhum orçamento. Monte pelo odontograma ou pelo mapa facial.</p>;
+  if (!lista.length) return <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Nenhum orçamento ainda.</p>;
   return (
     <div className="grid gap-3">
       {lista.map((t) => (
@@ -277,7 +264,7 @@ function Tratamentos({ pacienteId, nome, lista }: { pacienteId: string; nome: st
             ))}
           </ul>
           <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
-            <Button variant="outline" size="sm" onClick={() => imprimir(t, nome, config.nome_software)}><Printer className="h-4 w-4" /> Imprimir</Button>
+            <a href={urlApi(`/api/pacientes/${pacienteId}/tratamentos/${t.id}/pdf`)} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-muted" data-testid="trat-pdf"><Printer className="h-4 w-4" /> PDF para imprimir</a>
             {t.status === "rascunho" && <Button size="sm" variant="outline" onClick={() => acao.mutate({ t, acao: "apresentar" })} data-testid="trat-apresentar"><FileText className="h-4 w-4" /> Apresentado ao paciente</Button>}
             {(t.status === "rascunho" || t.status === "apresentado") && (
               <>

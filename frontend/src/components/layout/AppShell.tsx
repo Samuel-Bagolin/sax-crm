@@ -84,7 +84,7 @@ function comTermos(texto: string, t: TermosSegmento): string {
   return texto.replace(/\{(\w+)\}/g, (_, k: keyof TermosSegmento) => t[k] ?? k);
 }
 
-const COM_ORCAMENTO: SegmentoChave[] = ["odontologia", "estetica"];
+const COM_ORCAMENTO: SegmentoChave[] = ["odontologia", "estetica", "terapia"];
 
 /** Ordem do menu: Leads, Negócios ou Pacientes, Agenda, Orçamentos, Contratos; depois operação e gestão. */
 const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
