@@ -294,6 +294,27 @@ async def criar_demo_pudim(principal: Principal = Depends(require("empresa:manag
     return r
 
 
+@router.get("/demos")
+async def demos_disponiveis(principal: Principal = Depends(require("empresa:manage"))):
+    """Demonstrações que dá para criar agora (a do Pudim não aparece: virou empresa real)."""
+    from lib import demo_hamburgueria
+
+    return [{"chave": "hamburgueria", "nome": demo_hamburgueria.NOME, "existe": await demo_hamburgueria.existe()}]
+
+
+@router.post("/demos/hamburgueria", status_code=201)
+async def criar_demo_hamburgueria(principal: Principal = Depends(require("empresa:manage"))):
+    """Cria "[DEMO] Chapa Quente Hamburgueria" (comércio) com dados fictícios. A senha só aparece nesta resposta."""
+    from lib import demo_hamburgueria
+
+    try:
+        r = await demo_hamburgueria.criar(principal.email)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    logger.info("demonstração da hamburgueria criada por %s", principal.email)
+    return r
+
+
 class ImportarPlanilhaIn(BaseModel):
     arquivo_base64: str = Field(min_length=10, max_length=12_000_000)
     simular: bool = True

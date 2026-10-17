@@ -799,7 +799,7 @@ async def _marca_publica(config: SiteConfig, slug: str, seg: str) -> dict:
             "formulario": seg in COM_FORMULARIO, "agendar_url": await _agendar_url(config),
             "contatos_whatsapp": await contatos_whatsapp(),
             "cashback": {"ativo": cb.ativo, "pct_indicacao": cb.pct_indicacao, "pct_compra": cb.pct_compra,
-                         "autocadastro": cb.autocadastro_site, "validade_dias": cb.validade_dias} if cb.ativo else None}
+                         "autocadastro": cb.autocadastro_site, "validade_dias": cb.validade_dias} if cb.ativo and seg == "comercio" else None}
 
 
 def _item_publico(d: dict, slug: str, config: SiteConfig) -> dict:

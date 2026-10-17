@@ -86,3 +86,9 @@ def test_site_lojas_no_balao_e_indique_e_ganhe(loja):
     v = httpx.get(f"{API}/publico/site/{slug}/indicacao/{gerado.json()['codigo']}").json()
     assert v == {"valido": True, "codigo": gerado.json()["codigo"], "nome": "Carla"}
     assert httpx.get(f"{API}/publico/site/{slug}/indicacao/NADA-000").json() == {"valido": False}
+
+
+def test_afiliados_so_no_restaurante(cartao_demo):  # noqa: F811
+    c, _ = _cadastrar("barbearia", cartao_demo)
+    assert c.get("/cashback/config").status_code == 404
+    assert c.get("/cashback/resumo").status_code == 404

@@ -13,11 +13,18 @@ from lib.auth import Principal, require
 from lib.db import db
 from models.common import now_utc
 
-router = APIRouter(prefix="/cashback", tags=["cashback"])
-publico_router = APIRouter(prefix="/publico/site", tags=["publico"])
-
 LER = "paciente:read"
 ESCREVER = "paciente:write"
+
+
+async def _so_restaurante(principal: Principal = Depends(require(LER))) -> None:
+    """Afiliados e cashback são do segmento comércio (restaurante e doceria)."""
+    if principal.segmento != "comercio":
+        raise HTTPException(404, "Afiliados e cashback são só para restaurantes e comércio")
+
+
+router = APIRouter(prefix="/cashback", tags=["cashback"], dependencies=[Depends(_so_restaurante)])
+publico_router = APIRouter(prefix="/publico/site", tags=["publico"])
 
 
 def _gestor(principal: Principal) -> None:
@@ -237,9 +244,11 @@ _PEDIDOS: dict[str, list[float]] = {}
 async def _programa_no_site(slug: str) -> cb.CashbackConfig:
     from routers.site_imobiliaria import _site_ativo
 
+    from routers.site_imobiliaria import _segmento
+
     await _site_ativo(slug)
     cfg = await cb.carregar_config()
-    if not cfg.ativo:
+    if not cfg.ativo or await _segmento() != "comercio":
         raise HTTPException(404, "Programa de indicação desligado")
     return cfg
 

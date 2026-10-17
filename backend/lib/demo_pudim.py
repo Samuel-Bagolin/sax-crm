@@ -362,7 +362,7 @@ async def criar(por: str) -> dict:
     return {"empresa_id": empresa.id, "nome": NOME, "emails": emails, "senha": senha, "site": SLUG_SITE}
 
 
-DOMINIOS_DEMO = ("@pudimdemo.exemplo.com", "@demo-pudim.sax")
+DOMINIOS_DEMO = ("@pudimdemo.exemplo.com", "@demo-pudim.sax", "@chapaquentedemo.exemplo.com")
 COLECOES_FICTICIAS = ("leads", "entradas", "atividades", "historico", "transacoes", "site_itens", "site_item_midia", "site_midia",
                       "wa_fluxos", "wa_setores", "cb_movimentos", "cb_compras", "pedidos", "supervisoes", "unidades", "funis", "agendamentos",
                       "anexos", "anexos_pendentes")

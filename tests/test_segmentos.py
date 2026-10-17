@@ -303,3 +303,33 @@ def test_demo_vira_empresa_real_sem_dados_ficticios():
     assert len(root.get("/unidades", headers=h).json()) == 1 and len(root.get("/funis", headers=h).json()) >= 1
     # empresa que não é de demonstração não pode ser limpa
     assert root.post(f"/plataforma/empresas/{eid}/limpar-demonstracao", json={"confirmar": "demo-pudim-perfeito", "nome": "Outro nome"}).status_code == 409
+
+
+def test_demo_da_hamburgueria():
+    root = httpx.Client(base_url=API, timeout=120)
+    root.post("/auth/login", json={"email": os.environ["CRM_SYSADMIN"], "senha": os.environ["CRM_SYSADMIN_SENHA"]})
+    antiga = next((e for e in root.get("/empresas").json() if e["slug"] == "demo-chapa-quente"), None)
+    if antiga:
+        assert root.delete(f"/empresas/{antiga['id']}", params={"confirmar": "demo-chapa-quente"}).status_code == 204
+    assert next(x for x in root.get("/plataforma/demos").json() if x["chave"] == "hamburgueria")["existe"] is False
+    r = root.post("/plataforma/demos/hamburgueria")
+    assert r.status_code == 201, r.text
+    d = r.json()
+    assert root.post("/plataforma/demos/hamburgueria").status_code == 409  # não duplica
+    assert next(x for x in root.get("/plataforma/demos").json() if x["chave"] == "hamburgueria")["existe"] is True
+    g = httpx.Client(base_url=API, timeout=60)
+    me = g.post("/auth/login", json={"email": d["emails"][0], "senha": d["senha"]}).json()
+    assert me["segmento"] == "comercio" and me["papel"] == "admin"
+    assert {f["nome"] for f in g.get("/funis").json()} == {"Eventos e festas", "Empresas e convênios"}
+    negocios = g.get("/leads").json()
+    assert len(negocios) >= 8 and {n.get("temperatura") for n in negocios} >= {"quente", "morno", "frio"}
+    assert len(g.get("/entradas").json()) >= 4 and len(g.get("/unidades").json()) == 2
+    itens = g.get("/site-imobiliaria/itens").json()
+    assert len(itens) >= 10 and all(i["tipo"] == "produto" for i in itens)
+    fluxo = g.get("/whatsapp/fluxos").json()[0]
+    assert any(p["tipo"] == "link" and p["link_tipo"] == "catalogo" for p in fluxo["passos"])
+    assert g.get("/cashback/config").json()["ativo"] is True
+    # o fluxo salvo pela demonstração passa na validação da tela (catálogo publicado)
+    assert g.put(f"/whatsapp/fluxos/{fluxo['id']}", json={k: fluxo[k] for k in ("nome", "ativo", "gatilho", "palavras", "conexoes", "passos")}).status_code == 200
+    assert httpx.get(f"{API}/publico/site/chapa-quente-demo").status_code == 200
+    root.delete(f"/empresas/{d['empresa_id']}", params={"confirmar": "demo-chapa-quente"})

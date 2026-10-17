@@ -117,3 +117,40 @@ async def carregar_crm_config() -> CrmConfig:
     if not data:
         return CrmConfig(origens=ORIGENS_PADRAO, motivos_perda=MOTIVOS_PERDA_PADRAO, etiquetas=ETIQUETAS_PADRAO)
     return CrmConfig(**data)
+
+
+SEGMENTOS_CRM_TARDIO = ("barbearia", "terapia")
+
+
+async def crm_em_todos_segmentos() -> None:
+    """Uma vez por instalação (out/2026): barbearia e clínica terapêutica passam a ter Leads e Negócios.
+    Liga o módulo nos planos do catálogo, nas empresas desses segmentos e cria os funis de exemplo que faltam."""
+    from lib.segmentos import SEGMENTOS, segmento_de
+
+    if await controle["_sistema"].find_one({"_id": "crm_todos_segmentos"}):
+        return
+    async for p in controle.planos_catalogo.find({"segmento": {"$in": list(SEGMENTOS_CRM_TARDIO)}}):
+        if "crm" not in (p.get("modulos") or []):
+            await controle.planos_catalogo.update_one({"_id": p["_id"]}, {"$set": {"modulos": [*(p.get("modulos") or []), "crm"]}})
+    async for e in controle.empresas.find({"segmento": {"$in": list(SEGMENTOS_CRM_TARDIO)}}, {"id": 1, "db_name": 1, "modulos": 1, "segmento": 1}):
+        try:
+            if e.get("modulos") and "crm" not in e["modulos"]:
+                await controle.empresas.update_one({"id": e["id"]}, {"$set": {"modulos": [*e["modulos"], "crm"]}})
+            banco = client[e["db_name"]]
+            cfg = await banco.configuracoes.find_one({"id": "singleton"}, {"modulos_ativos": 1}) or {}
+            if cfg.get("modulos_ativos") and "crm" not in cfg["modulos_ativos"]:
+                await banco.configuracoes.update_one({"id": "singleton"}, {"$set": {"modulos_ativos": [*cfg["modulos_ativos"], "crm"]}})
+            nomes = {f.get("nome") async for f in banco.funis.find({}, {"nome": 1})}
+            tem_padrao = bool(nomes)
+            # funil de antes com outro nome (mesmas etapas) não ganha cópia
+            antigos = {"Novos pacientes": "Primeiro contato", "Clientes novos": "Clientes"}
+            novos = [f for f in _funis_padrao(segmento_de(e)) if f["nome"] not in nomes and antigos.get(f["nome"]) not in nomes]
+            for f in novos:
+                if tem_padrao:
+                    f["padrao"] = False
+                f["ordem"] = len(nomes) + f["ordem"]
+            if novos:
+                await banco.funis.insert_many(novos)
+        except Exception:
+            logger.exception("crm_em_todos_segmentos falhou para %s", e.get("db_name"))
+    await controle["_sistema"].update_one({"_id": "crm_todos_segmentos"}, {"$set": {"em": now_utc()}}, upsert=True)

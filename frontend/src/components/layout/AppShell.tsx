@@ -13,6 +13,7 @@ import {
   CircleDollarSign,
   FileSignature,
   Handshake,
+  ReceiptText,
   Inbox,
   KeyRound,
   Globe,
@@ -111,12 +112,13 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
   {
     titulo: "Atendimento",
     itens: [
-      { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: COM_ORCAMENTO },
+      { to: "/leads", modulo: "crm", icon: Inbox, rotulo: "Leads", nivel: "todos", contador: "leads", segmentos: SERVICOS },
       { to: "/whatsapp", modulo: "pacientes", icon: MessageSquareText, rotulo: "WhatsApp", curto: "WhatsApp", nivel: "todos", segmentos: SERVICOS },
+      { to: "/crm", modulo: "crm", icon: Handshake, rotulo: "Negócios", nivel: "todos", segmentos: SERVICOS },
       { to: "/pacientes", modulo: "pacientes", icon: Contact, rotulo: "{clientes}", nivel: "todos", segmentos: SERVICOS },
       { to: "/atendimentos", modulo: "atendimentos", icon: CalendarDays, rotulo: "Agenda", nivel: "todos", segmentos: SERVICOS },
       { to: "/clube", modulo: "atendimentos", icon: Crown, rotulo: "Assinantes", curto: "Clube", nivel: "todos", segmentos: ["barbearia"] },
-      { to: "/orcamentos", modulo: "pacientes", icon: Handshake, rotulo: "Orçamentos", curto: "Orçam.", nivel: "todos", segmentos: COM_ORCAMENTO },
+      { to: "/orcamentos", modulo: "pacientes", icon: ReceiptText, rotulo: "Orçamentos", curto: "Orçam.", nivel: "todos", segmentos: COM_ORCAMENTO },
       { to: "/meu-site", modulo: "atendimentos", icon: Globe, rotulo: "Meu site", curto: "Site", nivel: "todos", segmentos: SERVICOS },
     ],
   },
@@ -125,7 +127,7 @@ const GRUPOS: { titulo: string | null; itens: ItemNav[] }[] = [
     itens: [
       { to: "/financeiro", modulo: "financeiro", icon: CircleDollarSign, nivel: "todos" },
       { to: "/comissoes", modulo: "crm", icon: Percent, rotulo: "Comissões", nivel: "todos", segmentos: ["comercio"] },
-      { to: "/cashback", modulo: "pacientes", icon: Gift, rotulo: "Afiliados e cashback", curto: "Afiliados", nivel: "todos", segmentos: ["comercio", ...SERVICOS] },
+      { to: "/cashback", modulo: "pacientes", icon: Gift, rotulo: "Afiliados e cashback", curto: "Afiliados", nivel: "todos", segmentos: ["comercio"] },
       { to: "/relatorios", modulo: "crm", icon: ChartNoAxesColumn, rotulo: "Relatórios", nivel: "todos" },
       { to: "/chat", modulo: "chat", icon: MessageCircle, rotulo: "Chat da equipe", curto: "Chat", nivel: "todos", contador: "chat" },
     ],

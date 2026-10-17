@@ -30,12 +30,14 @@ def _preencher(conteudo: bytes, aba: str, linhas: list[dict]):
     return wb
 
 
-def test_barbearia_clientes_sem_crm(cartao_demo):  # noqa: F811
+def test_barbearia_clientes_leads_e_negocios(cartao_demo):  # noqa: F811
     c, corpo = _cadastrar("barbearia", cartao_demo, plano="barbearia_essencial")
     r = c.get("/dados/modelo")
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/vnd.openxml")
     wb = _abrir(r.content)
-    assert wb.sheetnames[:2] == ["LEIA-ME", "CLIENTES"] and "LEADS" not in wb.sheetnames  # barbearia não tem CRM
+    assert wb.sheetnames[:2] == ["LEIA-ME", "CLIENTES"] and {"LEADS", "NEGOCIOS"} <= set(wb.sheetnames)  # todos os segmentos têm funil
+    funis = {f["nome"]: f for f in c.get("/funis").json()}
+    assert funis["Clube de assinantes"]["padrao"] and "Clientes novos" in funis
     assert wb["LISTAS"].sheet_state == "hidden"
 
     wb = _preencher(r.content, "CLIENTES", [

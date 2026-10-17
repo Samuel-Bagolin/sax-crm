@@ -24,7 +24,7 @@ from lib.email import mail_worker
 from routers import clube, veiculos, pacientes, atendimentos, agendar_publico, unidades, cadastro, plataforma, assinatura_plataforma, site_imobiliaria, proprietarios, rotina, fotos_imovel, match, planos, portais, propostas, proprietario
 from routers import termo, whatsapp, administradores, cashback, supervisoes, pedidos, anexos, dados
 from routers import agenda, assinaturas, relatorios, google, documentos, chat, auth, config, contratos, crm, empresas, financeiro, imoveis, leads, pessoas, usuarios, operacao
-from lib.crm import garantir_crm_todas
+from lib.crm import crm_em_todos_segmentos, garantir_crm_todas
 
 
 # Startup runs before the yield, shutdown after it. Add your own setup/teardown here.
@@ -48,7 +48,7 @@ async def inicializar() -> None:
             # (e para /api/status), em vez de derrubar o site inteiro.
             avisos = []
             for nome, passo in (("regras", lambda: trancar_regras(client)), ("indices", ensure_indexes),
-                                ("crm", garantir_crm_todas), ("admin", _primeiro_administrador),
+                                ("crm", garantir_crm_todas), ("crm_segmentos", crm_em_todos_segmentos), ("admin", _primeiro_administrador),
                                 ("marca", _migrar_marca), ("planos", lambda: carregar_catalogo(forcar=True))):
                 try:
                     await passo()

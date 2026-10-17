@@ -25,6 +25,7 @@ import { CatalogoComercial, ComercialDialog } from "@/components/empresas/Comerc
 import { Administradores } from "@/components/empresas/Administradores";
 import { ImportarPrints, ImportarRevendas } from "@/components/empresas/ImportarRevendas";
 import { ImportarDados } from "@/components/dados/ImportarDados";
+import { Demonstracoes } from "@/components/empresas/Demonstracoes";
 import { ConfigPagamentos, DadosContratada, DominiosClientes, PainelSegmentos, ServidorWhatsApp } from "@/components/empresas/Plataforma";
 import { cn } from "@/lib/utils";
 
@@ -232,6 +233,7 @@ export default function Empresas() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Demonstracoes />
           <Button size="sm" onClick={() => setModal(true)} data-testid="empresa-nova-button">
             <Plus className="h-4 w-4" />
             Nova empresa
