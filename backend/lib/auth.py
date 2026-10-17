@@ -179,7 +179,7 @@ _PERMS_ADMIN = _PERMS_CRM_GESTOR | {
     "contrato:read", "contrato:write", "contrato:create", "contrato:update", "contrato:delete",
     "visita:read", "visita:write",
     "relatorio:pdf",
-    "dados:importar", "dados:exportar",
+    "dados:importar", "dados:exportar", "pesquisa:gerir",
 }
 
 PERMISSOES: dict[str, set[str]] = {
@@ -197,7 +197,7 @@ PERMISSOES: dict[str, set[str]] = {
         "contrato:read", "contrato:write", "contrato:create", "contrato:update", "contrato:delete",
         "visita:read", "visita:write",
         "relatorio:pdf",
-        "dados:importar", "dados:exportar",
+        "dados:importar", "dados:exportar", "pesquisa:gerir",
     } | _PERMS_CRM_GESTOR,
     # Corretor: imóveis todos; leads e comissões apenas os próprios; financeiro da
     # imobiliária (fluxo de caixa, DRE, plano de contas) oculto.

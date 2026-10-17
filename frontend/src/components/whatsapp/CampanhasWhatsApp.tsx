@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { Conexao } from "@/components/whatsapp/NumerosWhatsApp";
+import { useFormularios } from "@/pages/Pesquisas";
 
 type Status = "rascunho" | "enviando" | "pausada" | "concluida" | "cancelada";
 interface Publico {
@@ -198,6 +199,8 @@ function NovaCampanha({ conexoes, onFechar }: { conexoes: Conexao[]; onFechar: (
   const funis = useFunis();
   const crm = useCrmConfig();
   const { config } = useConfig();
+  const formularios = useFormularios();
+  const [formularioId, setFormularioId] = useState("");
   const conectadas = conexoes.filter((c) => c.status === "conectado");
   const [nome, setNome] = useState("");
   const [conexaoId, setConexaoId] = useState(conectadas[0]?.id ?? "");
@@ -217,7 +220,7 @@ function NovaCampanha({ conexoes, onFechar }: { conexoes: Conexao[]; onFechar: (
 
   const criar = useMutation({
     mutationFn: async (comecar: boolean) => {
-      const c = await apiPost<Campanha>("/whatsapp/campanhas", { nome, conexao_id: conexaoId, mensagem, publico: p, ...ritmo } as never);
+      const c = await apiPost<Campanha>("/whatsapp/campanhas", { nome, conexao_id: conexaoId, mensagem, publico: p, formulario_id: formularioId || null, ...ritmo } as never);
       if (comecar) await apiPost(`/whatsapp/campanhas/${c.id}/iniciar`);
       return comecar;
     },
@@ -229,7 +232,7 @@ function NovaCampanha({ conexoes, onFechar }: { conexoes: Conexao[]; onFechar: (
     onError: (e) => toast.error(detalheErro(e) ?? "Não foi possível criar a campanha."),
   });
 
-  const exemplo = useMemo(() => `${mensagem.replaceAll("{nome}", previa?.amostra[0]?.split(" ")[0] ?? "Maria").replaceAll("{nome_completo}", previa?.amostra[0] ?? "Maria Souza").replaceAll("{empresa}", config.nome_software || "sua empresa").trim()}\n\n${RODAPE}`, [mensagem, previa, config.nome_software]);
+  const exemplo = useMemo(() => `${mensagem.replaceAll("{nome}", previa?.amostra[0]?.split(" ")[0] ?? "Maria").replaceAll("{nome_completo}", previa?.amostra[0] ?? "Maria Souza").replaceAll("{empresa}", config.nome_software || "sua empresa").replaceAll("{link}", formularioId ? "https://.../f/seu-link" : "{link}").trim()}\n\n${RODAPE}`, [mensagem, previa, config.nome_software, formularioId]);
   const diasEstimados = previa?.total ? Math.ceil(previa.total / ritmo.teto_diario) : 0;
   const podeSalvar = nome.trim().length >= 2 && conexaoId && mensagem.trim().length >= 5 && (previa?.total ?? 0) > 0 && ritmo.intervalo_max >= ritmo.intervalo_min;
 
@@ -249,6 +252,17 @@ function NovaCampanha({ conexoes, onFechar }: { conexoes: Conexao[]; onFechar: (
               </select>
             </div>
           </div>
+
+          {(formularios.data ?? []).some((f) => f.ativo) && (
+            <div className="space-y-1.5">
+              <Label>Pesquisa junto (opcional)</Label>
+              <select className={sel} value={formularioId} onChange={(e) => { setFormularioId(e.target.value); if (e.target.value && !mensagem.includes("{link}")) setMensagem((m) => `${m.trim()} Responde aqui: {link}`); }} data-testid="wa-campanha-pesquisa">
+                <option value="">Sem pesquisa</option>
+                {(formularios.data ?? []).filter((f) => f.ativo).map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+              </select>
+              {formularioId && <p className="text-xs text-muted-foreground">{"{link}"} vira o link pessoal de cada pessoa (uma resposta por link).</p>}
+            </div>
+          )}
 
           <fieldset className="space-y-3 rounded-lg border p-3">
             <legend className="px-1 text-sm font-medium">Quem recebe</legend>

@@ -39,6 +39,8 @@ import Unidades from "@/pages/Unidades";
 import Cashback from "@/pages/Cashback";
 import Comissoes from "@/pages/Comissoes";
 import Dados from "@/pages/Dados";
+import Pesquisas from "@/pages/Pesquisas";
+import ResponderFormulario from "@/pages/ResponderFormulario";
 import SitePublico from "@/pages/SitePublico";
 import WhatsApp from "@/pages/WhatsApp";
 import { Toaster } from "@/components/ui/sonner";
@@ -59,6 +61,7 @@ export default function App() {
         <Route path="/s/:slug" element={<SitePublico />} />
         <Route path="/cadastro" element={<Cadastro />} />
         <Route path="/termos" element={<Termos />} />
+        <Route path="/f/:token" element={<ResponderFormulario />} />
         <Route path="/agendar/:slug" element={<AgendarPublico />} />
         <Route path="/agendar/:slug/reserva/:token" element={<AgendarPublico />} />
         <Route path="/agendar/:slug/:prof" element={<AgendarPublico />} />
@@ -97,6 +100,7 @@ export default function App() {
               <Route path="/comissoes" element={<Comissoes />} />
               <Route path="/crm/configurar" element={<CrmConfig />} />
               <Route path="/dados" element={<Dados />} />
+              <Route path="/pesquisas" element={<Pesquisas />} />
             </Route>
             {/* Configurador: exclusivo do Administrador de Sistema (servidor nega com 403) */}
             <Route element={<RotaProtegida somenteSysadmin />}>

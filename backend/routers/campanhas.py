@@ -47,6 +47,7 @@ class CampanhaIn(BaseModel):
     hora_inicio: str = Field(default="09:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     hora_fim: str = Field(default="19:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     domingo: bool = False
+    formulario_id: str | None = Field(default=None, max_length=60)
 
     @model_validator(mode="after")
     def _coerente(self):
@@ -63,7 +64,7 @@ def _saida(c: dict, hoje: dict[str, int] | None = None) -> dict:
             "mensagem": c.get("mensagem"), "publico": c.get("publico") or {}, "total": total, "enviados": int(c.get("enviados") or 0),
             "falhas": int(c.get("falhas") or 0), "pulados": int(c.get("pulados") or 0), "cursor": int(c.get("cursor") or 0),
             "intervalo_min": c.get("intervalo_min"), "intervalo_max": c.get("intervalo_max"), "teto_diario": c.get("teto_diario"),
-            "hora_inicio": c.get("hora_inicio"), "hora_fim": c.get("hora_fim"), "domingo": bool(c.get("domingo")),
+            "formulario_id": c.get("formulario_id"), "hora_inicio": c.get("hora_inicio"), "hora_fim": c.get("hora_fim"), "domingo": bool(c.get("domingo")),
             "motivo_pausa": c.get("motivo_pausa"), "proximo_em": _iso(c.get("proximo_em")), "criado_em": _iso(c.get("criado_em")),
             "criado_por": c.get("criado_por"), "concluida_em": _iso(c.get("concluida_em")),
             "enviados_hoje_no_numero": (hoje or {}).get(c.get("conexao_id") or "", 0)}
@@ -97,6 +98,8 @@ async def criar(input: CampanhaIn, principal: Principal = Depends(_gerir)):
     conexao = await db.wa_conexoes.find_one({"id": input.conexao_id})
     if not conexao:
         raise HTTPException(422, "Escolha um número conectado")
+    if input.formulario_id and not await db.formularios.find_one({"id": input.formulario_id, "ativo": True}, {"id": 1}):
+        raise HTTPException(422, "Escolha uma pesquisa ativa")
     r = await camp.montar_publico(input.publico.model_dump())
     destinos = r["destinatarios"]
     if not destinos:

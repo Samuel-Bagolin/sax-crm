@@ -454,13 +454,20 @@ async def concluir(agendamento_id: str, input: Conclusao, principal: Principal =
     if reservado.modified_count != 1:
         raise HTTPException(409, "Atendimento já concluído")
     try:
-        return await _lancar_conclusao(a, input, principal)
+        saida = await _lancar_conclusao(a, input, principal)
     except Exception:
         # Desfaz: tira o que foi lançado no caixa e devolve o status, para a pessoa poder tentar de novo.
         await db.transacoes.delete_many({"agendamento_id": a["id"]})
         await db.agendamentos.update_one({"id": a["id"]}, {"$set": {"status": a["status"], "concluido_em": None, "concluido_por": None,
                                                                     "updated_at": now_utc()}})
         raise
+    try:  # pesquisa de satisfação automática pelo WhatsApp (nunca atrapalha a conclusão)
+        from lib.formularios import apos_atendimento
+
+        await apos_atendimento(a)
+    except Exception:
+        logger.exception("pesquisa pós-atendimento falhou")
+    return saida
 
 
 async def _lancar_conclusao(a: dict, input: Conclusao, principal: Principal) -> dict:

@@ -276,6 +276,15 @@ async def processar_campanha(c: dict, agora: datetime | None = None) -> str:
         return "pulado"
     pessoa = await db.pessoas.find_one({"id": destino.get("pessoa_id")}) or destino
     texto = montar_texto(c.get("mensagem") or "", pessoa, c.get("empresa_nome") or "")
+    if c.get("formulario_id"):  # pesquisa: link pessoal (uma resposta por pessoa)
+        from lib import formularios
+
+        form = await db.formularios.find_one({"id": c["formulario_id"]})
+        r = await formularios.criar_convite(form, pessoa if pessoa.get("id") else None, "campanha", chave=f"cp-{envio_id.replace('|', '-')}",
+                                            extra={"campanha_id": c["id"]}) if form else None
+        if r:
+            url = formularios.url_publica(r[1])
+            texto = texto.replace("{link}", url) if "{link}" in texto else texto.replace(f"\n\n{RODAPE}", f"\n{url}\n\n{RODAPE}")
     conv = await _conversa_para(conexao, destino)
     try:
         msg_id = await wa.enviar_texto(conexao["instancia"], conv["jid"], texto)
